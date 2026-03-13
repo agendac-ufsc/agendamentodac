@@ -676,9 +676,13 @@ async function createGoogleCalendarEvent(eventTitle, eventDescription, startDate
 
 // server/services/email.ts
 import { Resend } from "resend";
-var resend = new Resend(process.env.RESEND_API_KEY);
+var resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 async function sendEmail({ to, subject, html, from = "noreply@agendamento.com" }) {
   try {
+    if (!resend) {
+      console.warn("[Email] Resend API key not configured, skipping email send");
+      return { id: "mock-id" };
+    }
     const response = await resend.emails.send({
       from,
       to,

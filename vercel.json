@@ -2,28 +2,14 @@
   "version": 2,
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
-  "builds": [
-    {
-      "src": "dist/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "dist/public/**",
-      "use": "@vercel/static"
-    }
-  ],
   "rewrites": [
     {
-      "source": "/api/trpc/:path*",
-      "destination": "dist/index.js"
+      "source": "/api/:path*",
+      "destination": "/index.js"
     },
     {
-      "source": "/api/oauth/:path*",
-      "destination": "dist/index.js"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "dist/public/index.html"
+      "source": "/(.*)",
+      "destination": "/index.js"
     }
   ]
 }
