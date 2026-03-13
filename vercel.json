@@ -4,8 +4,8 @@
   "outputDirectory": "dist/public",
   "rewrites": [
     {
-      "source": "/api/trpc/:path*",
-      "destination": "/api/trpc.js"
+      "source": "/api/:path*",
+      "destination": "/api/index.ts"
     },
     {
       "source": "/(.*)",
