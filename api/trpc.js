@@ -1,7 +1,7 @@
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import express from "express";
-import { appRouter } from "../server/routers";
-import { createContext } from "../server/_core/context";
+import { appRouter } from "../server/routers.ts";
+import { createContext } from "../server/_core/context.ts";
 
 const app = express();
 app.use(express.json());
