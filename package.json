@@ -1,0 +1,17 @@
+{
+  "name": "agendamento-simples",
+  "version": "1.0.0",
+  "description": "Sistema simples de agendamento com Google Calendar",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "dotenv": "^16.0.3",
+    "googleapis": "^118.0.0",
+    "resend": "^0.16.0",
+    "cors": "^2.8.5"
+  }
+}

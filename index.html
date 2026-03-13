@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Agendamento</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 600px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            text-align: center;
+            font-size: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .calendar {
+            margin: 20px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .calendar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .calendar-header button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .calendar-header button:hover {
+            background: #5568d3;
+        }
+
+        .calendar-header h3 {
+            color: #333;
+            font-size: 18px;
+        }
+
+        .calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 5px;
+        }
+
+        .day-header {
+            text-align: center;
+            font-weight: bold;
+            color: #667eea;
+            padding: 10px 0;
+            font-size: 12px;
+        }
+
+        .day {
+            aspect-ratio: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            cursor: pointer;
+            background: white;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+
+        .day:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .day.other-month {
+            color: #ccc;
+            background: #fafafa;
+            cursor: not-allowed;
+        }
+
+        .day.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .time-slots {
+            margin: 20px 0;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+        }
+
+        .time-slot {
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .time-slot:hover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .time-slot.selected {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        button.submit {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin-top: 20px;
+        }
+
+        button.submit:hover {
+            transform: translateY(-2px);
+        }
+
+        button.submit:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .message {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+
+        .loading {
+            display: none;
+            text-align: center;
+            color: #667eea;
+            margin-top: 20px;
+        }
+
+        .loading.show {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📅 Agende seu Horário</h1>
+
+        <form id="agendamentoForm">
+            <div class="form-group">
+                <label for="nome">Nome Completo *</label>
+                <input type="text" id="nome" name="nome" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">E-mail *</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="telefone">Telefone *</label>
+                <input type="tel" id="telefone" name="telefone" required>
+            </div>
+
+            <div class="calendar">
+                <div class="calendar-header">
+                    <button type="button" id="prevMonth">← Anterior</button>
+                    <h3 id="monthYear"></h3>
+                    <button type="button" id="nextMonth">Próximo →</button>
+                </div>
+                <div class="calendar-grid" id="calendarGrid"></div>
+            </div>
+
+            <div class="form-group">
+                <label>Data Selecionada: <strong id="selectedDate">Nenhuma</strong></label>
+            </div>
+
+            <div class="form-group">
+                <label>Horário *</label>
+                <div class="time-slots" id="timeSlots"></div>
+            </div>
+
+            <div class="loading" id="loading">
+                <p>Processando seu agendamento...</p>
+            </div>
+
+            <button type="submit" class="submit" id="submitBtn">Confirmar Agendamento</button>
+
+            <div class="message" id="message"></div>
+        </form>
+    </div>
+
+    <script>
+        let currentDate = new Date();
+        let selectedDate = null;
+        let selectedTime = null;
+
+        const monthYear = document.getElementById('monthYear');
+        const calendarGrid = document.getElementById('calendarGrid');
+        const timeSlots = document.getElementById('timeSlots');
+        const form = document.getElementById('agendamentoForm');
+        const message = document.getElementById('message');
+        const loading = document.getElementById('loading');
+        const selectedDateDisplay = document.getElementById('selectedDate');
+
+        // Renderizar calendário
+        function renderCalendar() {
+            const year = currentDate.getFullYear();
+            const month = currentDate.getMonth();
+
+            monthYear.textContent = new Date(year, month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+            calendarGrid.innerHTML = '';
+
+            // Cabeçalho dos dias da semana
+            const dayHeaders = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
+            dayHeaders.forEach(day => {
+                const header = document.createElement('div');
+                header.className = 'day-header';
+                header.textContent = day;
+                calendarGrid.appendChild(header);
+            });
+
+            // Dias do mês anterior
+            for (let i = daysInPrevMonth - firstDay + 1; i <= daysInPrevMonth; i++) {
+                const day = document.createElement('div');
+                day.className = 'day other-month';
+                day.textContent = i;
+                calendarGrid.appendChild(day);
+            }
+
+            // Dias do mês atual
+            for (let i = 1; i <= daysInMonth; i++) {
+                const day = document.createElement('div');
+                day.className = 'day';
+                day.textContent = i;
+
+                const date = new Date(year, month, i);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+
+                if (date < today) {
+                    day.classList.add('other-month');
+                    day.style.cursor = 'not-allowed';
+                } else {
+                    day.addEventListener('click', () => selectDate(date));
+                }
+
+                if (selectedDate && date.toDateString() === selectedDate.toDateString()) {
+                    day.classList.add('selected');
+                }
+
+                calendarGrid.appendChild(day);
+            }
+
+            // Dias do próximo mês
+            const totalCells = calendarGrid.children.length - 7; // Menos cabeçalho
+            const remainingCells = 42 - totalCells;
+            for (let i = 1; i <= remainingCells; i++) {
+                const day = document.createElement('div');
+                day.className = 'day other-month';
+                day.textContent = i;
+                calendarGrid.appendChild(day);
+            }
+        }
+
+        function selectDate(date) {
+            selectedDate = date;
+            selectedTime = null;
+            selectedDateDisplay.textContent = date.toLocaleDateString('pt-BR');
+            renderCalendar();
+            renderTimeSlots();
+        }
+
+        function renderTimeSlots() {
+            timeSlots.innerHTML = '';
+            if (!selectedDate) return;
+
+            const times = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
+            times.forEach(time => {
+                const slot = document.createElement('div');
+                slot.className = 'time-slot';
+                slot.textContent = time;
+                slot.addEventListener('click', () => selectTime(time, slot));
+                timeSlots.appendChild(slot);
+            });
+        }
+
+        function selectTime(time, element) {
+            document.querySelectorAll('.time-slot').forEach(s => s.classList.remove('selected'));
+            element.classList.add('selected');
+            selectedTime = time;
+        }
+
+        document.getElementById('prevMonth').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentDate.setMonth(currentDate.getMonth() - 1);
+            renderCalendar();
+        });
+
+        document.getElementById('nextMonth').addEventListener('click', (e) => {
+            e.preventDefault();
+            currentDate.setMonth(currentDate.getMonth() + 1);
+            renderCalendar();
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (!selectedDate || !selectedTime) {
+                showMessage('Por favor, selecione uma data e horário', 'error');
+                return;
+            }
+
+            const nome = document.getElementById('nome').value;
+            const email = document.getElementById('email').value;
+            const telefone = document.getElementById('telefone').value;
+
+            loading.classList.add('show');
+
+            try {
+                const response = await fetch('/api/agendar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        nome,
+                        email,
+                        telefone,
+                        data: selectedDate.toISOString().split('T')[0],
+                        hora: selectedTime
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage('✅ Agendamento realizado com sucesso! Verifique seu e-mail.', 'success');
+                    form.reset();
+                    selectedDate = null;
+                    selectedTime = null;
+                    selectedDateDisplay.textContent = 'Nenhuma';
+                    renderCalendar();
+                    timeSlots.innerHTML = '';
+                } else {
+                    showMessage('❌ Erro: ' + (result.error || 'Tente novamente'), 'error');
+                }
+            } catch (error) {
+                showMessage('❌ Erro ao processar agendamento: ' + error.message, 'error');
+            } finally {
+                loading.classList.remove('show');
+            }
+        });
+
+        function showMessage(text, type) {
+            message.textContent = text;
+            message.className = 'message ' + type;
+            setTimeout(() => {
+                message.className = 'message';
+            }, 5000);
+        }
+
+        // Inicializar
+        renderCalendar();
+    </script>
+</body>
+</html>
