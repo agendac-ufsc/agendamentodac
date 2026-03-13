@@ -4,10 +4,6 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/index.js"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.js"
     }
