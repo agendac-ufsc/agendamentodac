@@ -1,7 +1,6 @@
 {
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
-  "framework": "react-router",
   "rewrites": [
     {
       "source": "/api/:path*",
