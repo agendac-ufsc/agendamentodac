@@ -14,7 +14,8 @@ export default function Scheduling() {
     phone: '',
   });
   const [selectedDate, setSelectedDate] = useState<string>('');
-  const [selectedTime, setSelectedTime] = useState<string>('');
+  const [startTime, setStartTime] = useState<string>('');
+  const [endTime, setEndTime] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
   const [appointmentId, setAppointmentId] = useState<number | null>(null);
 
@@ -31,12 +32,6 @@ export default function Scheduling() {
     },
   });
 
-  // Query para obter horários disponíveis
-  const { data: availableSlots, isLoading: slotsLoading } = trpc.appointments.getAvailableSlots.useQuery(
-    { date: selectedDate },
-    { enabled: !!selectedDate }
-  );
-
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.email || !formData.phone) {
@@ -52,11 +47,28 @@ export default function Scheduling() {
   };
 
   const handleTimeSelect = (time: string) => {
-    setSelectedTime(time);
-    handleCreateAppointment(time);
+    if (!startTime) {
+      setStartTime(time);
+    } else if (!endTime) {
+      // Validar se o horário de saída é posterior ao de entrada
+      if (time <= startTime) {
+        toast.error('O horário de saída deve ser posterior ao de entrada');
+        return;
+      }
+      setEndTime(time);
+    } else {
+      // Resetar e começar de novo se já tiver ambos selecionados
+      setStartTime(time);
+      setEndTime('');
+    }
   };
 
-  const handleCreateAppointment = async (time: string) => {
+  const handleCreateAppointment = async () => {
+    if (!startTime || !endTime) {
+      toast.error('Selecione os horários de entrada e saída');
+      return;
+    }
+
     setIsLoading(true);
     try {
       await createAppointmentMutation.mutateAsync({
@@ -64,13 +76,29 @@ export default function Scheduling() {
         email: formData.email,
         phone: formData.phone,
         appointmentDate: selectedDate,
-        appointmentTime: time,
+        startTime: startTime,
+        endTime: endTime,
         googleFormsLink: process.env.VITE_GOOGLE_FORMS_LINK,
       });
     } catch (error) {
       console.error('Error creating appointment:', error);
     }
   };
+
+  // Gera horários de 30 em 30 minutos das 08:00 às 22:00
+  const generateTimeSlots = () => {
+    const slots = [];
+    for (let hour = 8; hour <= 22; hour++) {
+      const h = hour.toString().padStart(2, '0');
+      slots.push(`${h}:00`);
+      if (hour < 22) {
+        slots.push(`${h}:30`);
+      }
+    }
+    return slots;
+  };
+
+  const timeSlots = generateTimeSlots();
 
   // Gera datas disponíveis (próximos 30 dias)
   const generateAvailableDates = () => {
@@ -190,41 +218,55 @@ export default function Scheduling() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="w-5 h-5" />
-                Selecione um Horário
+                Selecione os Horários
               </CardTitle>
               <CardDescription>
-                Data selecionada: {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                Data: {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                <br />
+                {!startTime ? 'Selecione o horário de entrada' : !endTime ? 'Selecione o horário de saída' : 'Horários selecionados'}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {slotsLoading ? (
-                <div className="text-center py-8">Carregando horários...</div>
-              ) : availableSlots && availableSlots.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {availableSlots.map((slot) => (
-                    <Button
-                      key={`${slot.date}-${slot.startTime}`}
-                      variant="outline"
-                      onClick={() => handleTimeSelect(slot.startTime)}
-                      disabled={slot.currentAppointments >= slot.maxAppointments}
-                      className="text-sm"
-                    >
-                      {slot.startTime}
-                    </Button>
-                  ))}
+              <div className="grid grid-cols-3 md:grid-cols-6 gap-2 mb-6">
+                {timeSlots.map((time) => (
+                  <Button
+                    key={time}
+                    variant={startTime === time || endTime === time ? 'default' : 'outline'}
+                    onClick={() => handleTimeSelect(time)}
+                    className={`text-xs ${startTime === time ? 'bg-blue-600' : endTime === time ? 'bg-green-600' : ''}`}
+                  >
+                    {time}
+                  </Button>
+                ))}
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-lg mb-4 border border-slate-200">
+                <div className="flex justify-between text-sm">
+                  <span><strong>Entrada:</strong> {startTime || '--:--'}</span>
+                  <span><strong>Saída:</strong> {endTime || '--:--'}</span>
                 </div>
-              ) : (
-                <div className="text-center py-8 text-slate-600">
-                  Nenhum horário disponível para esta data
-                </div>
-              )}
-              <Button
-                variant="ghost"
-                onClick={() => setStep('calendar')}
-                className="w-full mt-4"
-              >
-                Voltar
-              </Button>
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  variant="ghost"
+                  onClick={() => {
+                    setStep('calendar');
+                    setStartTime('');
+                    setEndTime('');
+                  }}
+                  className="flex-1"
+                >
+                  Voltar
+                </Button>
+                <Button
+                  onClick={handleCreateAppointment}
+                  disabled={!startTime || !endTime || isLoading}
+                  className="flex-1"
+                >
+                  {isLoading ? 'Processando...' : 'Confirmar'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
         )}
@@ -248,7 +290,7 @@ export default function Scheduling() {
                   <strong>Data:</strong> {new Date(selectedDate).toLocaleDateString('pt-BR')}
                 </p>
                 <p className="text-sm text-slate-600">
-                  <strong>Horário:</strong> {selectedTime}
+                  <strong>Período:</strong> {startTime} às {endTime}
                 </p>
               </div>
               <p className="text-sm text-slate-600">
@@ -277,7 +319,8 @@ export default function Scheduling() {
                   setStep('form');
                   setFormData({ name: '', email: '', phone: '' });
                   setSelectedDate('');
-                  setSelectedTime('');
+                  setStartTime('');
+                  setEndTime('');
                 }}
                 className="w-full"
               >

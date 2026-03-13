@@ -36,14 +36,16 @@ export const appRouter = router({
           email: z.string().email('E-mail inválido'),
           phone: z.string().min(1, 'Telefone é obrigatório'),
           appointmentDate: z.string(), // YYYY-MM-DD
-          appointmentTime: z.string(), // HH:mm
+          startTime: z.string(), // HH:mm
+          endTime: z.string(), // HH:mm
           googleFormsLink: z.string().optional(),
         })
       )
       .mutation(async ({ input, ctx }) => {
         try {
           // Combina data e hora
-          const appointmentDateTime = new Date(`${input.appointmentDate}T${input.appointmentTime}:00`);
+          const startDateTime = new Date(`${input.appointmentDate}T${input.startTime}:00`);
+          const endDateTime = new Date(`${input.appointmentDate}T${input.endTime}:00`);
 
           // Cria o agendamento no banco de dados
           const appointment = await createAppointment({
@@ -51,7 +53,7 @@ export const appRouter = router({
             name: input.name,
             email: input.email,
             phone: input.phone,
-            appointmentDate: appointmentDateTime,
+            appointmentDate: startDateTime,
             status: 'pending',
           });
 
@@ -64,9 +66,9 @@ export const appRouter = router({
           try {
             const calendarEvent = await createGoogleCalendarEvent(
               `Agendamento - ${input.name}`,
-              `Agendamento confirmado para ${input.name}\nE-mail: ${input.email}\nTelefone: ${input.phone}`,
-              appointmentDateTime,
-              new Date(appointmentDateTime.getTime() + 60 * 60 * 1000), // 1 hora de duração
+              `Agendamento confirmado para ${input.name}\nE-mail: ${input.email}\nTelefone: ${input.phone}\nPeríodo: ${input.startTime} às ${input.endTime}`,
+              startDateTime,
+              endDateTime,
               input.email
             );
             googleCalendarEventId = calendarEvent.eventId;
@@ -85,8 +87,8 @@ export const appRouter = router({
             await sendConfirmationEmailToClient(
               input.email,
               input.name,
-              appointmentDateTime,
-              input.appointmentTime,
+              startDateTime,
+              `${input.startTime} às ${input.endTime}`,
               input.googleFormsLink
             );
           } catch (error) {
@@ -101,8 +103,8 @@ export const appRouter = router({
               input.name,
               input.email,
               input.phone,
-              appointmentDateTime,
-              input.appointmentTime
+              startDateTime,
+              `${input.startTime} às ${input.endTime}`
             );
           } catch (error) {
             console.warn('[Appointment] Failed to send notification email to admin:', error);
