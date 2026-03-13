@@ -4,11 +4,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/dist/index.js"
+      "destination": "/index.js"
     },
     {
       "source": "/(.*)",
-      "destination": "/dist/index.html"
+      "destination": "/public/index.html"
     }
   ]
 }
