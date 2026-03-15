@@ -104,7 +104,7 @@ app.post('/api/agendar', async (req, res) => {
                 // Enviar e-mail para o administrador
                 await resend.emails.send({
                     from: 'noreply@resend.dev',
-                    to: process.env.ADMIN_EMAIL,
+                    to: [process.env.ADMIN_EMAIL, email],
                     subject: `📅 Novo agendamento - ${nome}`,
                     html: `
                         <h2>Novo Agendamento</h2>
