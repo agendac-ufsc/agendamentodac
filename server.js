@@ -13,12 +13,14 @@ app.use(express.static(path.join(__dirname)));
 // Configurar Brevo
 const sendEmail = async (to, subject, htmlContent) => {
     if (!process.env.BREVO_API_KEY) {
-        console.warn('⚠️  BREVO_API_KEY não configurada. E-mails não serão enviados.');
+        console.warn('⚠️  BREVO_API_KEY não configurada nos logs do Vercel.');
         return null;
     }
 
-    // Prioriza EMAIL_REMETENTE_VALIDADO (conforme imagem do usuário), depois SENDER_EMAIL, depois o padrão
-    const senderEmail = process.env.EMAIL_REMETENTE_VALIDADO || process.env.SENDER_EMAIL || "agendac.ufsc@gmail.com";
+    // Define o remetente prioritário:
+    // 1. Variável de ambiente específica do remetente validado
+    // 2. O e-mail informado pelo usuário como o correto
+    const senderEmail = process.env.EMAIL_REMETENTE_VALIDADO || "agendac.ufsc@gmail.com";
 
     const data = {
         sender: { "name": "Agendamento DAC", "email": senderEmail },
@@ -34,11 +36,15 @@ const sendEmail = async (to, subject, htmlContent) => {
                 'Content-Type': 'application/json'
             }
         });
-        console.log('E-mail enviado com sucesso via Brevo para:', to, 'Message ID:', response.data.messageId);
+        console.log(`E-mail enviado com sucesso via Brevo (Remetente: ${senderEmail}) para: ${to}`);
         return response.data;
     } catch (error) {
-        console.error('ERRO DETALHADO BREVO ao enviar para:', to, JSON.stringify(error.response ? error.response.data : error.message));
-        // Não lançamos erro aqui para não travar o fluxo principal se um e-mail falhar
+        const errorData = error.response ? error.response.data : error.message;
+        console.error(`ERRO BREVO ao enviar para ${to}:`, JSON.stringify(errorData));
+        // Log específico para ajudar o usuário a identificar se o remetente não está validado
+        if (errorData.code === 'unauthorized' || (errorData.message && errorData.message.includes('sender'))) {
+            console.error(`⚠️ ALERTA: O e-mail ${senderEmail} pode não estar validado no painel do Brevo.`);
+        }
         return null;
     }
 };
@@ -58,7 +64,7 @@ if (process.env.GOOGLE_CALENDAR_CLIENT_ID && process.env.GOOGLE_CALENDAR_CLIENT_
 
     calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 } else {
-    console.warn('⚠️  Google Calendar não configurado. Agendamentos não serão criados no calendário.');
+    console.warn('⚠️  Google Calendar não configurado.');
 }
 
 // Rota para agendar
@@ -103,17 +109,16 @@ app.post('/api/agendar', async (req, res) => {
                 });
                 calendarEventId = calendarEvent.data.id;
             } catch (calendarError) {
-                console.error('Erro ao criar evento no Google Calendar:', calendarError.message);
+                console.error('Erro Google Calendar:', calendarError.message);
             }
         }
 
-        // Enviar e-mails via Brevo
+        // Enviar e-mails via Brevo de forma independente
         const dataFormatada = new Date(startTime).toLocaleDateString('pt-BR');
-        
-        // Enviar e-mail para o cliente e para o administrador de forma independente
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
         
-        await Promise.all([
+        // Dispara ambos os envios sem esperar um pelo outro para maior performance
+        Promise.all([
             sendEmail(
                 email,
                 '✅ Seu agendamento foi confirmado!',
@@ -141,7 +146,7 @@ app.post('/api/agendar', async (req, res) => {
                 </div>
                 `
             )
-        ]);
+        ]).catch(e => console.error('Erro no processamento paralelo de e-mails:', e));
 
         res.json({ 
             success: true, 
