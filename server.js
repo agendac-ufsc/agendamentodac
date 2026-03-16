@@ -32,18 +32,22 @@ const sendEmail = async (to, subject, htmlContent) => {
     };
 
     try {
+        console.log(`Tentando enviar e-mail para ${to} usando remetente ${senderEmail}...`);
         const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
             headers: {
                 'api-key': process.env.BREVO_API_KEY,
                 'Content-Type': 'application/json'
             }
         });
-        console.log(`E-mail enviado com sucesso via Brevo (Remetente: ${senderEmail}) para: ${to}`);
+        console.log(`✅ E-mail enviado com sucesso para: ${to}. Response ID: ${response.data.messageId}`);
         return response.data;
     } catch (error) {
         const errorData = error.response ? error.response.data : error.message;
-        console.error(`ERRO BREVO ao enviar para ${to}:`, JSON.stringify(errorData));
-        // Log específico para ajudar o usuário a identificar se o remetente não está validado
+        console.error(`❌ ERRO BREVO ao enviar para ${to}:`, JSON.stringify(errorData));
+        
+        if (error.response && error.response.status === 401) {
+            console.error("⚠️ ERRO 401: BREVO_API_KEY pode estar inválida ou expirada.");
+        }
         if (errorData.code === 'unauthorized' || (errorData.message && errorData.message.includes('sender'))) {
             console.error(`⚠️ ALERTA: O e-mail ${senderEmail} pode não estar validado no painel do Brevo.`);
         }
