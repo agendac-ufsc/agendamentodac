@@ -20,7 +20,9 @@ const sendEmail = async (to, subject, htmlContent) => {
     // Define o remetente prioritário:
     // 1. Variável de ambiente específica do remetente validado
     // 2. O e-mail informado pelo usuário como o correto
-    const senderEmail = process.env.EMAIL_REMETENTE_VALIDADO || "agendac.ufsc@gmail.com";
+    // O remetente deve ser o e-mail validado no Brevo. 
+    // Usamos SENDER_EMAIL (definido no Vercel) ou o padrão agendac.ufsc@gmail.com
+    const senderEmail = process.env.SENDER_EMAIL || "agendac.ufsc@gmail.com";
 
     const data = {
         sender: { "name": "Agendamento DAC", "email": senderEmail },
@@ -113,40 +115,63 @@ app.post('/api/agendar', async (req, res) => {
             }
         }
 
-        // Enviar e-mails via Brevo de forma independente
+        // Enviar e-mails via Brevo
         const dataFormatada = new Date(startTime).toLocaleDateString('pt-BR');
+        
+        // O adminEmail recebe a notificação do novo agendamento
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
         
-        // Dispara ambos os envios sem esperar um pelo outro para maior performance
-        Promise.all([
-            sendEmail(
-                email,
-                '✅ Seu agendamento foi confirmado!',
-                `
-                <div style="font-family: sans-serif; color: #333;">
-                    <h2>Olá ${nome}!</h2>
-                    <p>Seu agendamento foi confirmado com sucesso!</p>
-                    <p><strong>Data:</strong> ${dataFormatada}</p>
-                    <p><strong>Horário:</strong> ${hora}</p>
-                    <p>Obrigado por agendar conosco!</p>
-                </div>
-                `
-            ),
-            sendEmail(
-                adminEmail,
-                `📅 Novo agendamento - ${nome}`,
-                `
-                <div style="font-family: sans-serif; color: #333;">
-                    <h2>Novo Agendamento</h2>
-                    <p><strong>Nome:</strong> ${nome}</p>
-                    <p><strong>E-mail:</strong> ${email}</p>
-                    <p><strong>Telefone:</strong> ${telefone}</p>
-                    <p><strong>Data:</strong> ${dataFormatada}</p>
-                    <p><strong>Horário:</strong> ${hora}</p>
-                </div>
-                `
-            )
-        ]).catch(e => console.error('Erro no processamento paralelo de e-mails:', e));
+        // O email do proponente (vindo do formulário) recebe a confirmação
+        const proponenteEmail = email;
+
+        console.log(`Iniciando envio de e-mails: Admin(${adminEmail}), Proponente(${proponenteEmail})`);
+        
+        // Dispara ambos os envios
+        try {
+            await Promise.all([
+                // E-mail para o Proponente (Confirmação)
+                sendEmail(
+                    proponenteEmail,
+                    '✅ Confirmação de Agendamento - DAC',
+                    `
+                    <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                        <h2 style="color: #764ba2;">Olá ${nome}!</h2>
+                        <p>Recebemos sua solicitação de agendamento e ela foi confirmada com sucesso.</p>
+                        <hr style="border: 0; border-top: 1px solid #eee;">
+                        <p><strong>Detalhes do Agendamento:</strong></p>
+                        <p>📅 <strong>Data:</strong> ${dataFormatada}</p>
+                        <p>⏰ <strong>Horário:</strong> ${hora}</p>
+                        <hr style="border: 0; border-top: 1px solid #eee;">
+                        <p>Caso precise cancelar ou reagendar, entre em contato respondendo a este e-mail.</p>
+                        <p>Atenciosamente,<br><strong>Equipe DAC</strong></p>
+                    </div>
+                    `
+                ),
+                // E-mail para o Admin (Notificação)
+                sendEmail(
+                    adminEmail,
+                    `📅 NOVO AGENDAMENTO: ${nome}`,
+                    `
+                    <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                        <h2 style="color: #333;">Novo Agendamento Recebido</h2>
+                        <p>Um novo horário foi reservado através do sistema.</p>
+                        <hr style="border: 0; border-top: 1px solid #eee;">
+                        <p><strong>Dados do Proponente:</strong></p>
+                        <p>👤 <strong>Nome:</strong> ${nome}</p>
+                        <p>📧 <strong>E-mail:</strong> ${proponenteEmail}</p>
+                        <p>📞 <strong>Telefone:</strong> ${telefone}</p>
+                        <hr style="border: 0; border-top: 1px solid #eee;">
+                        <p><strong>Horário Reservado:</strong></p>
+                        <p>📅 <strong>Data:</strong> ${dataFormatada}</p>
+                        <p>⏰ <strong>Horário:</strong> ${hora}</p>
+                    </div>
+                    `
+                )
+            ]);
+            console.log('Todos os e-mails foram processados.');
+        } catch (e) {
+            console.error('Erro crítico no envio de e-mails:', e);
+        }
 
         res.json({ 
             success: true, 
