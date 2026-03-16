@@ -17,8 +17,11 @@ const sendEmail = async (to, subject, htmlContent) => {
         return null;
     }
 
+    // Prioriza EMAIL_REMETENTE_VALIDADO (conforme imagem do usuário), depois SENDER_EMAIL, depois o padrão
+    const senderEmail = process.env.EMAIL_REMETENTE_VALIDADO || process.env.SENDER_EMAIL || "agendac.ufsc@gmail.com";
+
     const data = {
-        sender: { "name": "Agendamento DAC", "email": process.env.SENDER_EMAIL || "agendac.ufsc@gmail.com" },
+        sender: { "name": "Agendamento DAC", "email": senderEmail },
         to: Array.isArray(to) ? to.map(email => ({ "email": email })) : [{ "email": to }],
         subject: subject,
         htmlContent: htmlContent
@@ -35,7 +38,8 @@ const sendEmail = async (to, subject, htmlContent) => {
         return response.data;
     } catch (error) {
         console.error('ERRO DETALHADO BREVO ao enviar para:', to, JSON.stringify(error.response ? error.response.data : error.message));
-        throw error;
+        // Não lançamos erro aqui para não travar o fluxo principal se um e-mail falhar
+        return null;
     }
 };
 
@@ -104,11 +108,13 @@ app.post('/api/agendar', async (req, res) => {
         }
 
         // Enviar e-mails via Brevo
-        try {
-            const dataFormatada = new Date(startTime).toLocaleDateString('pt-BR');
-            
-            // Enviar e-mail para o cliente
-            await sendEmail(
+        const dataFormatada = new Date(startTime).toLocaleDateString('pt-BR');
+        
+        // Enviar e-mail para o cliente e para o administrador de forma independente
+        const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
+        
+        await Promise.all([
+            sendEmail(
                 email,
                 '✅ Seu agendamento foi confirmado!',
                 `
@@ -120,11 +126,8 @@ app.post('/api/agendar', async (req, res) => {
                     <p>Obrigado por agendar conosco!</p>
                 </div>
                 `
-            );
-
-            // Enviar e-mail para o administrador
-            const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
-            await sendEmail(
+            ),
+            sendEmail(
                 adminEmail,
                 `📅 Novo agendamento - ${nome}`,
                 `
@@ -137,10 +140,8 @@ app.post('/api/agendar', async (req, res) => {
                     <p><strong>Horário:</strong> ${hora}</p>
                 </div>
                 `
-            );
-        } catch (emailError) {
-            console.error('Erro ao enviar e-mails:', emailError.message);
-        }
+            )
+        ]);
 
         res.json({ 
             success: true, 
