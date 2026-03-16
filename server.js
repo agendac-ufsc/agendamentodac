@@ -58,9 +58,9 @@ const sendEmail = async (to, subject, htmlContent) => {
 // Rota para agendar
 app.post('/api/agendar', async (req, res) => {
     try {
-        const { nome, email, telefone, data, hora } = req.body;
+        const { nome, email, telefone, evento, data, hora } = req.body;
 
-        if (!nome || !email || !telefone || !data || !hora) {
+        if (!nome || !email || !telefone || !evento || !data || !hora) {
             return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         }
 
@@ -87,6 +87,7 @@ app.post('/api/agendar', async (req, res) => {
                 <p><strong>Detalhes do Agendamento:</strong></p>
                 <p>📅 <strong>Data:</strong> ${dataFormatada}</p>
                 <p>⏰ <strong>Horário:</strong> ${hora}</p>
+                <p>🎭 <strong>Evento:</strong> ${evento}</p>
                 <hr style="border: 0; border-top: 1px solid #eee;">
                 <p>Caso precise cancelar ou reagendar, entre em contato respondendo a este e-mail.</p>
                 <p>Atenciosamente,<br><strong>Equipe DAC</strong></p>
@@ -96,7 +97,7 @@ app.post('/api/agendar', async (req, res) => {
 
         const emailAdmin = await sendEmail(
             adminEmail,
-            `📅 NOVO AGENDAMENTO: ${nome}`,
+            `📅 NOVO AGENDAMENTO: ${evento} (${nome})`,
             `
             <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
                 <h2 style="color: #333;">Novo Agendamento Recebido</h2>
@@ -106,6 +107,7 @@ app.post('/api/agendar', async (req, res) => {
                 <p>👤 <strong>Nome:</strong> ${nome}</p>
                 <p>📧 <strong>E-mail:</strong> ${proponenteEmail}</p>
                 <p>📞 <strong>Telefone:</strong> ${telefone}</p>
+                <p>🎭 <strong>Evento:</strong> ${evento}</p>
                 <hr style="border: 0; border-top: 1px solid #eee;">
                 <p><strong>Horário Reservado:</strong></p>
                 <p>📅 <strong>Data:</strong> ${dataFormatada}</p>
