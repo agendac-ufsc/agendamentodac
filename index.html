@@ -356,7 +356,15 @@
                 sel.start = time; sel.end = null;
                 document.getElementById('modalStart').style.display = 'flex';
             } else {
-                sel.end = time;
+                // Calcular o horário de término real (acrescentando 30 minutos ao slot selecionado)
+                const [h, m] = time.split(':').map(Number);
+                let endH = h;
+                let endM = m + 30;
+                if (endM >= 60) {
+                    endH += 1;
+                    endM = 0;
+                }
+                sel.end = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
             }
             renderTimeSlots(step);
             updateStepUI(step);
