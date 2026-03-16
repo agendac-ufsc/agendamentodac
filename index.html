@@ -323,12 +323,13 @@
                     const slotStart = new Date(`${dateStr}T${time}:00`);
                     const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000); // Slot de 30 minutos
                     
-                    const isBusy = eventsOnDay.some(e => {
+                    const isBusy = googleEvents.some(e => {
                         const eStart = new Date(e.start);
                         const eEnd = new Date(e.end);
-                        // Um slot está ocupado se houver QUALQUER sobreposição com o evento do Google
-                        // (Início do slot antes do fim do evento E fim do slot depois do início do evento)
-                        return slotStart < eEnd && slotEnd > eStart;
+                        
+                        // Um slot está ocupado se houver QUALQUER sobreposição com o evento do Google.
+                        // Usamos uma pequena margem de 1 segundo para evitar problemas de arredondamento.
+                        return (slotStart < new Date(eEnd.getTime() - 1000)) && (slotEnd > new Date(eStart.getTime() + 1000));
                     });
 
                     if (isBusy) {
