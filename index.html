@@ -274,7 +274,8 @@
     <script>
         let currentDate = new Date();
         let selectedDate = null;
-        let selectedTime = null;
+        let startTime = null;
+        let endTime = null;
 
         const monthYear = document.getElementById('monthYear');
         const calendarGrid = document.getElementById('calendarGrid');
@@ -351,8 +352,10 @@
 
         function selectDate(date) {
             selectedDate = date;
-            selectedTime = null;
+            startTime = null;
+            endTime = null;
             selectedDateDisplay.textContent = date.toLocaleDateString('pt-BR');
+            updateSubmitButton();
             renderCalendar();
             renderTimeSlots();
         }
@@ -374,15 +377,61 @@
                 const slot = document.createElement('div');
                 slot.className = 'time-slot';
                 slot.textContent = time;
-                slot.addEventListener('click', () => selectTime(time, slot));
+                
+                if (startTime && time === startTime) slot.classList.add('selected');
+                if (endTime && time === endTime) slot.classList.add('selected');
+                
+                // Desabilitar horários menores ou iguais ao início se já houver um início selecionado
+                if (startTime && !endTime) {
+                    const startVal = parseInt(startTime.replace(':', ''));
+                    const currentVal = parseInt(time.replace(':', ''));
+                    if (currentVal <= startVal) {
+                        slot.style.opacity = '0.3';
+                        slot.style.cursor = 'not-allowed';
+                    } else {
+                        slot.addEventListener('click', () => selectTime(time));
+                    }
+                } else {
+                    slot.addEventListener('click', () => selectTime(time));
+                }
+                
                 timeSlots.appendChild(slot);
             });
         }
 
-        function selectTime(time, element) {
-            document.querySelectorAll('.time-slot').forEach(s => s.classList.remove('selected'));
-            element.classList.add('selected');
-            selectedTime = time;
+        function selectTime(time) {
+            if (!startTime || (startTime && endTime)) {
+                // Iniciar nova seleção
+                startTime = time;
+                endTime = null;
+            } else {
+                // Selecionar fim
+                const startVal = parseInt(startTime.replace(':', ''));
+                const endVal = parseInt(time.replace(':', ''));
+                
+                if (endVal > startVal) {
+                    endTime = time;
+                } else {
+                    startTime = time;
+                    endTime = null;
+                }
+            }
+            updateSubmitButton();
+            renderTimeSlots();
+        }
+
+        function updateSubmitButton() {
+            const btn = document.getElementById('submitBtn');
+            if (selectedDate && startTime && endTime) {
+                btn.disabled = false;
+                btn.textContent = `Confirmar Agendamento (${startTime} - ${endTime})`;
+            } else if (selectedDate && startTime) {
+                btn.disabled = true;
+                btn.textContent = 'Selecione o Horário de Término';
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'Selecione Data e Horários';
+            }
         }
 
         document.getElementById('prevMonth').addEventListener('click', (e) => {
@@ -400,8 +449,8 @@
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            if (!selectedDate || !selectedTime) {
-                showMessage('Por favor, selecione uma data e horário', 'error');
+            if (!selectedDate || !startTime || !endTime) {
+                showMessage('Por favor, selecione uma data e os horários de início e término', 'error');
                 return;
             }
 
@@ -420,7 +469,7 @@
                         email,
                         telefone,
                         data: selectedDate.toISOString().split('T')[0],
-                        hora: selectedTime
+                        hora: `${startTime} às ${endTime}`
                     })
                 });
 
@@ -430,8 +479,10 @@
                     showMessage('✅ Agendamento realizado com sucesso! Verifique seu e-mail.', 'success');
                     form.reset();
                     selectedDate = null;
-                    selectedTime = null;
+                    startTime = null;
+                    endTime = null;
                     selectedDateDisplay.textContent = 'Nenhuma';
+                    updateSubmitButton();
                     renderCalendar();
                     timeSlots.innerHTML = '';
                 } else {
@@ -453,6 +504,7 @@
         }
 
         // Inicializar
+        updateSubmitButton();
         renderCalendar();
     </script>
 </body>

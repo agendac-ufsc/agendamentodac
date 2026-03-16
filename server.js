@@ -67,9 +67,7 @@ app.post('/api/agendar', async (req, res) => {
         console.log(`[Agendar] Nova solicitação recebida de: ${nome} (${email})`);
 
         const [year, month, day] = data.split('-');
-        const [hours, minutes] = hora.split(':');
-        const startTime = new Date(year, month - 1, day, hours, minutes);
-        const dataFormatada = startTime.toLocaleDateString('pt-BR');
+        const dataFormatada = `${day}/${month}/${year}`;
         
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
         const proponenteEmail = email;
