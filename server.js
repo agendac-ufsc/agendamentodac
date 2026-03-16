@@ -104,32 +104,23 @@ app.post('/api/agendar', async (req, res) => {
                     dateTime: endTime.toISOString(),
                     timeZone: 'America/Sao_Paulo'
                 },
+                // Removendo o e-mail do proponente dos 'attendees' para que o Google não envie convite automático
                 attendees: [
-                    { email: email },
                     { email: adminEmail }
-                ],
-                // Tenta forçar o organizador se as permissões permitirem, 
-                // mas o ideal é que o Refresh Token seja da conta agendac.ufsc
-                organizer: {
-                    email: adminEmail,
-                    displayName: "Agendamento DAC"
-                }
+                ]
             };
 
             try {
-                console.log(`Tentando criar evento no Google Calendar para: ${adminEmail} e ${email}`);
+                console.log(`Criando evento silencioso no Google Calendar para: ${adminEmail}`);
                 const calendarEvent = await calendar.events.insert({
                     calendarId: 'primary',
                     resource: event,
-                    sendUpdates: 'all' // Garante que os convites sejam enviados por e-mail pelo Google
+                    sendUpdates: 'none' // Silencia as notificações automáticas do Google
                 });
                 calendarEventId = calendarEvent.data.id;
                 console.log(`✅ Evento criado no Google Calendar. ID: ${calendarEventId}`);
             } catch (calendarError) {
                 console.error('❌ Erro Google Calendar:', calendarError.message);
-                if (calendarError.message.includes('invalid_grant')) {
-                    console.error('⚠️ O Refresh Token do Google pode ter expirado ou é da conta antiga.');
-                }
             }
         }
 
