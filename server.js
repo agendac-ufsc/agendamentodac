@@ -3,20 +3,40 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const { google } = require('googleapis');
-const { Resend } = require('resend');
+const axios = require('axios');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Configurar Resend
-const getResend = () => {
-    if (!process.env.RESEND_API_KEY) {
-        console.warn('⚠️  RESEND_API_KEY não configurada. E-mails não serão enviados.');
+// Configurar Brevo
+const sendEmail = async (to, subject, htmlContent) => {
+    if (!process.env.BREVO_API_KEY) {
+        console.warn('⚠️  BREVO_API_KEY não configurada. E-mails não serão enviados.');
         return null;
     }
-    return new Resend(process.env.RESEND_API_KEY);
+
+    const data = {
+        sender: { "name": "Agendamento DAC", "email": process.env.SENDER_EMAIL || "agendac.ufsc@gmail.com" },
+        to: Array.isArray(to) ? to.map(email => ({ "email": email })) : [{ "email": to }],
+        subject: subject,
+        htmlContent: htmlContent
+    };
+
+    try {
+        const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
+            headers: {
+                'api-key': process.env.BREVO_API_KEY,
+                'Content-Type': 'application/json'
+            }
+        });
+        console.log('E-mail enviado com sucesso via Brevo. Message ID:', response.data.messageId);
+        return response.data;
+    } catch (error) {
+        console.error('Erro ao enviar e-mail via Brevo:', error.response ? error.response.data : error.message);
+        throw error;
+    }
 };
 
 // Configurar Google Calendar
@@ -83,41 +103,43 @@ app.post('/api/agendar', async (req, res) => {
             }
         }
 
-        // Enviar e-mails
-        const resend = getResend();
-        if (resend) {
-            try {
-                // Enviar e-mail para o cliente
-                await resend.emails.send({
-                    from: 'noreply@resend.dev',
-                    to: email,
-                    subject: '✅ Seu agendamento foi confirmado!',
-                    html: `
-                        <h2>Olá ${nome}!</h2>
-                        <p>Seu agendamento foi confirmado com sucesso!</p>
-                        <p><strong>Data:</strong> ${new Date(startTime).toLocaleDateString('pt-BR')}</p>
-                        <p><strong>Horário:</strong> ${hora}</p>
-                        <p>Obrigado por agendar conosco!</p>
-                    `
-                });
+        // Enviar e-mails via Brevo
+        try {
+            const dataFormatada = new Date(startTime).toLocaleDateString('pt-BR');
+            
+            // Enviar e-mail para o cliente
+            await sendEmail(
+                email,
+                '✅ Seu agendamento foi confirmado!',
+                `
+                <div style="font-family: sans-serif; color: #333;">
+                    <h2>Olá ${nome}!</h2>
+                    <p>Seu agendamento foi confirmado com sucesso!</p>
+                    <p><strong>Data:</strong> ${dataFormatada}</p>
+                    <p><strong>Horário:</strong> ${hora}</p>
+                    <p>Obrigado por agendar conosco!</p>
+                </div>
+                `
+            );
 
-                // Enviar e-mail para o administrador
-                await resend.emails.send({
-                    from: 'noreply@resend.dev',
-                    to: [process.env.ADMIN_EMAIL, email],
-                    subject: `📅 Novo agendamento - ${nome}`,
-                    html: `
-                        <h2>Novo Agendamento</h2>
-                        <p><strong>Nome:</strong> ${nome}</p>
-                        <p><strong>E-mail:</strong> ${email}</p>
-                        <p><strong>Telefone:</strong> ${telefone}</p>
-                        <p><strong>Data:</strong> ${new Date(startTime).toLocaleDateString('pt-BR')}</p>
-                        <p><strong>Horário:</strong> ${hora}</p>
-                    `
-                });
-            } catch (emailError) {
-                console.error('Erro ao enviar e-mails:', emailError.message);
-            }
+            // Enviar e-mail para o administrador (com cópia para o cliente conforme solicitado)
+            const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
+            await sendEmail(
+                [adminEmail, email],
+                `📅 Novo agendamento - ${nome}`,
+                `
+                <div style="font-family: sans-serif; color: #333;">
+                    <h2>Novo Agendamento</h2>
+                    <p><strong>Nome:</strong> ${nome}</p>
+                    <p><strong>E-mail:</strong> ${email}</p>
+                    <p><strong>Telefone:</strong> ${telefone}</p>
+                    <p><strong>Data:</strong> ${dataFormatada}</p>
+                    <p><strong>Horário:</strong> ${hora}</p>
+                </div>
+                `
+            );
+        } catch (emailError) {
+            console.error('Erro ao enviar e-mails:', emailError.message);
         }
 
         res.json({ 
