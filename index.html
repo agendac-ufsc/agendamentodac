@@ -45,6 +45,9 @@
         .accordion-header .status-icon { font-size: 12px; color: #ccc; transition: transform 0.3s; }
         .accordion-header.active .status-icon { transform: rotate(180deg); }
         .accordion-header.completed h3::after { content: ' ✅'; font-size: 14px; }
+        .accordion-item.disabled { opacity: 0.5; cursor: not-allowed; background: #f5f5f5; }
+        .accordion-item.disabled .accordion-header { cursor: not-allowed; pointer-events: none; }
+
         .accordion-content { display: none; padding: 20px; background: #fcfcfc; border-top: 1px solid #eee; }
         .accordion-content.show { display: block; }
 
@@ -101,14 +104,32 @@
         .message.error { background: #f8d7da; color: #721c24; display: block; }
         .loading { display: none; text-align: center; margin-top: 20px; color: #667eea; }
         .loading.show { display: block; }
+
+        .modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .btn-modal { padding: 10px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-yes { background: #28a745; color: white; }
+        .btn-no { background: #6c757d; color: white; }
     </style>
 </head>
 <body>
-    <div class="modal-overlay" id="modalOverlay">
+    <!-- Modal Orientação Início -->
+    <div class="modal-overlay" id="modalStart">
         <div class="modal-content">
             <h2 style="color: #764ba2; margin-bottom: 10px;">Início confirmado!</h2>
             <p style="color: #666; margin-bottom: 20px;">Agora escolha o horário de término.</p>
-            <button type="button" style="background:#667eea; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;" id="modalOkBtn">OK</button>
+            <button type="button" class="btn-modal btn-yes" id="btnStartOk">OK</button>
+        </div>
+    </div>
+
+    <!-- Modal Adicionar Outro -->
+    <div class="modal-overlay" id="modalAddAnother">
+        <div class="modal-content">
+            <h2 id="modalAddTitle" style="color: #764ba2; margin-bottom: 10px;">Adicionado!</h2>
+            <p id="modalAddText" style="color: #666; margin-bottom: 20px;">Deseja adicionar outro?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-yes" id="btnAddYes">Sim</button>
+                <button type="button" class="btn-modal btn-no" id="btnAddNo">Não</button>
+            </div>
         </div>
     </div>
 
@@ -139,18 +160,18 @@
         const stepNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
         const steps = Object.keys(stepNames);
         const selections = {};
-        const confirmedSteps = {};
+        const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
+        let currentStepContext = null;
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null, currentMonth: new Date() };
-            confirmedSteps[s] = null;
         });
 
         function initAccordion() {
             const accordion = document.getElementById('stepsAccordion');
             steps.forEach(s => {
                 const item = document.createElement('div');
-                item.className = 'accordion-item';
+                item.className = 'accordion-item' + (s === 'desmontagem' ? ' disabled' : '');
                 item.setAttribute('data-step', s);
                 item.innerHTML = `
                     <div class="accordion-header" onclick="toggleStep('${s}')">
@@ -168,6 +189,8 @@
         }
 
         function toggleStep(step) {
+            if (step === 'desmontagem' && confirmedSteps.evento.length === 0) return;
+
             steps.forEach(s => {
                 const content = document.getElementById(`content-${s}`);
                 const header = content.previousElementSibling;
@@ -270,7 +293,7 @@
             const sel = selections[step];
             if (!sel.start || (sel.start && sel.end)) {
                 sel.start = time; sel.end = null;
-                document.getElementById('modalOverlay').style.display = 'flex';
+                document.getElementById('modalStart').style.display = 'flex';
             } else {
                 sel.end = time;
             }
@@ -290,18 +313,39 @@
 
         function confirmStep(step) {
             const sel = selections[step];
-            confirmedSteps[step] = {
+            const data = {
                 date: sel.date,
                 start: sel.start,
                 end: sel.end
             };
             
+            confirmedSteps[step].push(data);
+            currentStepContext = step;
+
+            if (step === 'ensaio' || step === 'evento') {
+                document.getElementById('modalAddTitle').textContent = `${stepNames[step]} adicionado!`;
+                document.getElementById('modalAddText').textContent = `Deseja adicionar outro ${stepNames[step]}?`;
+                document.getElementById('modalAddAnother').style.display = 'flex';
+            } else {
+                finishStepSelection(step);
+            }
+        }
+
+        function finishStepSelection(step) {
             // Marcar como completado no header
             document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.add('completed');
             
-            // Fechar aba automaticamente
+            // Limpar seleção atual para permitir novos se necessário
+            selections[step].date = null;
+            selections[step].start = null;
+            selections[step].end = null;
+
+            // Lógica de dependência da Desmontagem
+            if (step === 'evento') {
+                document.querySelector('.accordion-item[data-step="desmontagem"]').classList.remove('disabled');
+            }
+
             toggleStep(null);
-            
             updateSummary();
         }
 
@@ -312,35 +356,59 @@
             
             let hasConfirmed = false;
             steps.forEach(s => {
-                if (confirmedSteps[s]) {
+                confirmedSteps[s].forEach((data, index) => {
                     hasConfirmed = true;
                     const card = document.createElement('div');
                     card.className = 'summary-card';
+                    const label = confirmedSteps[s].length > 1 ? `${stepNames[s]} ${index + 1}` : stepNames[s];
                     card.innerHTML = `
                         <div class="summary-info">
-                            <h4>${stepNames[s]}</h4>
-                            <p>📅 ${confirmedSteps[s].date.toLocaleDateString('pt-BR')} | ⏰ ${confirmedSteps[s].start} às ${confirmedSteps[s].end}</p>
+                            <h4>${label}</h4>
+                            <p>📅 ${data.date.toLocaleDateString('pt-BR')} | ⏰ ${data.start} às ${data.end}</p>
                         </div>
-                        <button type="button" class="btn-delete" onclick="deleteConfirmedStep('${s}')">Excluir</button>
+                        <button type="button" class="btn-delete" onclick="deleteConfirmedStep('${s}', ${index})">Excluir</button>
                     `;
                     list.appendChild(card);
-                }
+                });
             });
 
             section.classList.toggle('show', hasConfirmed);
             document.getElementById('submitBtn').disabled = !hasConfirmed;
         }
 
-        function deleteConfirmedStep(step) {
-            confirmedSteps[step] = null;
-            selections[step].date = null;
-            selections[step].start = null;
-            selections[step].end = null;
-            document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.remove('completed');
+        function deleteConfirmedStep(step, index) {
+            confirmedSteps[step].splice(index, 1);
+            if (confirmedSteps[step].length === 0) {
+                document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.remove('completed');
+                if (step === 'evento') {
+                    document.querySelector('.accordion-item[data-step="desmontagem"]').classList.add('disabled');
+                    confirmedSteps.desmontagem = [];
+                    document.querySelector('.accordion-item[data-step="desmontagem"] .accordion-header').classList.remove('completed');
+                }
+            }
             updateSummary();
         }
 
-        document.getElementById('modalOkBtn').onclick = () => document.getElementById('modalOverlay').style.display = 'none';
+        // Modal Handlers
+        document.getElementById('btnStartOk').onclick = () => document.getElementById('modalStart').style.display = 'none';
+        
+        document.getElementById('btnAddYes').onclick = () => {
+            const step = currentStepContext;
+            document.getElementById('modalAddAnother').style.display = 'none';
+            // Limpar seleção atual para novo agendamento na mesma aba
+            selections[step].date = null;
+            selections[step].start = null;
+            selections[step].end = null;
+            renderStepCalendar(step);
+            renderTimeSlots(step);
+            updateStepUI(step);
+            updateSummary();
+        };
+
+        document.getElementById('btnAddNo').onclick = () => {
+            document.getElementById('modalAddAnother').style.display = 'none';
+            finishStepSelection(currentStepContext);
+        };
 
         document.getElementById('agendamentoForm').onsubmit = async (e) => {
             e.preventDefault();
@@ -357,11 +425,11 @@
             };
 
             steps.forEach(s => {
-                if (confirmedSteps[s]) {
-                    payload.etapas[s] = {
-                        data: confirmedSteps[s].date.toISOString().split('T')[0],
-                        horario: `${confirmedSteps[s].start} às ${confirmedSteps[s].end}`
-                    };
+                if (confirmedSteps[s].length > 0) {
+                    payload.etapas[s] = confirmedSteps[s].map(data => ({
+                        data: data.date.toISOString().split('T')[0],
+                        horario: `${data.start} às ${data.end}`
+                    }));
                 }
             });
 

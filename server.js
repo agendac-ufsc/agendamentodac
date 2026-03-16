@@ -62,11 +62,15 @@ app.post('/api/agendar', async (req, res) => {
             const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
             
             for (const key in etapas) {
-                html += `<tr>
-                    <td style="border: 1px solid #ddd; padding: 8px;"><strong>${nomesEtapas[key]}</strong></td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${formatarData(etapas[key].data)}</td>
-                    <td style="border: 1px solid #ddd; padding: 8px;">${etapas[key].horario}</td>
-                </tr>`;
+                const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
+                itens.forEach((item, index) => {
+                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${index + 1}` : nomesEtapas[key];
+                    html += `<tr>
+                        <td style="border: 1px solid #ddd; padding: 8px;"><strong>${label}</strong></td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${formatarData(item.data)}</td>
+                        <td style="border: 1px solid #ddd; padding: 8px;">${item.horario}</td>
+                    </tr>`;
+                });
             }
             html += '</table>';
             return html;
