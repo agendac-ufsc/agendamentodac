@@ -458,6 +458,14 @@
                 }
             }
             updateSummary();
+            
+            // Scroll automático para o calendário quando deletar um agendamento
+            const calendarElement = document.getElementById(`calendar-${step}`);
+            if (calendarElement) {
+                setTimeout(() => {
+                    calendarElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
         }
 
         // Modal Handlers
@@ -474,6 +482,14 @@
             renderTimeSlots(step);
             updateStepUI(step);
             updateSummary();
+            
+            // Scroll automático para o calendário
+            const calendarElement = document.getElementById(`calendar-${step}`);
+            if (calendarElement) {
+                setTimeout(() => {
+                    calendarElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
         };
 
         document.getElementById('btnAddNo').onclick = () => {
