@@ -147,6 +147,10 @@
             <div class="form-group"><label>Telefone *</label><input type="tel" id="telefone" required></div>
             <div class="form-group"><label>Nome do Evento *</label><input type="text" id="evento" required></div>
 
+            <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5;">
+                <strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.
+            </div>
+
             <div class="accordion" id="stepsAccordion">
                 <!-- Etapas Geradas via JS -->
             </div>
@@ -209,6 +213,11 @@
                     </div>
                     <div class="accordion-content" id="content-${s}">
                         <div class="calendar" id="calendar-${s}"></div>
+                        <div style="display: flex; gap: 15px; margin-bottom: 20px; font-size: 12px; justify-content: center; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 1px solid #eee; border-radius: 2px; background: #fff;"></div> Livre</div>
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 1px solid #ffe066; border-radius: 2px; background: #fff4cc;"></div> Parcialmente Ocupado</div>
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 1px solid #ff8080; border-radius: 2px; background: #ffb3b3;"></div> Ocupado</div>
+                        </div>
                         <div class="time-slots" id="slots-${s}"></div>
                         <button type="button" class="btn-confirm-step" id="btn-confirm-${s}" onclick="confirmStep('${s}')">Confirmar ${stepNames[s]}</button>
                     </div>
