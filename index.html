@@ -169,9 +169,10 @@
         const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
         let currentStepContext = null;
         let googleEvents = [];
+        let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
 
         steps.forEach(s => {
-            selections[s] = { date: null, start: null, end: null, currentMonth: new Date() };
+            selections[s] = { date: null, start: null, end: null };
         });
 
         async function fetchAvailability() {
@@ -240,13 +241,13 @@
         function renderStepCalendar(step) {
             const container = document.getElementById(`calendar-${step}`);
             const sel = selections[step];
-            const year = sel.currentMonth.getFullYear();
-            const month = sel.currentMonth.getMonth();
+            const year = globalCurrentMonth.getFullYear();
+            const month = globalCurrentMonth.getMonth();
 
             container.innerHTML = `
                 <div class="calendar-header">
                     <button type="button" onclick="event.stopPropagation(); changeMonth('${step}', -1)">←</button>
-                    <span>${sel.currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                    <span>${globalCurrentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
                     <button type="button" onclick="event.stopPropagation(); changeMonth('${step}', 1)">→</button>
                 </div>
                 <div class="calendar-grid"></div>
@@ -299,7 +300,7 @@
         }
 
         function changeMonth(step, delta) {
-            selections[step].currentMonth.setMonth(selections[step].currentMonth.getMonth() + delta);
+            globalCurrentMonth.setMonth(globalCurrentMonth.getMonth() + delta);
             renderStepCalendar(step);
         }
 
