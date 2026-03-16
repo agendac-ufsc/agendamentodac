@@ -61,8 +61,8 @@
         .day:hover:not(.other-month) { background: #f0f4ff; border-color: #667eea; }
         .day.selected { background: #667eea; color: white; border-color: #667eea; }
         .day.other-month { color: #ccc; cursor: not-allowed; }
-        .day.busy-full { background: #ff4d4d !important; color: white !important; border-color: #cc0000 !important; cursor: not-allowed; }
-        .day.busy-partial { background: #ffcc00 !important; color: #333 !important; border-color: #e6b800 !important; }
+        .day.busy-full { background: #ffb3b3 !important; color: #333 !important; border-color: #ff8080 !important; cursor: not-allowed; }
+        .day.busy-partial { background: #fff4cc !important; color: #333 !important; border-color: #ffe066 !important; }
         .time-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; }
         @media (min-width: 600px) { .time-slots { grid-template-columns: repeat(6, 1fr); } }
         .time-slot { padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center; cursor: pointer; font-size: 12px; transition: all 0.2s; }
@@ -324,6 +324,7 @@
                     const isBusy = eventsOnDay.some(e => {
                         const eStart = new Date(e.start);
                         const eEnd = new Date(e.end);
+                        // Um slot de 30min está ocupado se o seu início estiver dentro do intervalo do evento
                         return slotDateTime >= eStart && slotDateTime < eEnd;
                     });
 
