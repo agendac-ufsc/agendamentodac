@@ -177,20 +177,23 @@ app.post('/api/agendar', async (req, res) => {
 
         // Criar eventos no Google Calendar
         const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-        const calendarPromises = [];
-
+        
+        console.log(`[Agendar] Iniciando criação de eventos para: ${evento} (${nome})`);
+        
+        // Usar um loop sequencial para garantir que cada evento seja processado corretamente
+        // e evitar possíveis problemas de concorrência ou disparos duplos em ambientes serverless
         for (const key in etapas) {
             const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
-            itens.forEach((item, index) => {
-                const label = itens.length > 1 ? `${nomesEtapas[key]} ${index + 1}` : nomesEtapas[key];
+            for (let i = 0; i < itens.length; i++) {
+                const item = itens[i];
+                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
                 const summary = `${label}: ${evento}`;
                 const description = `Proponente: ${nome}\nE-mail: ${email}\nTelefone: ${telefone}`;
-                calendarPromises.push(createCalendarEvent(summary, description, item.data, item.horario));
-            });
+                
+                console.log(`[Agendar] Criando evento: ${summary} em ${item.data} ${item.horario}`);
+                await createCalendarEvent(summary, description, item.data, item.horario);
+            }
         }
-
-        // Aguardar criação dos eventos
-        await Promise.all(calendarPromises);
 
         const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';

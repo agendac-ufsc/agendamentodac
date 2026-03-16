@@ -522,8 +522,13 @@
 
         document.getElementById('agendamentoForm').onsubmit = async (e) => {
             e.preventDefault();
+            const submitBtn = document.getElementById('submitBtn');
             const loading = document.getElementById('loading');
             const msg = document.getElementById('message');
+            
+            // Proteção contra cliques duplos
+            if (submitBtn.disabled) return;
+            submitBtn.disabled = true;
             loading.classList.add('show');
 
             const payload = {
@@ -563,6 +568,7 @@
                 msg.className = 'message error';
             } finally {
                 loading.classList.remove('show');
+                submitBtn.disabled = false;
             }
         };
 
