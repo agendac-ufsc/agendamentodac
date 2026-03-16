@@ -28,29 +28,15 @@ const sendEmail = async (to, subject, htmlContent) => {
     };
 
     try {
-        console.log(`[Brevo] Tentando enviar e-mail para: ${to}`);
-        console.log(`[Brevo] Remetente configurado: ${senderEmail}`);
-        
         const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
             headers: {
                 'api-key': apiKey,
                 'Content-Type': 'application/json'
             }
         });
-        
-        console.log(`✅ [Brevo] Sucesso! ID: ${response.data.messageId}`);
         return response.data;
     } catch (error) {
-        if (error.response) {
-            console.error(`❌ [Brevo] Erro da API (${error.response.status}):`, JSON.stringify(error.response.data));
-            if (error.response.status === 401) {
-                console.error("   -> Verifique se a BREVO_API_KEY está correta.");
-            } else if (error.response.status === 400) {
-                console.error("   -> Verifique se o remetente está validado e se o formato do e-mail é válido.");
-            }
-        } else {
-            console.error(`❌ [Brevo] Erro de rede ou configuração:`, error.message);
-        }
+        console.error(`❌ [Brevo] Erro ao enviar e-mail:`, error.response ? error.response.data : error.message);
         return null;
     }
 };
@@ -58,73 +44,80 @@ const sendEmail = async (to, subject, htmlContent) => {
 // Rota para agendar
 app.post('/api/agendar', async (req, res) => {
     try {
-        const { nome, email, telefone, evento, data, hora } = req.body;
+        const { nome, email, telefone, evento, etapas } = req.body;
 
-        if (!nome || !email || !telefone || !evento || !data || !hora) {
+        if (!nome || !email || !telefone || !evento || !etapas) {
             return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         }
 
-        console.log(`[Agendar] Nova solicitação recebida de: ${nome} (${email})`);
+        const formatarData = (dataStr) => {
+            const [year, month, day] = dataStr.split('-');
+            return `${day}/${month}/${year}`;
+        };
 
-        const [year, month, day] = data.split('-');
-        const dataFormatada = `${day}/${month}/${year}`;
-        
+        const gerarTabelaEtapas = (etapas) => {
+            let html = '<table style="width: 100%; border-collapse: collapse; margin-top: 10px;">';
+            html += '<tr style="background: #f8f9fa;"><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Etapa</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Data</th><th style="border: 1px solid #ddd; padding: 8px; text-align: left;">Horário</th></tr>';
+            
+            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+            
+            for (const key in etapas) {
+                html += `<tr>
+                    <td style="border: 1px solid #ddd; padding: 8px;"><strong>${nomesEtapas[key]}</strong></td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${formatarData(etapas[key].data)}</td>
+                    <td style="border: 1px solid #ddd; padding: 8px;">${etapas[key].horario}</td>
+                </tr>`;
+            }
+            html += '</table>';
+            return html;
+        };
+
+        const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
-        const proponenteEmail = email;
 
-        // Enviar e-mails
-        // Nota: Enviamos sequencialmente para garantir logs claros em caso de erro no primeiro envio
-        console.log(`[Agendar] Iniciando sequência de envios...`);
-        
+        // E-mail para o Proponente
         const emailProponente = await sendEmail(
-            proponenteEmail,
-            '✅ Confirmação de Agendamento - DAC',
+            email,
+            '✅ Confirmação de Inscrição de Projeto - DAC',
             `
             <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
                 <h2 style="color: #764ba2;">Olá ${nome}!</h2>
-                <p>Recebemos sua solicitação de agendamento e ela foi confirmada com sucesso.</p>
+                <p>Sua inscrição para o evento <strong>${evento}</strong> foi recebida com sucesso.</p>
                 <hr style="border: 0; border-top: 1px solid #eee;">
-                <p><strong>Detalhes do Agendamento:</strong></p>
-                <p>📅 <strong>Data:</strong> ${dataFormatada}</p>
-                <p>⏰ <strong>Horário:</strong> ${hora}</p>
-                <p>🎭 <strong>Evento:</strong> ${evento}</p>
+                <p><strong>Resumo do Cronograma:</strong></p>
+                ${tabelaHtml}
                 <hr style="border: 0; border-top: 1px solid #eee;">
-                <p>Caso precise cancelar ou reagendar, entre em contato respondendo a este e-mail.</p>
+                <p>Caso precise realizar alterações, entre em contato respondendo a este e-mail.</p>
                 <p>Atenciosamente,<br><strong>Equipe DAC</strong></p>
             </div>
             `
         );
 
+        // E-mail para o Administrador
         const emailAdmin = await sendEmail(
             adminEmail,
-            `📅 NOVO AGENDAMENTO: ${evento} (${nome})`,
+            `📅 NOVA INSCRIÇÃO: ${evento} (${nome})`,
             `
             <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
-                <h2 style="color: #333;">Novo Agendamento Recebido</h2>
-                <p>Um novo horário foi reservado através do sistema.</p>
+                <h2 style="color: #333;">Nova Inscrição de Projeto</h2>
+                <p>Um novo projeto foi inscrito com o seguinte cronograma:</p>
                 <hr style="border: 0; border-top: 1px solid #eee;">
                 <p><strong>Dados do Proponente:</strong></p>
                 <p>👤 <strong>Nome:</strong> ${nome}</p>
-                <p>📧 <strong>E-mail:</strong> ${proponenteEmail}</p>
+                <p>📧 <strong>E-mail:</strong> ${email}</p>
                 <p>📞 <strong>Telefone:</strong> ${telefone}</p>
                 <p>🎭 <strong>Evento:</strong> ${evento}</p>
                 <hr style="border: 0; border-top: 1px solid #eee;">
-                <p><strong>Horário Reservado:</strong></p>
-                <p>📅 <strong>Data:</strong> ${dataFormatada}</p>
-                <p>⏰ <strong>Horário:</strong> ${hora}</p>
+                <p><strong>Cronograma do Projeto:</strong></p>
+                ${tabelaHtml}
             </div>
             `
         );
 
         if (emailProponente || emailAdmin) {
-            res.json({ 
-                success: true, 
-                message: 'Agendamento realizado com sucesso.'
-            });
+            res.json({ success: true });
         } else {
-            res.status(500).json({ 
-                error: 'O agendamento foi registrado, mas houve um erro ao enviar os e-mails de confirmação. Por favor, verifique os logs do servidor.' 
-            });
+            res.status(500).json({ error: 'Erro ao enviar e-mails de confirmação.' });
         }
 
     } catch (error) {
@@ -133,7 +126,6 @@ app.post('/api/agendar', async (req, res) => {
     }
 });
 
-// Rota raiz
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });

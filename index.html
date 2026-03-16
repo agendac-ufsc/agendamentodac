@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Agendamento</title>
+    <title>Sistema de Agendamento DAC</title>
     <style>
         * {
             margin: 0;
@@ -48,7 +48,7 @@
             font-weight: 500;
         }
 
-        input, select {
+        input {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -57,15 +57,80 @@
             transition: border-color 0.3s;
         }
 
-        input:focus, select:focus {
+        input:focus {
             outline: none;
             border-color: #667eea;
         }
 
-        .calendar {
+        /* Accordion Styles */
+        .accordion {
             margin: 20px 0;
-            padding: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .accordion-item {
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .accordion-item:last-child {
+            border-bottom: none;
+        }
+
+        .accordion-header {
+            background: #fff;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.3s;
+            user-select: none;
+        }
+
+        .accordion-header:hover {
             background: #f8f9fa;
+        }
+
+        .accordion-header h3 {
+            font-size: 16px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        .accordion-header .status-icon {
+            font-size: 12px;
+            color: #ccc;
+            transition: transform 0.3s;
+        }
+
+        .accordion-header.active .status-icon {
+            transform: rotate(180deg);
+        }
+
+        .accordion-header.completed h3::after {
+            content: ' ✅';
+            font-size: 14px;
+        }
+
+        .accordion-content {
+            display: none;
+            padding: 20px;
+            background: #fcfcfc;
+            border-top: 1px solid #eee;
+        }
+
+        .accordion-content.show {
+            display: block;
+        }
+
+        /* Calendar & Time Slots Styles */
+        .calendar {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #fff;
+            border: 1px solid #eee;
             border-radius: 8px;
         }
 
@@ -73,26 +138,17 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
         }
 
         .calendar-header button {
             background: #667eea;
             color: white;
             border: none;
-            padding: 8px 12px;
+            padding: 5px 10px;
             border-radius: 5px;
             cursor: pointer;
-            font-size: 14px;
-        }
-
-        .calendar-header button:hover {
-            background: #5568d3;
-        }
-
-        .calendar-header h3 {
-            color: #333;
-            font-size: 18px;
+            font-size: 12px;
         }
 
         .calendar-grid {
@@ -105,8 +161,8 @@
             text-align: center;
             font-weight: bold;
             color: #667eea;
-            padding: 10px 0;
-            font-size: 12px;
+            font-size: 11px;
+            padding-bottom: 5px;
         }
 
         .day {
@@ -114,23 +170,16 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 2px solid #e0e0e0;
-            border-radius: 5px;
+            border: 1px solid #eee;
+            border-radius: 4px;
             cursor: pointer;
-            background: white;
-            transition: all 0.3s;
-            font-size: 14px;
+            font-size: 12px;
+            transition: all 0.2s;
         }
 
-        .day:hover {
-            border-color: #667eea;
+        .day:hover:not(.other-month) {
             background: #f0f4ff;
-        }
-
-        .day.other-month {
-            color: #ccc;
-            background: #fafafa;
-            cursor: not-allowed;
+            border-color: #667eea;
         }
 
         .day.selected {
@@ -139,11 +188,16 @@
             border-color: #667eea;
         }
 
+        .day.other-month {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+
         .time-slots {
-            margin: 20px 0;
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 10px;
+            gap: 8px;
+            margin-top: 15px;
         }
 
         @media (min-width: 600px) {
@@ -153,24 +207,49 @@
         }
 
         .time-slot {
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
             text-align: center;
             cursor: pointer;
-            transition: all 0.3s;
-            background: white;
+            font-size: 12px;
+            transition: all 0.2s;
         }
 
         .time-slot:hover {
-            border-color: #667eea;
             background: #f0f4ff;
+            border-color: #667eea;
         }
 
         .time-slot.selected {
             background: #667eea;
             color: white;
             border-color: #667eea;
+        }
+
+        /* Summary & Buttons */
+        .step-summary {
+            margin-top: 15px;
+            padding: 10px;
+            background: #eef2ff;
+            border-radius: 6px;
+            font-size: 13px;
+            display: none;
+        }
+
+        .step-summary.show {
+            display: block;
+        }
+
+        .btn-clear {
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-top: 10px;
         }
 
         button.submit {
@@ -187,59 +266,20 @@
             margin-top: 20px;
         }
 
-        button.submit:hover {
-            transform: translateY(-2px);
-        }
-
         button.submit:disabled {
             opacity: 0.5;
             cursor: not-allowed;
         }
 
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .message.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-            display: block;
-        }
-
-        .message.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-            display: block;
-        }
-
-        .loading {
-            display: none;
-            text-align: center;
-            color: #667eea;
-            margin-top: 20px;
-        }
-
-        .loading.show {
-            display: block;
-        }
-
-        /* Modal Styles */
+        /* Modal & Messages */
         .modal-overlay {
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: 1000;
+            z-index: 2000;
         }
 
         .modal-content {
@@ -249,425 +289,328 @@
             text-align: center;
             max-width: 400px;
             width: 90%;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
-        .modal-content h2 {
-            color: #764ba2;
-            margin-bottom: 10px;
-            font-size: 22px;
-        }
-
-        .modal-content p {
-            color: #666;
-            margin-bottom: 20px;
-            font-size: 14px;
-        }
-
-        .modal-btn {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 10px 30px;
+        .message {
+            padding: 15px;
             border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-
-        .modal-btn:hover {
-            background: #764ba2;
-        }
-
-        /* Summary Styles */
-        .summary-card {
-            background: #f0f4ff;
-            border: 2px solid #667eea;
-            border-radius: 10px;
-            padding: 20px;
-            margin: 20px 0;
+            margin-top: 20px;
             display: none;
-            flex-direction: column;
-            gap: 10px;
+            text-align: center;
         }
 
-        .summary-card.show {
-            display: flex;
-        }
+        .message.success { background: #d4edda; color: #155724; display: block; }
+        .message.error { background: #f8d7da; color: #721c24; display: block; }
 
-        .summary-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #667eea;
-            padding-bottom: 10px;
-            margin-bottom: 5px;
-        }
-
-        .summary-header h4 {
-            color: #333;
-            font-size: 16px;
-        }
-
-        .summary-details {
-            font-size: 15px;
-            color: #555;
-            line-height: 1.6;
-        }
-
-        .delete-btn {
-            background: #ff4d4d;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-            transition: background 0.3s;
-        }
-
-        .delete-btn:hover {
-            background: #cc0000;
-        }
+        .loading { display: none; text-align: center; margin-top: 20px; color: #667eea; }
+        .loading.show { display: block; }
     </style>
 </head>
 <body>
     <div class="modal-overlay" id="modalOverlay">
         <div class="modal-content">
-            <h2>Horário de início confirmado!</h2>
-            <p>Agora clique no OK para escolher o horário de término no seletor.</p>
-            <button type="button" class="modal-btn" id="modalOkBtn">OK</button>
+            <h2 style="color: #764ba2; margin-bottom: 10px;">Início confirmado!</h2>
+            <p style="color: #666; margin-bottom: 20px;">Agora escolha o horário de término.</p>
+            <button type="button" style="background:#667eea; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer;" id="modalOkBtn">OK</button>
         </div>
     </div>
 
     <div class="container">
-        <h1>📅 Agende seu Horário</h1>
+        <h1>📅 Inscrição de Projeto</h1>
 
         <form id="agendamentoForm">
             <div class="form-group">
                 <label for="nome">Nome Completo *</label>
-                <input type="text" id="nome" name="nome" required>
+                <input type="text" id="nome" required>
             </div>
-
             <div class="form-group">
                 <label for="email">E-mail *</label>
-                <input type="email" id="email" name="email" required>
+                <input type="email" id="email" required>
             </div>
-
             <div class="form-group">
                 <label for="telefone">Telefone *</label>
-                <input type="tel" id="telefone" name="telefone" required>
+                <input type="tel" id="telefone" required>
             </div>
-
             <div class="form-group">
                 <label for="evento">Nome do Evento *</label>
-                <input type="text" id="evento" name="evento" required>
+                <input type="text" id="evento" required>
             </div>
 
-            <div class="calendar">
-                <div class="calendar-header">
-                    <button type="button" id="prevMonth">← Anterior</button>
-                    <h3 id="monthYear"></h3>
-                    <button type="button" id="nextMonth">Próximo →</button>
+            <div class="accordion" id="stepsAccordion">
+                <!-- Etapa: Ensaio -->
+                <div class="accordion-item" data-step="ensaio">
+                    <div class="accordion-header" onclick="toggleStep('ensaio')">
+                        <h3>Ensaio</h3>
+                        <span class="status-icon">▼</span>
+                    </div>
+                    <div class="accordion-content" id="content-ensaio">
+                        <div class="calendar" id="calendar-ensaio"></div>
+                        <div class="time-slots" id="slots-ensaio"></div>
+                        <div class="step-summary" id="summary-ensaio"></div>
+                        <button type="button" class="btn-clear" onclick="clearStep('ensaio')">Limpar Ensaio</button>
+                    </div>
                 </div>
-                <div class="calendar-grid" id="calendarGrid"></div>
-            </div>
 
-            <div class="form-group">
-                <label>Data Selecionada: <strong id="selectedDate">Nenhuma</strong></label>
-            </div>
-
-            <div class="form-group">
-                <label>Horário *</label>
-                <div class="time-slots" id="timeSlots"></div>
-            </div>
-
-            <div class="summary-card" id="summaryCard">
-                <div class="summary-header">
-                    <h4>Resumo da Seleção</h4>
-                    <button type="button" class="delete-btn" id="deleteSelectionBtn">Excluir Seleção</button>
+                <!-- Etapa: Montagem -->
+                <div class="accordion-item" data-step="montagem">
+                    <div class="accordion-header" onclick="toggleStep('montagem')">
+                        <h3>Montagem</h3>
+                        <span class="status-icon">▼</span>
+                    </div>
+                    <div class="accordion-content" id="content-montagem">
+                        <div class="calendar" id="calendar-montagem"></div>
+                        <div class="time-slots" id="slots-montagem"></div>
+                        <div class="step-summary" id="summary-montagem"></div>
+                        <button type="button" class="btn-clear" onclick="clearStep('montagem')">Limpar Montagem</button>
+                    </div>
                 </div>
-                <div class="summary-details" id="summaryDetails">
-                    <!-- Preenchido via JS -->
+
+                <!-- Etapa: Evento -->
+                <div class="accordion-item" data-step="evento">
+                    <div class="accordion-header" onclick="toggleStep('evento')">
+                        <h3>Evento</h3>
+                        <span class="status-icon">▼</span>
+                    </div>
+                    <div class="accordion-content" id="content-evento">
+                        <div class="calendar" id="calendar-evento"></div>
+                        <div class="time-slots" id="slots-evento"></div>
+                        <div class="step-summary" id="summary-evento"></div>
+                        <button type="button" class="btn-clear" onclick="clearStep('evento')">Limpar Evento</button>
+                    </div>
+                </div>
+
+                <!-- Etapa: Desmontagem -->
+                <div class="accordion-item" data-step="desmontagem">
+                    <div class="accordion-header" onclick="toggleStep('desmontagem')">
+                        <h3>Desmontagem</h3>
+                        <span class="status-icon">▼</span>
+                    </div>
+                    <div class="accordion-content" id="content-desmontagem">
+                        <div class="calendar" id="calendar-desmontagem"></div>
+                        <div class="time-slots" id="slots-desmontagem"></div>
+                        <div class="step-summary" id="summary-desmontagem"></div>
+                        <button type="button" class="btn-clear" onclick="clearStep('desmontagem')">Limpar Desmontagem</button>
+                    </div>
                 </div>
             </div>
 
-            <div class="loading" id="loading">
-                <p>Processando seu agendamento...</p>
-            </div>
-
-            <button type="submit" class="submit" id="submitBtn">Confirmar Agendamento</button>
-
+            <div class="loading" id="loading">Processando agendamento...</div>
+            <button type="submit" class="submit" id="submitBtn" disabled>Finalizar Inscrição</button>
             <div class="message" id="message"></div>
         </form>
     </div>
 
     <script>
-        let currentDate = new Date();
-        let selectedDate = null;
-        let startTime = null;
-        let endTime = null;
+        const steps = ['ensaio', 'montagem', 'evento', 'desmontagem'];
+        const selections = {
+            ensaio: { date: null, start: null, end: null, currentMonth: new Date() },
+            montagem: { date: null, start: null, end: null, currentMonth: new Date() },
+            evento: { date: null, start: null, end: null, currentMonth: new Date() },
+            desmontagem: { date: null, start: null, end: null, currentMonth: new Date() }
+        };
 
-        const monthYear = document.getElementById('monthYear');
-        const calendarGrid = document.getElementById('calendarGrid');
-        const timeSlots = document.getElementById('timeSlots');
-        const form = document.getElementById('agendamentoForm');
-        const message = document.getElementById('message');
-        const loading = document.getElementById('loading');
-        const selectedDateDisplay = document.getElementById('selectedDate');
+        function toggleStep(step) {
+            steps.forEach(s => {
+                const content = document.getElementById(`content-${s}`);
+                const header = content.previousElementSibling;
+                if (s === step) {
+                    const isShowing = content.classList.contains('show');
+                    content.classList.toggle('show', !isShowing);
+                    header.classList.toggle('active', !isShowing);
+                    if (!isShowing) renderStepCalendar(s);
+                } else {
+                    content.classList.remove('show');
+                    header.classList.remove('active');
+                }
+            });
+        }
 
-        // Renderizar calendário
-        function renderCalendar() {
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
+        function renderStepCalendar(step) {
+            const container = document.getElementById(`calendar-${step}`);
+            const sel = selections[step];
+            const year = sel.currentMonth.getFullYear();
+            const month = sel.currentMonth.getMonth();
 
-            monthYear.textContent = new Date(year, month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+            container.innerHTML = `
+                <div class="calendar-header">
+                    <button type="button" onclick="changeMonth('${step}', -1)">←</button>
+                    <span>${sel.currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                    <button type="button" onclick="changeMonth('${step}', 1)">→</button>
+                </div>
+                <div class="calendar-grid"></div>
+            `;
+
+            const grid = container.querySelector('.calendar-grid');
+            ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].forEach(d => {
+                const h = document.createElement('div');
+                h.className = 'day-header';
+                h.textContent = d;
+                grid.appendChild(h);
+            });
 
             const firstDay = new Date(year, month, 1).getDay();
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             const daysInPrevMonth = new Date(year, month, 0).getDate();
 
-            calendarGrid.innerHTML = '';
-
-            // Cabeçalho dos dias da semana
-            const dayHeaders = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'];
-            dayHeaders.forEach(day => {
-                const header = document.createElement('div');
-                header.className = 'day-header';
-                header.textContent = day;
-                calendarGrid.appendChild(header);
-            });
-
-            // Dias do mês anterior
             for (let i = daysInPrevMonth - firstDay + 1; i <= daysInPrevMonth; i++) {
-                const day = document.createElement('div');
-                day.className = 'day other-month';
-                day.textContent = i;
-                calendarGrid.appendChild(day);
+                const d = document.createElement('div');
+                d.className = 'day other-month';
+                d.textContent = i;
+                grid.appendChild(d);
             }
 
-            // Dias do mês atual
             for (let i = 1; i <= daysInMonth; i++) {
-                const day = document.createElement('div');
-                day.className = 'day';
-                day.textContent = i;
-
+                const d = document.createElement('div');
+                d.className = 'day';
+                d.textContent = i;
                 const date = new Date(year, month, i);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
+                const today = new Date(); today.setHours(0,0,0,0);
 
-                if (date < today) {
-                    day.classList.add('other-month');
-                    day.style.cursor = 'not-allowed';
-                } else {
-                    day.addEventListener('click', () => selectDate(date));
+                if (date < today) d.classList.add('other-month');
+                else {
+                    d.onclick = () => selectDate(step, date);
+                    if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
                 }
-
-                if (selectedDate && date.toDateString() === selectedDate.toDateString()) {
-                    day.classList.add('selected');
-                }
-
-                calendarGrid.appendChild(day);
-            }
-
-            // Dias do próximo mês
-            const totalCells = calendarGrid.children.length - 7; // Menos cabeçalho
-            const remainingCells = 42 - totalCells;
-            for (let i = 1; i <= remainingCells; i++) {
-                const day = document.createElement('div');
-                day.className = 'day other-month';
-                day.textContent = i;
-                calendarGrid.appendChild(day);
+                grid.appendChild(d);
             }
         }
 
-        function selectDate(date) {
-            selectedDate = date;
-            startTime = null;
-            endTime = null;
-            selectedDateDisplay.textContent = date.toLocaleDateString('pt-BR');
-            updateSubmitButton();
-            renderCalendar();
-            renderTimeSlots();
+        function changeMonth(step, delta) {
+            selections[step].currentMonth.setMonth(selections[step].currentMonth.getMonth() + delta);
+            renderStepCalendar(step);
         }
 
-        function renderTimeSlots() {
-            timeSlots.innerHTML = '';
-            if (!selectedDate) return;
+        function selectDate(step, date) {
+            selections[step].date = date;
+            selections[step].start = null;
+            selections[step].end = null;
+            renderStepCalendar(step);
+            renderTimeSlots(step);
+            updateUI(step);
+        }
 
-            const times = [];
-            for (let hour = 8; hour <= 22; hour++) {
-                const h = hour.toString().padStart(2, '0');
-                times.push(`${h}:00`);
-                if (hour < 22) {
-                    times.push(`${h}:30`);
-                }
-            }
+        function renderTimeSlots(step) {
+            const container = document.getElementById(`slots-${step}`);
+            container.innerHTML = '';
+            const sel = selections[step];
+            if (!sel.date) return;
 
-            times.forEach(time => {
-                const slot = document.createElement('div');
-                slot.className = 'time-slot';
-                slot.textContent = time;
-                
-                if (startTime && time === startTime) slot.classList.add('selected');
-                if (endTime && time === endTime) slot.classList.add('selected');
-                
-                // Desabilitar horários menores ou iguais ao início se já houver um início selecionado
-                if (startTime && !endTime) {
-                    const startVal = parseInt(startTime.replace(':', ''));
-                    const currentVal = parseInt(time.replace(':', ''));
-                    if (currentVal <= startVal) {
-                        slot.style.opacity = '0.3';
-                        slot.style.cursor = 'not-allowed';
+            for (let h = 8; h <= 22; h++) {
+                [0, 30].forEach(m => {
+                    if (h === 22 && m === 30) return;
+                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                    const slot = document.createElement('div');
+                    slot.className = 'time-slot';
+                    slot.textContent = time;
+
+                    if (sel.start === time || sel.end === time) slot.classList.add('selected');
+
+                    if (sel.start && !sel.end) {
+                        const sVal = parseInt(sel.start.replace(':', ''));
+                        const cVal = parseInt(time.replace(':', ''));
+                        if (cVal <= sVal) {
+                            slot.style.opacity = '0.3';
+                            slot.style.cursor = 'not-allowed';
+                        } else {
+                            slot.onclick = () => selectTime(step, time);
+                        }
                     } else {
-                        slot.addEventListener('click', () => selectTime(time));
+                        slot.onclick = () => selectTime(step, time);
                     }
-                } else {
-                    slot.addEventListener('click', () => selectTime(time));
-                }
-                
-                timeSlots.appendChild(slot);
-            });
+                    container.appendChild(slot);
+                });
+            }
         }
 
-        function selectTime(time) {
-            if (!startTime || (startTime && endTime)) {
-                // Iniciar nova seleção
-                startTime = time;
-                endTime = null;
-                
-                // Mostrar modal de orientação
+        function selectTime(step, time) {
+            const sel = selections[step];
+            if (!sel.start || (sel.start && sel.end)) {
+                sel.start = time;
+                sel.end = null;
                 document.getElementById('modalOverlay').style.display = 'flex';
             } else {
-                // Selecionar fim
-                const startVal = parseInt(startTime.replace(':', ''));
-                const endVal = parseInt(time.replace(':', ''));
-                
-                if (endVal > startVal) {
-                    endTime = time;
-                } else {
-                    startTime = time;
-                    endTime = null;
-                }
+                sel.end = time;
             }
-            updateSubmitButton();
-            renderTimeSlots();
+            renderTimeSlots(step);
+            updateUI(step);
         }
 
-        function updateSubmitButton() {
-            const btn = document.getElementById('submitBtn');
-            const summaryCard = document.getElementById('summaryCard');
-            const summaryDetails = document.getElementById('summaryDetails');
-
-            if (selectedDate && startTime && endTime) {
-                btn.disabled = false;
-                btn.textContent = `Confirmar Agendamento Final`;
-                
-                // Mostrar resumo
-                summaryDetails.innerHTML = `
-                    <p>📅 <strong>Data:</strong> ${selectedDate.toLocaleDateString('pt-BR')}</p>
-                    <p>⏰ <strong>Horário:</strong> ${startTime} às ${endTime}</p>
-                `;
-                summaryCard.classList.add('show');
-            } else if (selectedDate && startTime) {
-                btn.disabled = true;
-                btn.textContent = 'Selecione o Horário de Término';
-                summaryCard.classList.remove('show');
+        function updateUI(step) {
+            const sel = selections[step];
+            const summary = document.getElementById(`summary-${step}`);
+            const header = document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`);
+            
+            if (sel.date && sel.start && sel.end) {
+                summary.innerHTML = `<strong>Selecionado:</strong> ${sel.date.toLocaleDateString('pt-BR')} das ${sel.start} às ${sel.end}`;
+                summary.classList.add('show');
+                header.classList.add('completed');
             } else {
-                btn.disabled = true;
-                btn.textContent = 'Selecione Data e Horários';
-                summaryCard.classList.remove('show');
+                summary.classList.remove('show');
+                header.classList.remove('completed');
             }
+            
+            const allDone = steps.every(s => selections[s].date && selections[s].start && selections[s].end);
+            document.getElementById('submitBtn').disabled = !allDone;
         }
 
-        document.getElementById('prevMonth').addEventListener('click', (e) => {
+        function clearStep(step) {
+            selections[step].date = null;
+            selections[step].start = null;
+            selections[step].end = null;
+            renderStepCalendar(step);
+            renderTimeSlots(step);
+            updateUI(step);
+        }
+
+        document.getElementById('modalOkBtn').onclick = () => document.getElementById('modalOverlay').style.display = 'none';
+
+        document.getElementById('agendamentoForm').onsubmit = async (e) => {
             e.preventDefault();
-            currentDate.setMonth(currentDate.getMonth() - 1);
-            renderCalendar();
-        });
-
-        document.getElementById('nextMonth').addEventListener('click', (e) => {
-            e.preventDefault();
-            currentDate.setMonth(currentDate.getMonth() + 1);
-            renderCalendar();
-        });
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            if (!selectedDate || !startTime || !endTime) {
-                showMessage('Por favor, selecione uma data e os horários de início e término', 'error');
-                return;
-            }
-
-            const nome = document.getElementById('nome').value;
-            const email = document.getElementById('email').value;
-            const telefone = document.getElementById('telefone').value;
-            const evento = document.getElementById('evento').value;
-
+            const loading = document.getElementById('loading');
+            const msg = document.getElementById('message');
             loading.classList.add('show');
 
+            const payload = {
+                nome: document.getElementById('nome').value,
+                email: document.getElementById('email').value,
+                telefone: document.getElementById('telefone').value,
+                evento: document.getElementById('evento').value,
+                etapas: {}
+            };
+
+            steps.forEach(s => {
+                payload.etapas[s] = {
+                    data: selections[s].date.toISOString().split('T')[0],
+                    horario: `${selections[s].start} às ${selections[s].end}`
+                };
+            });
+
             try {
-                const response = await fetch('/api/agendar', {
+                const res = await fetch('/api/agendar', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        nome,
-                        email,
-                        telefone,
-                        evento,
-                        data: selectedDate.toISOString().split('T')[0],
-                        hora: `${startTime} às ${endTime}`
-                    })
+                    body: JSON.stringify(payload)
                 });
-
-                const result = await response.json();
-
-                if (response.ok) {
-                    showMessage('✅ Agendamento realizado com sucesso! Verifique seu e-mail.', 'success');
-                    form.reset();
-                    selectedDate = null;
-                    startTime = null;
-                    endTime = null;
-                    selectedDateDisplay.textContent = 'Nenhuma';
-                    updateSubmitButton();
-                    renderCalendar();
-                    timeSlots.innerHTML = '';
+                const result = await res.json();
+                if (res.ok) {
+                    msg.textContent = '✅ Inscrição realizada com sucesso!';
+                    msg.className = 'message success';
+                    document.getElementById('agendamentoForm').reset();
+                    steps.forEach(clearStep);
                 } else {
-                    showMessage('❌ Erro: ' + (result.error || 'Tente novamente'), 'error');
+                    msg.textContent = '❌ Erro: ' + result.error;
+                    msg.className = 'message error';
                 }
-            } catch (error) {
-                showMessage('❌ Erro ao processar agendamento: ' + error.message, 'error');
+            } catch (err) {
+                msg.textContent = '❌ Erro de conexão.';
+                msg.className = 'message error';
             } finally {
                 loading.classList.remove('show');
             }
-        });
+        };
 
-        function showMessage(text, type) {
-            message.textContent = text;
-            message.className = 'message ' + type;
-            setTimeout(() => {
-                message.className = 'message';
-            }, 5000);
-        }
-
-        // Fechar modal
-        document.getElementById('modalOkBtn').addEventListener('click', () => {
-            document.getElementById('modalOverlay').style.display = 'none';
-        });
-
-        // Excluir seleção
-        document.getElementById('deleteSelectionBtn').addEventListener('click', () => {
-            startTime = null;
-            endTime = null;
-            updateSubmitButton();
-            renderTimeSlots();
-        });
-
-        // Inicializar
-        updateSubmitButton();
-        renderCalendar();
+        // Inicializar primeira aba
+        toggleStep('ensaio');
     </script>
 </body>
 </html>
