@@ -313,7 +313,6 @@
 
             for (let h = 8; h <= 22; h++) {
                 [0, 30].forEach(m => {
-                    if (h === 22 && m === 30) return;
                     const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
