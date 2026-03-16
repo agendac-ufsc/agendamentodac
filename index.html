@@ -329,9 +329,9 @@
                         const eEnd = new Date(e.end);
                         
                         // Um slot está ocupado se houver QUALQUER sobreposição com o evento do Google.
-                        // Para garantir que o slot final seja incluído, verificamos se o início do slot (slotStart)
-                        // é menor que o fim do evento (eEnd).
-                        return (slotStart.getTime() < eEnd.getTime()) && (slotEnd.getTime() > eStart.getTime());
+                        // Para garantir que o slot que coincide com o término também seja bloqueado,
+                        // usamos a comparação slotStart <= eEnd.
+                        return (slotStart.getTime() <= eEnd.getTime()) && (slotEnd.getTime() >= eStart.getTime());
                     });
 
                     if (isBusy) {
