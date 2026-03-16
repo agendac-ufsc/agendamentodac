@@ -59,7 +59,7 @@
         .day-header { text-align: center; font-weight: bold; color: #667eea; font-size: 11px; padding-bottom: 5px; }
         .day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 1px solid #eee; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
         .day:hover:not(.other-month) { background: #f0f4ff; border-color: #667eea; }
-        .day.selected { background: #667eea; color: white; border-color: #667eea; }
+        .day.selected { border: 3px solid #667eea !important; box-shadow: 0 0 8px rgba(102, 126, 234, 0.5); font-weight: bold; }
         .day.other-month { color: #ccc; cursor: not-allowed; }
         .day.busy-full { background: #ffb3b3 !important; color: #333 !important; border-color: #ff8080 !important; cursor: not-allowed; }
         .day.busy-partial { background: #fff4cc !important; color: #333 !important; border-color: #ffe066 !important; }
