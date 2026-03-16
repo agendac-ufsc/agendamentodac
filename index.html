@@ -311,6 +311,14 @@
             renderStepCalendar(step);
             renderTimeSlots(step);
             updateStepUI(step);
+            
+            // Rolagem automática para os slots de horário
+            const slotsElement = document.getElementById(`slots-${step}`);
+            if (slotsElement) {
+                setTimeout(() => {
+                    slotsElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            }
         }
 
         function renderTimeSlots(step) {
