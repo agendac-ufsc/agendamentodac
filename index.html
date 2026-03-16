@@ -313,6 +313,7 @@
 
             for (let h = 8; h <= 22; h++) {
                 [0, 30].forEach(m => {
+                    if (h === 22 && m === 30) return;
                     const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
@@ -328,10 +329,9 @@
                         const eEnd = new Date(e.end);
                         
                         // Um slot está ocupado se houver QUALQUER sobreposição com o evento do Google.
-                        // Usamos uma pequena margem de 1 segundo para evitar problemas de arredondamento.
-                        // slotStart < eEnd (O slot começa antes do evento terminar)
-                        // slotEnd > eStart (O slot termina depois do evento começar)
-                        return (slotStart.getTime() < (eEnd.getTime() - 1000)) && (slotEnd.getTime() > (eStart.getTime() + 1000));
+                        // Para garantir que o slot final seja incluído, verificamos se o início do slot (slotStart)
+                        // é menor que o fim do evento (eEnd).
+                        return (slotStart.getTime() < eEnd.getTime()) && (slotEnd.getTime() > eStart.getTime());
                     });
 
                     if (isBusy) {
