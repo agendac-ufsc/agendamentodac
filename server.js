@@ -31,10 +31,10 @@ const sendEmail = async (to, subject, htmlContent) => {
                 'Content-Type': 'application/json'
             }
         });
-        console.log('E-mail enviado com sucesso via Brevo. Message ID:', response.data.messageId);
+        console.log('E-mail enviado com sucesso via Brevo para:', to, 'Message ID:', response.data.messageId);
         return response.data;
     } catch (error) {
-        console.error('ERRO DETALHADO BREVO:', JSON.stringify(error.response ? error.response.data : error.message));
+        console.error('ERRO DETALHADO BREVO ao enviar para:', to, JSON.stringify(error.response ? error.response.data : error.message));
         throw error;
     }
 };
@@ -122,10 +122,10 @@ app.post('/api/agendar', async (req, res) => {
                 `
             );
 
-            // Enviar e-mail para o administrador (com cópia para o cliente conforme solicitado)
+            // Enviar e-mail para o administrador
             const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
             await sendEmail(
-                [adminEmail, email],
+                adminEmail,
                 `📅 Novo agendamento - ${nome}`,
                 `
                 <div style="font-family: sans-serif; color: #333;">
