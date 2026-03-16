@@ -361,7 +361,15 @@
             timeSlots.innerHTML = '';
             if (!selectedDate) return;
 
-            const times = ['09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00'];
+            const times = [];
+            for (let hour = 8; hour <= 22; hour++) {
+                const h = hour.toString().padStart(2, '0');
+                times.push(`${h}:00`);
+                if (hour < 22) {
+                    times.push(`${h}:30`);
+                }
+            }
+
             times.forEach(time => {
                 const slot = document.createElement('div');
                 slot.className = 'time-slot';
