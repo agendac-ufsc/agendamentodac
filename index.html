@@ -278,6 +278,58 @@
         .modal-btn:hover {
             background: #764ba2;
         }
+
+        /* Summary Styles */
+        .summary-card {
+            background: #f0f4ff;
+            border: 2px solid #667eea;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .summary-card.show {
+            display: flex;
+        }
+
+        .summary-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #667eea;
+            padding-bottom: 10px;
+            margin-bottom: 5px;
+        }
+
+        .summary-header h4 {
+            color: #333;
+            font-size: 16px;
+        }
+
+        .summary-details {
+            font-size: 15px;
+            color: #555;
+            line-height: 1.6;
+        }
+
+        .delete-btn {
+            background: #ff4d4d;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: background 0.3s;
+        }
+
+        .delete-btn:hover {
+            background: #cc0000;
+        }
     </style>
 </head>
 <body>
@@ -324,6 +376,16 @@
             <div class="form-group">
                 <label>Horário *</label>
                 <div class="time-slots" id="timeSlots"></div>
+            </div>
+
+            <div class="summary-card" id="summaryCard">
+                <div class="summary-header">
+                    <h4>Resumo da Seleção</h4>
+                    <button type="button" class="delete-btn" id="deleteSelectionBtn">Excluir Seleção</button>
+                </div>
+                <div class="summary-details" id="summaryDetails">
+                    <!-- Preenchido via JS -->
+                </div>
             </div>
 
             <div class="loading" id="loading">
@@ -490,10 +552,29 @@
 
         function updateSubmitButton() {
             const btn = document.getElementById('submitBtn');
+            const summaryCard = document.getElementById('summaryCard');
+            const summaryDetails = document.getElementById('summaryDetails');
+
             if (selectedDate && startTime && endTime) {
                 btn.disabled = false;
-                btn.textContent = `Confirmar Agendamento (${startTime} - ${endTime})`;
+                btn.textContent = `Confirmar Agendamento Final`;
+                
+                // Mostrar resumo
+                summaryDetails.innerHTML = `
+                    <p>📅 <strong>Data:</strong> ${selectedDate.toLocaleDateString('pt-BR')}</p>
+                    <p>⏰ <strong>Horário:</strong> ${startTime} às ${endTime}</p>
+                `;
+                summaryCard.classList.add('show');
             } else if (selectedDate && startTime) {
+                btn.disabled = true;
+                btn.textContent = 'Selecione o Horário de Término';
+                summaryCard.classList.remove('show');
+            } else {
+                btn.disabled = true;
+                btn.textContent = 'Selecione Data e Horários';
+                summaryCard.classList.remove('show');
+            }
+        }
                 btn.disabled = true;
                 btn.textContent = 'Selecione o Horário de Término';
             } else {
@@ -574,6 +655,14 @@
         // Fechar modal
         document.getElementById('modalOkBtn').addEventListener('click', () => {
             document.getElementById('modalOverlay').style.display = 'none';
+        });
+
+        // Excluir seleção
+        document.getElementById('deleteSelectionBtn').addEventListener('click', () => {
+            startTime = null;
+            endTime = null;
+            updateSubmitButton();
+            renderTimeSlots();
         });
 
         // Inicializar
