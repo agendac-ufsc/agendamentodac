@@ -1,7 +1,7 @@
 {
   "name": "agendamento-simples",
   "version": "1.0.0",
-  "description": "Sistema simples de agendamento com Google Calendar",
+  "description": "Sistema de agendamento com envio de e-mail via Brevo",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -11,7 +11,6 @@
     "axios": "^1.13.6",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "googleapis": "^118.0.0"
+    "express": "^4.18.2"
   }
 }
