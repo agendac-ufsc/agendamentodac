@@ -86,9 +86,10 @@ app.get('/api/disponibilidade', async (req, res) => {
             auth: googleAuthClient,
             calendarId: CALENDAR_ID,
             timeMin: start || new Date().toISOString(),
-            timeMax: end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // +30 dias por padrão
+            timeMax: end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(), // +12 meses (365 dias)
             singleEvents: true,
             orderBy: 'startTime',
+            maxResults: 2500 // Aumentar limite de resultados para cobrir o ano todo
         });
 
         const ocupados = response.data.items.map(event => ({
