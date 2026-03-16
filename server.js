@@ -48,14 +48,17 @@ const createCalendarEvent = async (summary, description, date, timeRange) => {
 
     try {
         const [startTime, endTime] = timeRange.split(' às ');
-        const startDateTime = new Date(`${date}T${startTime}:00`);
-        const endDateTime = new Date(`${date}T${endTime}:00`);
+        
+        // Criar as datas forçando o fuso horário de Brasília (GMT-3)
+        // O formato ISO com -03:00 garante que o Google entenda o horário local correto
+        const startDateTimeStr = `${date}T${startTime}:00-03:00`;
+        const endDateTimeStr = `${date}T${endTime}:00-03:00`;
 
         const event = {
             summary: summary,
             description: description,
-            start: { dateTime: startDateTime.toISOString(), timeZone: 'America/Sao_Paulo' },
-            end: { dateTime: endDateTime.toISOString(), timeZone: 'America/Sao_Paulo' },
+            start: { dateTime: startDateTimeStr, timeZone: 'America/Sao_Paulo' },
+            end: { dateTime: endDateTimeStr, timeZone: 'America/Sao_Paulo' },
         };
 
         const response = await calendar.events.insert({
