@@ -320,12 +320,15 @@
                     slot.textContent = time;
 
                     // Verificar se o horário está ocupado no Google
-                    const slotDateTime = new Date(`${dateStr}T${time}:00`);
+                    const slotStart = new Date(`${dateStr}T${time}:00`);
+                    const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000); // Slot de 30 minutos
+                    
                     const isBusy = eventsOnDay.some(e => {
                         const eStart = new Date(e.start);
                         const eEnd = new Date(e.end);
-                        // Um slot de 30min está ocupado se o seu início estiver dentro do intervalo do evento
-                        return slotDateTime >= eStart && slotDateTime < eEnd;
+                        // Um slot está ocupado se houver QUALQUER sobreposição com o evento do Google
+                        // (Início do slot antes do fim do evento E fim do slot depois do início do evento)
+                        return slotStart < eEnd && slotEnd > eStart;
                     });
 
                     if (isBusy) {
