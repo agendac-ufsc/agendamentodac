@@ -61,11 +61,14 @@
         .day:hover:not(.other-month) { background: #f0f4ff; border-color: #667eea; }
         .day.selected { background: #667eea; color: white; border-color: #667eea; }
         .day.other-month { color: #ccc; cursor: not-allowed; }
+        .day.busy-full { background: #ff4d4d !important; color: white !important; border-color: #cc0000 !important; cursor: not-allowed; }
+        .day.busy-partial { background: #ffcc00 !important; color: #333 !important; border-color: #e6b800 !important; }
         .time-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; }
         @media (min-width: 600px) { .time-slots { grid-template-columns: repeat(6, 1fr); } }
         .time-slot { padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center; cursor: pointer; font-size: 12px; transition: all 0.2s; }
         .time-slot:hover { background: #f0f4ff; border-color: #667eea; }
         .time-slot.selected { background: #667eea; color: white; border-color: #667eea; }
+        .time-slot.busy { background: #eee; color: #bbb; border-color: #ddd; cursor: not-allowed; text-decoration: line-through; }
 
         /* Step Confirmation Button */
         .btn-confirm-step {
@@ -162,10 +165,32 @@
         const selections = {};
         const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
         let currentStepContext = null;
+        let googleEvents = [];
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null, currentMonth: new Date() };
         });
+
+        async function fetchAvailability() {
+            try {
+                const res = await fetch('/api/disponibilidade');
+                if (res.ok) {
+                    googleEvents = await res.json();
+                    steps.forEach(s => {
+                        if (document.getElementById(`content-${s}`).classList.contains('show')) {
+                            renderStepCalendar(s);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Erro ao buscar disponibilidade:', err);
+            }
+        }
+
+        // Buscar disponibilidade ao carregar
+        fetchAvailability();
+        // Atualizar a cada 2 minutos
+        setInterval(fetchAvailability, 120000);
 
         function initAccordion() {
             const accordion = document.getElementById('stepsAccordion');
@@ -198,7 +223,10 @@
                     const isShowing = content.classList.contains('show');
                     content.classList.toggle('show', !isShowing);
                     header.classList.toggle('active', !isShowing);
-                    if (!isShowing) renderStepCalendar(s);
+                    if (!isShowing) {
+                        fetchAvailability(); // Atualizar ao abrir aba
+                        renderStepCalendar(s);
+                    }
                 } else {
                     content.classList.remove('show');
                     header.classList.remove('active');
@@ -238,8 +266,21 @@
                 const d = document.createElement('div'); d.className = 'day'; d.textContent = i;
                 const date = new Date(year, month, i);
                 const today = new Date(); today.setHours(0,0,0,0);
-                if (date < today) d.classList.add('other-month');
-                else {
+                
+                if (date < today) {
+                    d.classList.add('other-month');
+                } else {
+                    // Verificar ocupação no Google Calendar
+                    const dateStr = date.toISOString().split('T')[0];
+                    const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+                    
+                    if (eventsOnDay.length > 0) {
+                        // Lógica simplificada: se houver mais de 10 slots ocupados (5 horas), fica vermelho
+                        // (Idealmente calcularíamos a soma das durações, mas slots é mais rápido)
+                        if (eventsOnDay.length >= 15) d.classList.add('busy-full');
+                        else d.classList.add('busy-partial');
+                    }
+
                     d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
                     if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
                 }
@@ -267,6 +308,9 @@
             const sel = selections[step];
             if (!sel.date) return;
 
+            const dateStr = sel.date.toISOString().split('T')[0];
+            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+
             for (let h = 8; h <= 22; h++) {
                 [0, 30].forEach(m => {
                     if (h === 22 && m === 30) return;
@@ -274,15 +318,28 @@
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
                     slot.textContent = time;
-                    if (sel.start === time || sel.end === time) slot.classList.add('selected');
 
-                    if (sel.start && !sel.end) {
-                        const sVal = parseInt(sel.start.replace(':', ''));
-                        const cVal = parseInt(time.replace(':', ''));
-                        if (cVal <= sVal) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
-                        else { slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); }; }
+                    // Verificar se o horário está ocupado no Google
+                    const slotDateTime = new Date(`${dateStr}T${time}:00`);
+                    const isBusy = eventsOnDay.some(e => {
+                        const eStart = new Date(e.start);
+                        const eEnd = new Date(e.end);
+                        return slotDateTime >= eStart && slotDateTime < eEnd;
+                    });
+
+                    if (isBusy) {
+                        slot.classList.add('busy');
                     } else {
-                        slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
+                        if (sel.start === time || sel.end === time) slot.classList.add('selected');
+
+                        if (sel.start && !sel.end) {
+                            const sVal = parseInt(sel.start.replace(':', ''));
+                            const cVal = parseInt(time.replace(':', ''));
+                            if (cVal <= sVal) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
+                            else { slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); }; }
+                        } else {
+                            slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
+                        }
                     }
                     container.appendChild(slot);
                 });

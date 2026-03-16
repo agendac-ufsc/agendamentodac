@@ -72,6 +72,38 @@ const createCalendarEvent = async (summary, description, date, timeRange) => {
     }
 };
 
+// Rota para verificar disponibilidade
+app.get('/api/disponibilidade', async (req, res) => {
+    if (!googleAuthClient) {
+        await initGoogleAuth();
+        if (!googleAuthClient) return res.status(500).json({ error: 'Erro na autenticação com Google' });
+    }
+
+    try {
+        const { start, end } = req.query; // Datas no formato ISO (ex: 2026-03-01T00:00:00Z)
+        
+        const response = await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId: CALENDAR_ID,
+            timeMin: start || new Date().toISOString(),
+            timeMax: end || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(), // +30 dias por padrão
+            singleEvents: true,
+            orderBy: 'startTime',
+        });
+
+        const ocupados = response.data.items.map(event => ({
+            start: event.start.dateTime || event.start.date,
+            end: event.end.dateTime || event.end.date,
+            summary: event.summary
+        }));
+
+        res.json(ocupados);
+    } catch (error) {
+        console.error('❌ [Google] Erro ao listar eventos:', error.message);
+        res.status(500).json({ error: 'Erro ao consultar calendário' });
+    }
+});
+
 // Configurar Brevo
 const sendEmail = async (to, subject, htmlContent) => {
     const apiKey = process.env.BREVO_API_KEY;
