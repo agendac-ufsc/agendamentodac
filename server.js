@@ -3,11 +3,74 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
+const { google } = require('googleapis');
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
+
+// Configurar Google Calendar
+const CALENDAR_ID = 'oto.bezerra@ufsc.br';
+let googleAuthClient;
+
+const initGoogleAuth = async () => {
+    try {
+        const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+        if (serviceAccountKey) {
+            const credentials = JSON.parse(serviceAccountKey);
+            const auth = new google.auth.GoogleAuth({
+                credentials: {
+                    client_email: credentials.client_email,
+                    private_key: credentials.private_key,
+                },
+                scopes: ['https://www.googleapis.com/auth/calendar'],
+            });
+            googleAuthClient = await auth.getClient();
+            console.log('✅ [Google] Autenticação configurada com sucesso.');
+        } else {
+            console.warn('⚠️ [Google] GOOGLE_SERVICE_ACCOUNT_KEY não encontrada.');
+        }
+    } catch (error) {
+        console.error('❌ [Google] Erro ao configurar autenticação:', error.message);
+    }
+};
+
+initGoogleAuth();
+
+const calendar = google.calendar({ version: 'v3' });
+
+const createCalendarEvent = async (summary, description, date, timeRange) => {
+    if (!googleAuthClient) {
+        await initGoogleAuth();
+        if (!googleAuthClient) return null;
+    }
+
+    try {
+        const [startTime, endTime] = timeRange.split(' às ');
+        const startDateTime = new Date(`${date}T${startTime}:00`);
+        const endDateTime = new Date(`${date}T${endTime}:00`);
+
+        const event = {
+            summary: summary,
+            description: description,
+            start: { dateTime: startDateTime.toISOString(), timeZone: 'America/Sao_Paulo' },
+            end: { dateTime: endDateTime.toISOString(), timeZone: 'America/Sao_Paulo' },
+        };
+
+        const response = await calendar.events.insert({
+            auth: googleAuthClient,
+            calendarId: CALENDAR_ID,
+            resource: event,
+        });
+
+        console.log(`✅ [Google] Evento criado: ${summary} - ID: ${response.data.id}`);
+        return response.data;
+    } catch (error) {
+        console.error(`❌ [Google] Erro ao criar evento "${summary}":`, error.message);
+        return null;
+    }
+};
 
 // Configurar Brevo
 const sendEmail = async (to, subject, htmlContent) => {
@@ -76,10 +139,27 @@ app.post('/api/agendar', async (req, res) => {
             return html;
         };
 
+        // Criar eventos no Google Calendar
+        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const calendarPromises = [];
+
+        for (const key in etapas) {
+            const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
+            itens.forEach((item, index) => {
+                const label = itens.length > 1 ? `${nomesEtapas[key]} ${index + 1}` : nomesEtapas[key];
+                const summary = `${label}: ${evento}`;
+                const description = `Proponente: ${nome}\nE-mail: ${email}\nTelefone: ${telefone}`;
+                calendarPromises.push(createCalendarEvent(summary, description, item.data, item.horario));
+            });
+        }
+
+        // Aguardar criação dos eventos
+        await Promise.all(calendarPromises);
+
         const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
 
-        // E-mail para o Proponente
+        // Enviar e-mails
         const emailProponente = await sendEmail(
             email,
             '✅ Confirmação de Inscrição de Projeto - DAC',
@@ -97,7 +177,6 @@ app.post('/api/agendar', async (req, res) => {
             `
         );
 
-        // E-mail para o Administrador
         const emailAdmin = await sendEmail(
             adminEmail,
             `📅 NOVA INSCRIÇÃO: ${evento} (${nome})`,
