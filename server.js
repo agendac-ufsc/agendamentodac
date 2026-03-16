@@ -34,7 +34,7 @@ const sendEmail = async (to, subject, htmlContent) => {
         console.log('E-mail enviado com sucesso via Brevo. Message ID:', response.data.messageId);
         return response.data;
     } catch (error) {
-        console.error('Erro ao enviar e-mail via Brevo:', error.response ? error.response.data : error.message);
+        console.error('ERRO DETALHADO BREVO:', JSON.stringify(error.response ? error.response.data : error.message));
         throw error;
     }
 };
