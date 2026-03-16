@@ -527,9 +527,12 @@
             const loading = document.getElementById('loading');
             const msg = document.getElementById('message');
             
-            // Proteção contra cliques duplos
-            if (submitBtn.disabled) return;
+            // Proteção contra cliques duplos e submissões múltiplas
+            if (submitBtn.getAttribute('data-submitting') === 'true') return;
+            submitBtn.setAttribute('data-submitting', 'true');
             submitBtn.disabled = true;
+            submitBtn.style.opacity = '0.5';
+            submitBtn.textContent = 'Enviando...';
             loading.classList.add('show');
 
             const payload = {
@@ -569,7 +572,10 @@
                 msg.className = 'message error';
             } finally {
                 loading.classList.remove('show');
+                submitBtn.removeAttribute('data-submitting');
                 submitBtn.disabled = false;
+                submitBtn.style.opacity = '1';
+                submitBtn.textContent = 'Finalizar Inscrição';
             }
         };
 

@@ -180,9 +180,10 @@ app.post('/api/agendar', async (req, res) => {
         
         console.log(`[Agendar] Iniciando criação de eventos para: ${evento} (${nome})`);
         
-        // Usar um loop sequencial para garantir que cada evento seja processado corretamente
-        // e evitar possíveis problemas de concorrência ou disparos duplos em ambientes serverless
-        for (const key in etapas) {
+        // Usar Object.keys para iterar apenas sobre as propriedades próprias do objeto
+        // e evitar possíveis duplicações causadas por iteração em protótipos ou comportamentos inesperados
+        const chavesEtapas = Object.keys(etapas);
+        for (const key of chavesEtapas) {
             const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
             for (let i = 0; i < itens.length; i++) {
                 const item = itens[i];
