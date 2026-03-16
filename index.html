@@ -5,12 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sistema de Agendamento DAC</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -20,7 +15,6 @@
             justify-content: center;
             padding: 20px;
         }
-
         .container {
             background: white;
             border-radius: 15px;
@@ -29,279 +23,82 @@
             width: 100%;
             padding: 40px;
         }
-
-        h1 {
-            color: #333;
-            margin-bottom: 30px;
-            text-align: center;
-            font-size: 28px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #555;
-            font-weight: 500;
-        }
-
+        h1 { color: #333; margin-bottom: 30px; text-align: center; font-size: 28px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
         input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 16px;
-            transition: border-color 0.3s;
+            width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;
+            font-size: 16px; transition: border-color 0.3s;
         }
-
-        input:focus {
-            outline: none;
-            border-color: #667eea;
-        }
+        input:focus { outline: none; border-color: #667eea; }
 
         /* Accordion Styles */
-        .accordion {
-            margin: 20px 0;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .accordion-item {
-            border-bottom: 1px solid #e0e0e0;
-        }
-
-        .accordion-item:last-child {
-            border-bottom: none;
-        }
-
+        .accordion { margin: 20px 0; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; }
+        .accordion-item { border-bottom: 1px solid #e0e0e0; }
+        .accordion-item:last-child { border-bottom: none; }
         .accordion-header {
-            background: #fff;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            cursor: pointer;
-            transition: background 0.3s;
-            user-select: none;
+            background: #fff; padding: 15px 20px; display: flex; justify-content: space-between;
+            align-items: center; cursor: pointer; transition: background 0.3s; user-select: none;
         }
+        .accordion-header:hover { background: #f8f9fa; }
+        .accordion-header h3 { font-size: 16px; color: #333; font-weight: 600; }
+        .accordion-header .status-icon { font-size: 12px; color: #ccc; transition: transform 0.3s; }
+        .accordion-header.active .status-icon { transform: rotate(180deg); }
+        .accordion-header.completed h3::after { content: ' ✅'; font-size: 14px; }
+        .accordion-content { display: none; padding: 20px; background: #fcfcfc; border-top: 1px solid #eee; }
+        .accordion-content.show { display: block; }
 
-        .accordion-header:hover {
-            background: #f8f9fa;
-        }
+        /* Calendar & Time Slots */
+        .calendar { margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #eee; border-radius: 8px; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .calendar-header button { background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .day-header { text-align: center; font-weight: bold; color: #667eea; font-size: 11px; padding-bottom: 5px; }
+        .day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 1px solid #eee; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .day:hover:not(.other-month) { background: #f0f4ff; border-color: #667eea; }
+        .day.selected { background: #667eea; color: white; border-color: #667eea; }
+        .day.other-month { color: #ccc; cursor: not-allowed; }
+        .time-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; }
+        @media (min-width: 600px) { .time-slots { grid-template-columns: repeat(6, 1fr); } }
+        .time-slot { padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .time-slot:hover { background: #f0f4ff; border-color: #667eea; }
+        .time-slot.selected { background: #667eea; color: white; border-color: #667eea; }
 
-        .accordion-header h3 {
-            font-size: 16px;
-            color: #333;
-            font-weight: 600;
+        /* Step Confirmation Button */
+        .btn-confirm-step {
+            width: 100%; padding: 10px; background: #28a745; color: white; border: none;
+            border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer;
+            margin-top: 15px; display: none;
         }
+        .btn-confirm-step.show { display: block; }
 
-        .accordion-header .status-icon {
-            font-size: 12px;
-            color: #ccc;
-            transition: transform 0.3s;
+        /* Summary Styles */
+        .summary-section { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; display: none; }
+        .summary-section.show { display: block; }
+        .summary-card {
+            background: #f0f4ff; border: 1px solid #667eea; border-radius: 10px;
+            padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
         }
-
-        .accordion-header.active .status-icon {
-            transform: rotate(180deg);
-        }
-
-        .accordion-header.completed h3::after {
-            content: ' ✅';
-            font-size: 14px;
-        }
-
-        .accordion-content {
-            display: none;
-            padding: 20px;
-            background: #fcfcfc;
-            border-top: 1px solid #eee;
-        }
-
-        .accordion-content.show {
-            display: block;
-        }
-
-        /* Calendar & Time Slots Styles */
-        .calendar {
-            margin-bottom: 20px;
-            padding: 15px;
-            background: #fff;
-            border: 1px solid #eee;
-            border-radius: 8px;
-        }
-
-        .calendar-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .calendar-header button {
-            background: #667eea;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 12px;
-        }
-
-        .calendar-grid {
-            display: grid;
-            grid-template-columns: repeat(7, 1fr);
-            gap: 5px;
-        }
-
-        .day-header {
-            text-align: center;
-            font-weight: bold;
-            color: #667eea;
-            font-size: 11px;
-            padding-bottom: 5px;
-        }
-
-        .day {
-            aspect-ratio: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #eee;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
-        }
-
-        .day:hover:not(.other-month) {
-            background: #f0f4ff;
-            border-color: #667eea;
-        }
-
-        .day.selected {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        .day.other-month {
-            color: #ccc;
-            cursor: not-allowed;
-        }
-
-        .time-slots {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-            margin-top: 15px;
-        }
-
-        @media (min-width: 600px) {
-            .time-slots {
-                grid-template-columns: repeat(6, 1fr);
-            }
-        }
-
-        .time-slot {
-            padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            text-align: center;
-            cursor: pointer;
-            font-size: 12px;
-            transition: all 0.2s;
-        }
-
-        .time-slot:hover {
-            background: #f0f4ff;
-            border-color: #667eea;
-        }
-
-        .time-slot.selected {
-            background: #667eea;
-            color: white;
-            border-color: #667eea;
-        }
-
-        /* Summary & Buttons */
-        .step-summary {
-            margin-top: 15px;
-            padding: 10px;
-            background: #eef2ff;
-            border-radius: 6px;
-            font-size: 13px;
-            display: none;
-        }
-
-        .step-summary.show {
-            display: block;
-        }
-
-        .btn-clear {
-            background: #ff4d4d;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
-            margin-top: 10px;
-        }
+        .summary-info h4 { font-size: 14px; color: #333; margin-bottom: 4px; }
+        .summary-info p { font-size: 13px; color: #666; }
+        .btn-delete { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
 
         button.submit {
-            width: 100%;
-            padding: 14px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s;
-            margin-top: 20px;
+            width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: transform 0.2s; margin-top: 20px;
         }
-
-        button.submit:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        button.submit:disabled { opacity: 0.5; cursor: not-allowed; }
 
         /* Modal & Messages */
         .modal-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000;
         }
-
-        .modal-content {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-        }
-
-        .message {
-            padding: 15px;
-            border-radius: 8px;
-            margin-top: 20px;
-            display: none;
-            text-align: center;
-        }
-
+        .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; }
+        .message { padding: 15px; border-radius: 8px; margin-top: 20px; display: none; text-align: center; }
         .message.success { background: #d4edda; color: #155724; display: block; }
         .message.error { background: #f8d7da; color: #721c24; display: block; }
-
         .loading { display: none; text-align: center; margin-top: 20px; color: #667eea; }
         .loading.show { display: block; }
     </style>
@@ -317,81 +114,19 @@
 
     <div class="container">
         <h1>📅 Inscrição de Projeto</h1>
-
         <form id="agendamentoForm">
-            <div class="form-group">
-                <label for="nome">Nome Completo *</label>
-                <input type="text" id="nome" required>
-            </div>
-            <div class="form-group">
-                <label for="email">E-mail *</label>
-                <input type="email" id="email" required>
-            </div>
-            <div class="form-group">
-                <label for="telefone">Telefone *</label>
-                <input type="tel" id="telefone" required>
-            </div>
-            <div class="form-group">
-                <label for="evento">Nome do Evento *</label>
-                <input type="text" id="evento" required>
-            </div>
+            <div class="form-group"><label>Nome Completo *</label><input type="text" id="nome" required></div>
+            <div class="form-group"><label>E-mail *</label><input type="email" id="email" required></div>
+            <div class="form-group"><label>Telefone *</label><input type="tel" id="telefone" required></div>
+            <div class="form-group"><label>Nome do Evento *</label><input type="text" id="evento" required></div>
 
             <div class="accordion" id="stepsAccordion">
-                <!-- Etapa: Ensaio -->
-                <div class="accordion-item" data-step="ensaio">
-                    <div class="accordion-header" onclick="toggleStep('ensaio')">
-                        <h3>Ensaio</h3>
-                        <span class="status-icon">▼</span>
-                    </div>
-                    <div class="accordion-content" id="content-ensaio">
-                        <div class="calendar" id="calendar-ensaio"></div>
-                        <div class="time-slots" id="slots-ensaio"></div>
-                        <div class="step-summary" id="summary-ensaio"></div>
-                        <button type="button" class="btn-clear" onclick="clearStep('ensaio')">Limpar Ensaio</button>
-                    </div>
-                </div>
+                <!-- Etapas Geradas via JS -->
+            </div>
 
-                <!-- Etapa: Montagem -->
-                <div class="accordion-item" data-step="montagem">
-                    <div class="accordion-header" onclick="toggleStep('montagem')">
-                        <h3>Montagem</h3>
-                        <span class="status-icon">▼</span>
-                    </div>
-                    <div class="accordion-content" id="content-montagem">
-                        <div class="calendar" id="calendar-montagem"></div>
-                        <div class="time-slots" id="slots-montagem"></div>
-                        <div class="step-summary" id="summary-montagem"></div>
-                        <button type="button" class="btn-clear" onclick="clearStep('montagem')">Limpar Montagem</button>
-                    </div>
-                </div>
-
-                <!-- Etapa: Evento -->
-                <div class="accordion-item" data-step="evento">
-                    <div class="accordion-header" onclick="toggleStep('evento')">
-                        <h3>Evento</h3>
-                        <span class="status-icon">▼</span>
-                    </div>
-                    <div class="accordion-content" id="content-evento">
-                        <div class="calendar" id="calendar-evento"></div>
-                        <div class="time-slots" id="slots-evento"></div>
-                        <div class="step-summary" id="summary-evento"></div>
-                        <button type="button" class="btn-clear" onclick="clearStep('evento')">Limpar Evento</button>
-                    </div>
-                </div>
-
-                <!-- Etapa: Desmontagem -->
-                <div class="accordion-item" data-step="desmontagem">
-                    <div class="accordion-header" onclick="toggleStep('desmontagem')">
-                        <h3>Desmontagem</h3>
-                        <span class="status-icon">▼</span>
-                    </div>
-                    <div class="accordion-content" id="content-desmontagem">
-                        <div class="calendar" id="calendar-desmontagem"></div>
-                        <div class="time-slots" id="slots-desmontagem"></div>
-                        <div class="step-summary" id="summary-desmontagem"></div>
-                        <button type="button" class="btn-clear" onclick="clearStep('desmontagem')">Limpar Desmontagem</button>
-                    </div>
-                </div>
+            <div class="summary-section" id="summarySection">
+                <h3 style="font-size: 18px; margin-bottom: 15px; color: #333;">Resumo do Cronograma</h3>
+                <div id="summaryList"></div>
             </div>
 
             <div class="loading" id="loading">Processando agendamento...</div>
@@ -401,13 +136,36 @@
     </div>
 
     <script>
-        const steps = ['ensaio', 'montagem', 'evento', 'desmontagem'];
-        const selections = {
-            ensaio: { date: null, start: null, end: null, currentMonth: new Date() },
-            montagem: { date: null, start: null, end: null, currentMonth: new Date() },
-            evento: { date: null, start: null, end: null, currentMonth: new Date() },
-            desmontagem: { date: null, start: null, end: null, currentMonth: new Date() }
-        };
+        const stepNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const steps = Object.keys(stepNames);
+        const selections = {};
+        const confirmedSteps = {};
+
+        steps.forEach(s => {
+            selections[s] = { date: null, start: null, end: null, currentMonth: new Date() };
+            confirmedSteps[s] = null;
+        });
+
+        function initAccordion() {
+            const accordion = document.getElementById('stepsAccordion');
+            steps.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'accordion-item';
+                item.setAttribute('data-step', s);
+                item.innerHTML = `
+                    <div class="accordion-header" onclick="toggleStep('${s}')">
+                        <h3>${stepNames[s]}</h3>
+                        <span class="status-icon">▼</span>
+                    </div>
+                    <div class="accordion-content" id="content-${s}">
+                        <div class="calendar" id="calendar-${s}"></div>
+                        <div class="time-slots" id="slots-${s}"></div>
+                        <button type="button" class="btn-confirm-step" id="btn-confirm-${s}" onclick="confirmStep('${s}')">Confirmar ${stepNames[s]}</button>
+                    </div>
+                `;
+                accordion.appendChild(item);
+            });
+        }
 
         function toggleStep(step) {
             steps.forEach(s => {
@@ -433,19 +191,16 @@
 
             container.innerHTML = `
                 <div class="calendar-header">
-                    <button type="button" onclick="changeMonth('${step}', -1)">←</button>
+                    <button type="button" onclick="event.stopPropagation(); changeMonth('${step}', -1)">←</button>
                     <span>${sel.currentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
-                    <button type="button" onclick="changeMonth('${step}', 1)">→</button>
+                    <button type="button" onclick="event.stopPropagation(); changeMonth('${step}', 1)">→</button>
                 </div>
                 <div class="calendar-grid"></div>
             `;
 
             const grid = container.querySelector('.calendar-grid');
             ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].forEach(d => {
-                const h = document.createElement('div');
-                h.className = 'day-header';
-                h.textContent = d;
-                grid.appendChild(h);
+                const h = document.createElement('div'); h.className = 'day-header'; h.textContent = d; grid.appendChild(h);
             });
 
             const firstDay = new Date(year, month, 1).getDay();
@@ -453,22 +208,16 @@
             const daysInPrevMonth = new Date(year, month, 0).getDate();
 
             for (let i = daysInPrevMonth - firstDay + 1; i <= daysInPrevMonth; i++) {
-                const d = document.createElement('div');
-                d.className = 'day other-month';
-                d.textContent = i;
-                grid.appendChild(d);
+                const d = document.createElement('div'); d.className = 'day other-month'; d.textContent = i; grid.appendChild(d);
             }
 
             for (let i = 1; i <= daysInMonth; i++) {
-                const d = document.createElement('div');
-                d.className = 'day';
-                d.textContent = i;
+                const d = document.createElement('div'); d.className = 'day'; d.textContent = i;
                 const date = new Date(year, month, i);
                 const today = new Date(); today.setHours(0,0,0,0);
-
                 if (date < today) d.classList.add('other-month');
                 else {
-                    d.onclick = () => selectDate(step, date);
+                    d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
                     if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
                 }
                 grid.appendChild(d);
@@ -486,7 +235,7 @@
             selections[step].end = null;
             renderStepCalendar(step);
             renderTimeSlots(step);
-            updateUI(step);
+            updateStepUI(step);
         }
 
         function renderTimeSlots(step) {
@@ -502,20 +251,15 @@
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
                     slot.textContent = time;
-
                     if (sel.start === time || sel.end === time) slot.classList.add('selected');
 
                     if (sel.start && !sel.end) {
                         const sVal = parseInt(sel.start.replace(':', ''));
                         const cVal = parseInt(time.replace(':', ''));
-                        if (cVal <= sVal) {
-                            slot.style.opacity = '0.3';
-                            slot.style.cursor = 'not-allowed';
-                        } else {
-                            slot.onclick = () => selectTime(step, time);
-                        }
+                        if (cVal <= sVal) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
+                        else { slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); }; }
                     } else {
-                        slot.onclick = () => selectTime(step, time);
+                        slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
                     }
                     container.appendChild(slot);
                 });
@@ -525,41 +269,75 @@
         function selectTime(step, time) {
             const sel = selections[step];
             if (!sel.start || (sel.start && sel.end)) {
-                sel.start = time;
-                sel.end = null;
+                sel.start = time; sel.end = null;
                 document.getElementById('modalOverlay').style.display = 'flex';
             } else {
                 sel.end = time;
             }
             renderTimeSlots(step);
-            updateUI(step);
+            updateStepUI(step);
         }
 
-        function updateUI(step) {
+        function updateStepUI(step) {
             const sel = selections[step];
-            const summary = document.getElementById(`summary-${step}`);
-            const header = document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`);
-            
+            const btn = document.getElementById(`btn-confirm-${step}`);
             if (sel.date && sel.start && sel.end) {
-                summary.innerHTML = `<strong>Selecionado:</strong> ${sel.date.toLocaleDateString('pt-BR')} das ${sel.start} às ${sel.end}`;
-                summary.classList.add('show');
-                header.classList.add('completed');
+                btn.classList.add('show');
             } else {
-                summary.classList.remove('show');
-                header.classList.remove('completed');
+                btn.classList.remove('show');
             }
-            
-            const allDone = steps.every(s => selections[s].date && selections[s].start && selections[s].end);
-            document.getElementById('submitBtn').disabled = !allDone;
         }
 
-        function clearStep(step) {
+        function confirmStep(step) {
+            const sel = selections[step];
+            confirmedSteps[step] = {
+                date: sel.date,
+                start: sel.start,
+                end: sel.end
+            };
+            
+            // Marcar como completado no header
+            document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.add('completed');
+            
+            // Fechar aba automaticamente
+            toggleStep(null);
+            
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const section = document.getElementById('summarySection');
+            const list = document.getElementById('summaryList');
+            list.innerHTML = '';
+            
+            let hasConfirmed = false;
+            steps.forEach(s => {
+                if (confirmedSteps[s]) {
+                    hasConfirmed = true;
+                    const card = document.createElement('div');
+                    card.className = 'summary-card';
+                    card.innerHTML = `
+                        <div class="summary-info">
+                            <h4>${stepNames[s]}</h4>
+                            <p>📅 ${confirmedSteps[s].date.toLocaleDateString('pt-BR')} | ⏰ ${confirmedSteps[s].start} às ${confirmedSteps[s].end}</p>
+                        </div>
+                        <button type="button" class="btn-delete" onclick="deleteConfirmedStep('${s}')">Excluir</button>
+                    `;
+                    list.appendChild(card);
+                }
+            });
+
+            section.classList.toggle('show', hasConfirmed);
+            document.getElementById('submitBtn').disabled = !hasConfirmed;
+        }
+
+        function deleteConfirmedStep(step) {
+            confirmedSteps[step] = null;
             selections[step].date = null;
             selections[step].start = null;
             selections[step].end = null;
-            renderStepCalendar(step);
-            renderTimeSlots(step);
-            updateUI(step);
+            document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.remove('completed');
+            updateSummary();
         }
 
         document.getElementById('modalOkBtn').onclick = () => document.getElementById('modalOverlay').style.display = 'none';
@@ -579,10 +357,12 @@
             };
 
             steps.forEach(s => {
-                payload.etapas[s] = {
-                    data: selections[s].date.toISOString().split('T')[0],
-                    horario: `${selections[s].start} às ${selections[s].end}`
-                };
+                if (confirmedSteps[s]) {
+                    payload.etapas[s] = {
+                        data: confirmedSteps[s].date.toISOString().split('T')[0],
+                        horario: `${confirmedSteps[s].start} às ${confirmedSteps[s].end}`
+                    };
+                }
             });
 
             try {
@@ -591,13 +371,12 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                const result = await res.json();
                 if (res.ok) {
                     msg.textContent = '✅ Inscrição realizada com sucesso!';
                     msg.className = 'message success';
-                    document.getElementById('agendamentoForm').reset();
-                    steps.forEach(clearStep);
+                    setTimeout(() => location.reload(), 3000);
                 } else {
+                    const result = await res.json();
                     msg.textContent = '❌ Erro: ' + result.error;
                     msg.className = 'message error';
                 }
@@ -609,8 +388,7 @@
             }
         };
 
-        // Inicializar primeira aba
-        toggleStep('ensaio');
+        initAccordion();
     </script>
 </body>
 </html>
