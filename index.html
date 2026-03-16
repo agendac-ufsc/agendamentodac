@@ -339,8 +339,8 @@
                         if (sel.start && !sel.end) {
                             const sVal = parseInt(sel.start.replace(':', ''));
                             const cVal = parseInt(time.replace(':', ''));
-                            // Permitir clicar no mesmo slot para agendamentos de 30 minutos
-                            if (cVal < sVal) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
+                            // Bloquear apenas horários anteriores ou iguais ao de início para o término
+                            if (cVal <= sVal) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
                             else { slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); }; }
                         } else {
                             slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
@@ -360,18 +360,10 @@
                 const sVal = parseInt(sel.start.replace(':', ''));
                 const eVal = parseInt(time.replace(':', ''));
                 
-                // Se o usuário clicar no mesmo horário ou em um horário anterior, não faz nada
-                if (eVal < sVal) return;
+                // Se o usuário clicar em um horário anterior ou igual ao de início, não faz nada
+                if (eVal <= sVal) return;
 
-                // Calcular o horário de término real (acrescentando 30 minutos ao slot selecionado)
-                const [h, m] = time.split(':').map(Number);
-                let endH = h;
-                let endM = m + 30;
-                if (endM >= 60) {
-                    endH += 1;
-                    endM = 0;
-                }
-                sel.end = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+                sel.end = time;
             }
             renderTimeSlots(step);
             updateStepUI(step);
