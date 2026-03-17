@@ -141,10 +141,10 @@
                 
                 headers = data[0];
                 allData = data.slice(1);
-                
-                // Debug: Log para verificar os dados recebidos
-                console.log('Headers:', headers);
-                console.log('Dados completos:', allData);
+                             // Exibir dados para depuração na página
+                content.innerHTML += `<h3>Headers:</h3><pre>${JSON.stringify(headers, null, 2)}</pre>`;
+                content.innerHTML += `<h3>Dados Completos:</h3><pre>${JSON.stringify(allData, null, 2)}</pre>`;
+
                 
                 let html = '<div class="list-container">';
                 
@@ -179,13 +179,7 @@
             const doc = new jsPDF();
             const row = allData[index];
             const identifier = row[1] || row[2] || 'Sem Nome';
-            
-            // Debug: Log para verificar os dados da linha específica
-            console.log(`Gerando PDF para índice ${index}`);
-            console.log('Dados da linha:', row);
-            console.log('Headers:', headers);
-
-            // Configurações do PDF
+                       // Configurações do PDF
             doc.setFont("helvetica", "bold");
             doc.setFontSize(18);
             doc.setTextColor(40, 40, 40);
@@ -204,14 +198,8 @@
                 const value = row[i] ? row[i].toString().trim() : "";
                 // Só adiciona se o valor não for vazio, não for apenas espaços
                 if (value && value !== "") {
-                    tableData.push([header, value]);
-                    console.log(`Campo incluído: "${header}" = "${value}"`);
-                } else {
-                    console.log(`Campo excluído (vazio): "${header}"`);
-                }
+                    tableData.push([header, value]);                }
             });
-            console.log('Dados para tabela:', tableData);
-
             // Gerar tabela organizada
             doc.autoTable({
                 startY: 40,
