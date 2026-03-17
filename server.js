@@ -333,9 +333,13 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             // Tentar encontrar correspondência na segunda etapa por e-mail ou telefone
             const correspondencia = dataSegundaEtapa.find(s => {
                 const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-                // Busca simples por email ou telefone nos campos da planilha
-                return (emailSheet && emailSheet.toLowerCase() === p.email.toLowerCase()) || 
-                       s.some(val => val && (val.toString().includes(p.email) || val.toString().includes(p.telefone)));
+                // Normalização básica para e-mails (trim e lowercase)
+                const pEmail = (p.email || '').trim().toLowerCase();
+                const sEmail = (emailSheet || '').trim().toLowerCase();
+                
+                // Comparação por e-mail (prioritário) ou telefone
+                return (sEmail === pEmail) || 
+                       s.some(val => val && val.toString().includes(p.telefone));
             });
 
             return {

@@ -318,11 +318,18 @@
             tableData.push(['Telefone', p.telefone]);
             
             let cronogramaStr = '';
-            for (const key in p.etapas) {
-                const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
-                itens.forEach(it => {
-                    cronogramaStr += `${key.toUpperCase()}: ${it.data} (${it.horario})\n`;
-                });
+            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+            if (p.etapas && Object.keys(p.etapas).length > 0) {
+                for (const key in p.etapas) {
+                    const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                    itens.forEach((it, i) => {
+                        const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                        const dataFormatada = it.data.split('-').reverse().join('/');
+                        cronogramaStr += `${label}: ${dataFormatada} (${it.horario})\n`;
+                    });
+                }
+            } else {
+                cronogramaStr = 'Não registrado via site';
             }
             tableData.push(['Cronograma Solicitado', cronogramaStr]);
 
