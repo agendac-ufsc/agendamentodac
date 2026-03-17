@@ -296,8 +296,10 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                     status: 'Completo (Forms)'
                 });
             });
+        console.log(`[DEBUG] Gerados ${unificados.length} registros unificados.`);
         res.json(unificados);
     } catch (error) {
+        console.error('[DEBUG] Erro ao gerar dados unificados:', error);
         res.status(500).json({ error: 'Erro ao gerar dados unificados' });
     }
 });

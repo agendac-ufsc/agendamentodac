@@ -196,11 +196,18 @@
                     const id = (index + 1).toString().padStart(2, '0');
                     
                     // Extrair Nome do Evento
-                    let nomeEvento = p.evento || 'SEM NOME';
-                    if (s && (!p.evento || p.evento === 'N/A' || p.evento === 'Evento (Forms)')) {
-                        const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
+                    let nomeEvento = p.evento || '';
+                    
+                    // Se o nome for genérico ou vazio, tenta buscar no Forms
+                    if (s && (!nomeEvento || nomeEvento === 'SEM NOME' || nomeEvento === 'N/A' || nomeEvento === 'Evento (Forms)')) {
+                        const idxNomeEv = s.headers.findIndex(h => {
+                            const l = h.toLowerCase();
+                            return l.includes('nome do evento') || l.includes('título do projeto') || l.includes('nome do projeto');
+                        });
                         if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
                     }
+                    
+                    if (!nomeEvento || nomeEvento.trim() === '') nomeEvento = 'SEM NOME';
 
                     // Extrair Local
                     let local = 'N/A';
@@ -214,16 +221,35 @@
                     // Formatar Etapas
                     let etapasHtml = '';
                     const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-                    if (p.etapas && Object.keys(p.etapas).length > 0) {
+                    
+                    // Verifica se há etapas registradas na primeira etapa
+                    const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
+                        const val = p.etapas[k];
+                        return Array.isArray(val) ? val.length > 0 : !!val;
+                    });
+
+                    if (temEtapasSite) {
                         for (const key in p.etapas) {
                             const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
                             itens.forEach((it, i) => {
-                                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                                const dataFormatada = it.data.split('-').reverse().join('/');
-                                etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
+                                if (it && it.data && it.horario) {
+                                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                                    const dataFormatada = it.data.split('-').reverse().join('/');
+                                    etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
+                                }
                             });
                         }
-                    } else {
+                    } 
+                    
+                    // Se ainda não tiver etapas, tenta buscar no Forms (segunda etapa)
+                    if (!etapasHtml && s) {
+                        const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
+                        if (idxCronograma >= 0 && s.valores[idxCronograma]) {
+                            etapasHtml = `<span class="etapa-item" style="color: #666;">${s.valores[idxCronograma]}</span>`;
+                        }
+                    }
+
+                    if (!etapasHtml) {
                         etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
                     }
 
@@ -309,14 +335,28 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
 
+            // Extrair Nome do Evento (mesma lógica da tabela)
+            let nomeEvento = p.evento || '';
+            if (s && (!nomeEvento || nomeEvento === 'SEM NOME' || nomeEvento === 'N/A' || nomeEvento === 'Evento (Forms)')) {
+                const idxNomeEv = s.headers.findIndex(h => {
+                    const l = h.toLowerCase();
+                    return l.includes('nome do evento') || l.includes('título do projeto') || l.includes('nome do projeto');
+                });
+                if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
+            }
+            if (!nomeEvento || nomeEvento.trim() === '') nomeEvento = 'SEM NOME';
+
             doc.setFontSize(18);
             doc.text('FICHA DE INSCRIÇÃO UNIFICADA - DAC', 20, 20);
+            doc.setFontSize(12);
+            doc.text(`PROJETO: ${nomeEvento.toUpperCase()}`, 20, 30);
             doc.setFontSize(10);
-            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 28);
-            doc.line(20, 35, 190, 35);
+            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 38);
+            doc.line(20, 45, 190, 45);
 
             const tableData = [];
             tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+            tableData.push(['Nome do Evento', nomeEvento]);
             tableData.push(['Nome do Proponente', p.nome]);
             tableData.push(['E-mail', p.email]);
             tableData.push(['Telefone', p.telefone]);
@@ -324,16 +364,33 @@
             
             let cronogramaStr = '';
             const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-            if (p.etapas && Object.keys(p.etapas).length > 0) {
+            
+            const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
+                const val = p.etapas[k];
+                return Array.isArray(val) ? val.length > 0 : !!val;
+            });
+
+            if (temEtapasSite) {
                 for (const key in p.etapas) {
                     const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
                     itens.forEach((it, i) => {
-                        const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                        const dataFormatada = it.data.split('-').reverse().join('/');
-                        cronogramaStr += `${label}: ${dataFormatada} (${it.horario})\n`;
+                        if (it && it.data && it.horario) {
+                            const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                            const dataFormatada = it.data.split('-').reverse().join('/');
+                            cronogramaStr += `${label}: ${dataFormatada} (${it.horario})\n`;
+                        }
                     });
                 }
-            } else {
+            } 
+            
+            if (!cronogramaStr && s) {
+                const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
+                if (idxCronograma >= 0 && s.valores[idxCronograma]) {
+                    cronogramaStr = s.valores[idxCronograma];
+                }
+            }
+
+            if (!cronogramaStr) {
                 cronogramaStr = 'Não registrado via site';
             }
             tableData.push(['Cronograma Solicitado', cronogramaStr]);
@@ -349,7 +406,7 @@
             }
 
             doc.autoTable({
-                startY: 40,
+                startY: 50,
                 head: [['Campo', 'Informação']],
                 body: tableData,
                 theme: 'grid',
