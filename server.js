@@ -219,7 +219,7 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html'))
 app.get('/api/admin/dados-unificados', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
-        const response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:AZ' });
+        const response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:ZZ' });
         const rows = response.data.values || [];
         const headers = rows[0] || [];
         const dataSegundaEtapa = rows.slice(1);
