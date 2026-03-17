@@ -19,11 +19,11 @@
         td { padding: 15px; border-bottom: 1px solid #eee; vertical-align: middle; font-size: 13px; }
         tr:hover { background: #fcfcfc; }
         .col-id { color: #888; width: 50px; }
-        .col-evento { font-weight: 700; color: #d9534f; min-width: 150px; }
+        .col-evento { font-weight: 700; color: #333; min-width: 150px; }
         .col-local { min-width: 120px; }
         .local-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: #f0f4ff; color: #5a6fd6; border-radius: 20px; font-size: 11px; font-weight: 600; }
         .col-etapas { color: #555; line-height: 1.6; }
-        .etapa-item { display: block; margin-bottom: 2px; }
+        .etapa-item { display: block; margin-bottom: 2px; white-space: nowrap; }
         .btn-action { background: none; border: none; cursor: pointer; font-size: 16px; padding: 5px; transition: transform 0.2s; }
         .btn-action:hover { transform: scale(1.2); }
         .btn-pdf { color: #d9534f; display: flex; align-items: center; gap: 5px; text-decoration: none; font-weight: 600; }
@@ -82,7 +82,7 @@
                         <thead>
                             <tr>
                                 <th class="col-id">#</th>
-                                <th>Proponente / Evento</th>
+                                <th>Evento</th>
                                 <th>Local</th>
                                 <th>Etapas Agendadas</th>
                                 <th>Status</th>
@@ -146,20 +146,18 @@
 
                     const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
                     const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
-                    let formsTime = s && s.valores[0] ? `<br><small style="color: #999; font-size: 10px;">Enviado em: ${s.valores[0]}</small>` : '';
 
                     html += `
                         <tr>
                             <td class="col-id">${id}</td>
                             <td>
-                                <div style="font-weight: bold; color: #333;">${nomeProponente.toUpperCase()}</div>
-                                <div style="font-size: 11px; color: #d9534f; font-weight: bold; margin-top: 2px;">${nomeEvento.toUpperCase()}</div>
+                                <div style="font-weight: bold; color: #333;">${nomeEvento.toUpperCase()}</div>
                             </td>
                             <td class="col-local"><span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span></td>
                             <td class="col-etapas">${etapasHtml}</td>
                             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                             <td>
-                                ${s ? `<a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;"><i class="far fa-file-pdf"></i> Ficha (PDF)</a>${formsTime}` : '<span style="color: #ccc;">Aguardando Forms</span>'}
+                                ${s ? `<a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;"><i class="far fa-file-pdf"></i> Ficha (PDF)</a>` : '<span style="color: #ccc;">Aguardando Forms</span>'}
                             </td>
                             <td style="text-align: center;">
                                 <button class="btn-action btn-contact" onclick="showContact(${index})" title="Ver Contatos"><i class="far fa-address-card"></i></button>
