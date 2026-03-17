@@ -244,20 +244,15 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             const pEmail = (p.email || '').trim().toLowerCase();
             const pTelefone = (p.telefone || '').replace(/\D/g, '');
 
+            // Buscar a resposta mais recente (última na planilha) que coincida com e-mail ou telefone
             const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
-                const matchesEmail = indicesEmail.some(idx => {
-                    const sEmail = (s[idx] || '').trim().toLowerCase();
-                    return pEmail && sEmail && pEmail === sEmail;
-                });
-                if (matchesEmail) return true;
-
-                if (pTelefone && pTelefone.length >= 8) {
-                    return indicesTelefone.some(idx => {
-                        const sTelefone = (s[idx] || '').replace(/\D/g, '');
-                        return sTelefone && sTelefone.includes(pTelefone);
-                    });
-                }
-                return false;
+                const sEmail = indicesEmail.map(idx => (s[idx] || '').trim().toLowerCase());
+                const sTelefone = indicesTelefone.map(idx => (s[idx] || '').replace(/\D/g, ''));
+                
+                const matchesEmail = pEmail && sEmail.includes(pEmail);
+                const matchesTelefone = pTelefone && pTelefone.length >= 8 && sTelefone.some(st => st && st.includes(pTelefone));
+                
+                return matchesEmail || matchesTelefone;
             });
 
             if (correspondencia) {
@@ -266,8 +261,6 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                     segundaEtapa: { headers, valores: correspondencia },
                     status: 'Completo'
                 });
-                const index = dataSegundaEtapa.indexOf(correspondencia);
-                if (index > -1) dataSegundaEtapa.splice(index, 1);
             } else {
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
