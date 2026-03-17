@@ -221,8 +221,8 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
     try {
         const response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:ZZ' });
         const rows = response.data.values || [];
-        const headers = rows[0] || [];
-        const dataSegundaEtapa = rows.slice(1);
+        const headers = rows[0] || []; console.log("DEBUG: Headers encontrados:", headers.length, headers.slice(0, 5));
+        const dataSegundaEtapa = rows.slice(1); console.log("DEBUG: Linhas de dados encontradas:", dataSegundaEtapa.length);
 
         // Identificar colunas de e-mail e telefone
         const findIndices = (keywords) => headers.reduce((acc, h, i) => {
