@@ -31,10 +31,10 @@ try {
             token: kvToken,
         });
         console.log('✅ [KV] Cliente Redis/KV inicializado com sucesso.');
-    } else if (process.env.REDIS_URL && !process.env.REDIS_REST_API_TOKEN) {
-        // Se for uma URL direta do Redis (sem ser REST), o @vercel/kv pode não funcionar diretamente
-        // mas tentaremos usar a URL como base se for o formato https
-        if (process.env.REDIS_URL.startsWith('https')) {
+        } else if (process.env.REDIS_URL && !process.env.REDIS_REST_API_TOKEN) {
+            // Se for uma URL direta do Redis (sem ser REST), o @vercel/kv pode não funcionar diretamente
+            // mas tentaremos usar a URL como base se for o formato redis:// ou https://
+            if (process.env.REDIS_URL.startsWith('https') || process.env.REDIS_URL.startsWith('redis')) {
             kv = createClient({
                 url: process.env.REDIS_URL,
                 token: process.env.REDIS_TOKEN || '', // Algumas integrações usam REDIS_TOKEN
