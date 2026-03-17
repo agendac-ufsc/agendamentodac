@@ -189,10 +189,14 @@
             doc.setLineWidth(0.5);
             doc.line(20, 35, 190, 35);
 
-            // Preparar dados para a tabela vertical
+            // Preparar dados para a tabela vertical, filtrando campos vazios
             const tableData = [];
             headers.forEach((header, i) => {
-                tableData.push([header, row[i] || "---"]);
+                const value = row[i] ? row[i].toString().trim() : "";
+                // Só adiciona se o valor não for vazio, não for apenas espaços e não for "---"
+                if (value && value !== "" && value !== "---") {
+                    tableData.push([header, value]);
+                }
             });
 
             // Gerar tabela organizada
@@ -207,7 +211,13 @@
                     0: { fontStyle: 'bold', cellWidth: 60 },
                     1: { cellWidth: 'auto' }
                 },
-                margin: { left: 20, right: 20 }
+                margin: { left: 20, right: 20 },
+                didParseCell: function(data) {
+                    // Ajuste fino para evitar quebras de linha estranhas em textos longos
+                    if (data.column.index === 1) {
+                        data.cell.styles.overflow = 'linebreak';
+                    }
+                }
             });
 
             // Rodapé
