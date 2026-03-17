@@ -122,6 +122,12 @@
         let allData = [];
         let headers = [];
 
+        // Índices dos campos chave (serão determinados dinamicamente pelos headers)
+        let idxTimestamp = 0;
+        let idxEmail = 1;
+        let idxNomeCompleto = -1;
+        let idxRazaoSocial = -1;
+
         async function loadData() {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="loading">Carregando inscrições...</div>';
@@ -141,17 +147,48 @@
                 
                 headers = data[0];
                 allData = data.slice(1);
-                             // Exibir dados para depuração na página
-                content.innerHTML += `<h3>Headers:</h3><pre>${JSON.stringify(headers, null, 2)}</pre>`;
-                content.innerHTML += `<h3>Dados Completos:</h3><pre>${JSON.stringify(allData, null, 2)}</pre>`;
 
-                
+                // Determinar índices dos campos chave de forma dinâmica
+                idxTimestamp = 0;
+                idxEmail = -1;
+                idxNomeCompleto = -1;
+                idxRazaoSocial = -1;
+
+                headers.forEach((h, i) => {
+                    const lower = h.toLowerCase();
+                    if (lower.includes('endereço de e-mail') || lower === 'e-mail' || lower === 'email') {
+                        if (idxEmail === -1) idxEmail = i;
+                    }
+                    if (lower.includes('nome completo') && !lower.includes('representante')) {
+                        if (idxNomeCompleto === -1) idxNomeCompleto = i;
+                    }
+                    if (lower.includes('razão social')) {
+                        if (idxRazaoSocial === -1) idxRazaoSocial = i;
+                    }
+                });
+
+                if (idxEmail === -1) idxEmail = 1;
+
                 let html = '<div class="list-container">';
                 
                 allData.forEach((row, index) => {
-                    // Tenta pegar o nome ou identificador (geralmente na coluna 1 ou 2)
-                    const identifier = row[1] || row[2] || 'Sem Nome';
-                    const timestamp = row[0] || 'Data não disponível';
+                    // Montar identificador: preferir Nome Completo, depois Razão Social, depois e-mail
+                    let identifier = '';
+                    if (idxNomeCompleto >= 0 && row[idxNomeCompleto] && row[idxNomeCompleto].trim()) {
+                        identifier = row[idxNomeCompleto].trim();
+                    } else if (idxRazaoSocial >= 0 && row[idxRazaoSocial] && row[idxRazaoSocial].trim()) {
+                        identifier = row[idxRazaoSocial].trim();
+                    } else if (idxEmail >= 0 && row[idxEmail] && row[idxEmail].trim()) {
+                        identifier = row[idxEmail].trim();
+                    } else {
+                        // Buscar qualquer valor não vazio nas primeiras colunas
+                        for (let i = 1; i < Math.min(row.length, 6); i++) {
+                            if (row[i] && row[i].trim()) { identifier = row[i].trim(); break; }
+                        }
+                        if (!identifier) identifier = 'Sem identificação';
+                    }
+
+                    const timestamp = row[idxTimestamp] || 'Data não disponível';
                     
                     html += `
                         <div class="inscription-item">
@@ -178,8 +215,20 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             const row = allData[index];
-            const identifier = row[1] || row[2] || 'Sem Nome';
-                       // Configurações do PDF
+
+            // Montar identificador para o título do PDF
+            let identifier = '';
+            if (idxNomeCompleto >= 0 && row[idxNomeCompleto] && row[idxNomeCompleto].trim()) {
+                identifier = row[idxNomeCompleto].trim();
+            } else if (idxRazaoSocial >= 0 && row[idxRazaoSocial] && row[idxRazaoSocial].trim()) {
+                identifier = row[idxRazaoSocial].trim();
+            } else if (idxEmail >= 0 && row[idxEmail] && row[idxEmail].trim()) {
+                identifier = row[idxEmail].trim();
+            } else {
+                identifier = 'Sem identificação';
+            }
+
+            // Configurações do PDF
             doc.setFont("helvetica", "bold");
             doc.setFontSize(18);
             doc.setTextColor(40, 40, 40);
@@ -195,11 +244,13 @@
             // Preparar dados para a tabela vertical, filtrando campos vazios
             const tableData = [];
             headers.forEach((header, i) => {
-                const value = row[i] ? row[i].toString().trim() : "";
-                // Só adiciona se o valor não for vazio, não for apenas espaços
+                const value = (row[i] !== undefined && row[i] !== null) ? row[i].toString().trim() : "";
+                // Só adiciona se o valor não for vazio
                 if (value && value !== "") {
-                    tableData.push([header, value]);                }
+                    tableData.push([header, value]);
+                }
             });
+
             // Gerar tabela organizada
             doc.autoTable({
                 startY: 40,
@@ -209,12 +260,11 @@
                 headStyles: { fillColor: [102, 126, 234], textColor: 255, fontSize: 10 },
                 bodyStyles: { fontSize: 9, cellPadding: 5 },
                 columnStyles: {
-                    0: { fontStyle: 'bold', cellWidth: 60 },
+                    0: { fontStyle: 'bold', cellWidth: 70 },
                     1: { cellWidth: 'auto' }
                 },
                 margin: { left: 20, right: 20 },
                 didParseCell: function(data) {
-                    // Ajuste fino para evitar quebras de linha estranhas em textos longos
                     if (data.column.index === 1) {
                         data.cell.styles.overflow = 'linebreak';
                     }

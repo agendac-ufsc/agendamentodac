@@ -273,7 +273,7 @@ app.get('/api/admin/dados-forms', async (req, res) => {
         const response = await sheets.spreadsheets.values.get({
             auth: googleAuthClient,
             spreadsheetId: SPREADSHEET_ID,
-            range: 'Respostas ao formulário 1!A:Z', // Ajuste o nome da aba se necessário
+            range: 'Respostas ao formulário 1!A:AZ', // Range expandido para cobrir todas as colunas do formulário
         });
 
         const rows = response.data.values;
