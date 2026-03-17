@@ -4,206 +4,248 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Administrativo - DAC</title>
-    <!-- Bibliotecas para geração de PDF -->
+    <!-- Bibliotecas para geração de PDF e Ícones -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f4f7f6;
+            background: #f8f9fa;
+            color: #333;
             padding: 20px;
         }
         .container {
-            max-width: 900px;
+            max-width: 1200px;
             margin: 0 auto;
             background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
         }
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        p.subtitle {
-            text-align: center;
-            color: #666;
-            margin-bottom: 30px;
-        }
-        .list-container {
-            margin-top: 20px;
-        }
-        .inscription-item {
+        header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 15px 20px;
-            background: #fff;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            transition: all 0.2s;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
         }
-        .inscription-item:hover {
-            border-color: #667eea;
-            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
-        }
-        .inscription-info {
-            display: flex;
-            flex-direction: column;
-        }
-        .inscription-title {
-            font-weight: 600;
-            color: #333;
-            font-size: 16px;
-        }
-        .inscription-date {
-            font-size: 13px;
-            color: #888;
-            margin-top: 4px;
-        }
-        .btn-pdf {
-            padding: 8px 16px;
-            background-color: #28a745;
+        h1 { font-size: 22px; color: #444; }
+        .refresh-btn {
+            padding: 8px 15px;
+            background: #667eea;
             color: white;
             border: none;
             border-radius: 5px;
             cursor: pointer;
-            font-weight: bold;
-            font-size: 13px;
+            font-weight: 600;
             display: flex;
             align-items: center;
             gap: 8px;
-            transition: background 0.2s;
         }
-        .btn-pdf:hover {
-            background-color: #218838;
+        
+        /* Table Styles */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
         }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            font-size: 18px;
-            color: #667eea;
+        th {
+            background: #f1f3f5;
+            color: #666;
+            text-transform: uppercase;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 2px solid #dee2e6;
         }
-        .error {
-            color: #d9534f;
-            text-align: center;
-            padding: 20px;
+        td {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+            font-size: 13px;
         }
-        .refresh-btn {
-            display: block;
-            margin: 0 auto 20px;
-            padding: 10px 20px;
-            background-color: #667eea;
-            color: white;
+        tr:hover { background: #fcfcfc; }
+        
+        .col-id { color: #888; width: 50px; }
+        .col-evento { font-weight: 700; color: #d9534f; min-width: 150px; }
+        .col-local { min-width: 120px; }
+        .local-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            background: #f0f4ff;
+            color: #5a6fd6;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .col-etapas { color: #555; line-height: 1.6; }
+        .etapa-item { display: block; margin-bottom: 2px; }
+        
+        .btn-action {
+            background: none;
             border: none;
-            border-radius: 5px;
             cursor: pointer;
-            font-weight: bold;
+            font-size: 16px;
+            padding: 5px;
+            transition: transform 0.2s;
         }
-        .refresh-btn:hover {
-            background-color: #5a6fd6;
+        .btn-action:hover { transform: scale(1.2); }
+        .btn-pdf { color: #d9534f; display: flex; align-items: center; gap: 5px; text-decoration: none; font-weight: 600; }
+        .btn-contact { color: #666; }
+        .btn-delete { color: #d9534f; }
+        
+        .status-badge {
+            font-weight: 700;
+            font-size: 14px;
         }
+        .status-completo { color: #28a745; }
+        .status-pendente { color: #f0ad4e; }
+
+        /* Modal Contact */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center; justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+        .modal-header { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-body p { margin-bottom: 10px; font-size: 14px; }
+        .modal-footer { margin-top: 20px; text-align: right; }
+        .btn-close { padding: 8px 20px; background: #eee; border: none; border-radius: 5px; cursor: pointer; }
+
+        .loading { text-align: center; padding: 50px; color: #667eea; font-size: 18px; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📊 Painel Administrativo - DAC</h1>
-        <p class="subtitle">Segunda Etapa - Google Forms</p>
-        <button class="refresh-btn" onclick="loadData()">Atualizar Lista</button>
+        <header>
+            <h1>📊 Painel Administrativo - DAC</h1>
+            <button class="refresh-btn" onclick="loadData()">
+                <i class="fas fa-sync-alt"></i> Atualizar Lista
+            </button>
+        </header>
+
         <div id="content">
-            <div class="loading">Carregando inscrições...</div>
+            <div class="loading">Carregando inscrições unificadas...</div>
+        </div>
+    </div>
+
+    <!-- Modal Contato -->
+    <div id="contactModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3>Dados do Proponente</h3></div>
+            <div class="modal-body" id="contactBody"></div>
+            <div class="modal-footer">
+                <button class="btn-close" onclick="closeModal()">Fechar</button>
+            </div>
         </div>
     </div>
 
     <script>
-        let allData = [];
-        let headers = [];
-
-        // Índices dos campos chave (serão determinados dinamicamente pelos headers)
-        let idxTimestamp = 0;
-        let idxEmail = 1;
-        let idxNomeCompleto = -1;
-        let idxRazaoSocial = -1;
+        let allUnificados = [];
 
         async function loadData() {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Carregando inscrições...</div>';
+            content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Carregando dados unificados...</div>';
             
             try {
-                const response = await fetch('/api/admin/dados-forms');
-                if (!response.ok) {
-                    throw new Error('Erro ao buscar dados do servidor');
-                }
-                
+                const response = await fetch('/api/admin/dados-unificados');
                 const data = await response.json();
+                allUnificados = data;
                 
-                if (data.length <= 1) {
-                    content.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhuma inscrição encontrada.</p>';
+                if (data.length === 0) {
+                    content.innerHTML = '<p style="text-align: center; padding: 40px;">Nenhuma inscrição encontrada.</p>';
                     return;
                 }
                 
-                headers = data[0];
-                allData = data.slice(1);
-
-                // Determinar índices dos campos chave de forma dinâmica
-                idxTimestamp = 0;
-                idxEmail = -1;
-                idxNomeCompleto = -1;
-                idxRazaoSocial = -1;
-
-                headers.forEach((h, i) => {
-                    const lower = h.toLowerCase();
-                    if (lower.includes('endereço de e-mail') || lower === 'e-mail' || lower === 'email') {
-                        if (idxEmail === -1) idxEmail = i;
-                    }
-                    if (lower.includes('nome completo') && !lower.includes('representante')) {
-                        if (idxNomeCompleto === -1) idxNomeCompleto = i;
-                    }
-                    if (lower.includes('razão social')) {
-                        if (idxRazaoSocial === -1) idxRazaoSocial = i;
-                    }
-                });
-
-                if (idxEmail === -1) idxEmail = 1;
-
-                let html = '<div class="list-container">';
+                let html = `
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-id">#</th>
+                                <th>Evento</th>
+                                <th>Local</th>
+                                <th>Etapas Agendadas</th>
+                                <th>Status</th>
+                                <th>Arquivos</th>
+                                <th style="text-align: center;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
                 
-                allData.forEach((row, index) => {
-                    // Montar identificador: preferir Nome Completo, depois Razão Social, depois e-mail
-                    let identifier = '';
-                    if (idxNomeCompleto >= 0 && row[idxNomeCompleto] && row[idxNomeCompleto].trim()) {
-                        identifier = row[idxNomeCompleto].trim();
-                    } else if (idxRazaoSocial >= 0 && row[idxRazaoSocial] && row[idxRazaoSocial].trim()) {
-                        identifier = row[idxRazaoSocial].trim();
-                    } else if (idxEmail >= 0 && row[idxEmail] && row[idxEmail].trim()) {
-                        identifier = row[idxEmail].trim();
-                    } else {
-                        // Buscar qualquer valor não vazio nas primeiras colunas
-                        for (let i = 1; i < Math.min(row.length, 6); i++) {
-                            if (row[i] && row[i].trim()) { identifier = row[i].trim(); break; }
-                        }
-                        if (!identifier) identifier = 'Sem identificação';
+                data.forEach((item, index) => {
+                    const p = item.primeiraEtapa;
+                    const s = item.segundaEtapa;
+                    const id = (index + 1).toString().padStart(2, '0');
+                    
+                    // Extrair Local (Espaço Solicitado) se existir no forms
+                    let local = 'N/A';
+                    if (s) {
+                        const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado'));
+                        if (idxEspaco >= 0) local = s.valores[idxEspaco];
                     }
 
-                    const timestamp = row[idxTimestamp] || 'Data não disponível';
-                    
+                    // Formatar Etapas
+                    let etapasHtml = '';
+                    const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                    for (const key in p.etapas) {
+                        const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                        itens.forEach((it, i) => {
+                            const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                            const dataFormatada = it.data.split('-').reverse().join('/');
+                            etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
+                        });
+                    }
+
+                    const statusClass = item.status === 'Completo' ? 'status-completo' : 'status-pendente';
+                    const statusText = item.status === 'Completo' ? '1/1' : '0/1';
+
                     html += `
-                        <div class="inscription-item">
-                            <div class="inscription-info">
-                                <span class="inscription-title">Inscrição ${index + 1}: ${identifier}</span>
-                                <span class="inscription-date">Enviado em: ${timestamp}</span>
-                            </div>
-                            <button class="btn-pdf" onclick="generatePDF(${index})">
-                                📄 Gerar PDF
-                            </button>
-                        </div>
+                        <tr>
+                            <td class="col-id">${id}</td>
+                            <td class="col-evento">${p.evento.toUpperCase()}</td>
+                            <td class="col-local">
+                                <span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span>
+                            </td>
+                            <td class="col-etapas">${etapasHtml || 'Sem etapas'}</td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                            <td>
+                                ${s ? `
+                                    <a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;">
+                                        <i class="far fa-file-pdf"></i> Ficha (PDF)
+                                    </a>
+                                ` : '<span style="color: #ccc;">Aguardando Forms</span>'}
+                            </td>
+                            <td style="text-align: center;">
+                                <button class="btn-action btn-contact" onclick="showContact(${index})" title="Ver Contatos">
+                                    <i class="far fa-address-card"></i>
+                                </button>
+                                <button class="btn-action btn-delete" onclick="deleteInscricao('${p.email}')" title="Excluir">
+                                    <i class="far fa-trash-alt"></i>
+                                </button>
+                            </td>
+                        </tr>
                     `;
                 });
                 
-                html += '</div>';
+                html += '</tbody></table>';
                 content.innerHTML = html;
                 
             } catch (error) {
@@ -211,81 +253,94 @@
             }
         }
 
+        function showContact(index) {
+            const p = allUnificados[index].primeiraEtapa;
+            const body = document.getElementById('contactBody');
+            body.innerHTML = `
+                <p><strong><i class="fas fa-user"></i> Nome:</strong> ${p.nome}</p>
+                <p><strong><i class="fas fa-envelope"></i> E-mail:</strong> ${p.email}</p>
+                <p><strong><i class="fas fa-phone"></i> Telefone:</strong> ${p.telefone}</p>
+                <p><strong><i class="fas fa-calendar-alt"></i> Inscrito em:</strong> ${p.timestamp || 'N/A'}</p>
+            `;
+            document.getElementById('contactModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('contactModal').style.display = 'none';
+        }
+
+        async function deleteInscricao(email) {
+            if (!confirm('Tem certeza que deseja excluir esta inscrição?')) return;
+            try {
+                const res = await fetch('/api/admin/deletar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email })
+                });
+                if (res.ok) loadData();
+            } catch (e) { alert('Erro ao deletar'); }
+        }
+
         function generatePDF(index) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
-            const row = allData[index];
+            const item = allUnificados[index];
+            const p = item.primeiraEtapa;
+            const s = item.segundaEtapa;
 
-            // Montar identificador para o título do PDF
-            let identifier = '';
-            if (idxNomeCompleto >= 0 && row[idxNomeCompleto] && row[idxNomeCompleto].trim()) {
-                identifier = row[idxNomeCompleto].trim();
-            } else if (idxRazaoSocial >= 0 && row[idxRazaoSocial] && row[idxRazaoSocial].trim()) {
-                identifier = row[idxRazaoSocial].trim();
-            } else if (idxEmail >= 0 && row[idxEmail] && row[idxEmail].trim()) {
-                identifier = row[idxEmail].trim();
-            } else {
-                identifier = 'Sem identificação';
-            }
-
-            // Configurações do PDF
             doc.setFont("helvetica", "bold");
             doc.setFontSize(18);
-            doc.setTextColor(40, 40, 40);
-            doc.text("Ficha de Inscrição - DAC", 105, 20, { align: "center" });
+            doc.text("Ficha de Inscrição Unificada - DAC", 105, 20, { align: "center" });
             
             doc.setFontSize(12);
             doc.setFont("helvetica", "normal");
-            doc.text(`Inscrição #${index + 1} - ${identifier}`, 105, 28, { align: "center" });
+            doc.text(`Evento: ${p.evento}`, 105, 28, { align: "center" });
             
             doc.setLineWidth(0.5);
             doc.line(20, 35, 190, 35);
 
-            // Preparar dados para a tabela vertical, filtrando campos vazios
             const tableData = [];
-            headers.forEach((header, i) => {
-                const value = (row[i] !== undefined && row[i] !== null) ? row[i].toString().trim() : "";
-                // Só adiciona se o valor não for vazio
-                if (value && value !== "") {
-                    tableData.push([header, value]);
-                }
-            });
+            // Dados da 1ª Etapa
+            tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+            tableData.push(['Nome do Proponente', p.nome]);
+            tableData.push(['E-mail', p.email]);
+            tableData.push(['Telefone', p.telefone]);
+            
+            let cronogramaStr = '';
+            for (const key in p.etapas) {
+                const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                itens.forEach(it => {
+                    cronogramaStr += `${key.toUpperCase()}: ${it.data} (${it.horario})\n`;
+                });
+            }
+            tableData.push(['Cronograma Solicitado', cronogramaStr]);
 
-            // Gerar tabela organizada
-            doc.autoTable({
-                startY: 40,
-                head: [['Campo', 'Resposta']],
-                body: tableData,
-                theme: 'striped',
-                headStyles: { fillColor: [102, 126, 234], textColor: 255, fontSize: 10 },
-                bodyStyles: { fontSize: 9, cellPadding: 5 },
-                columnStyles: {
-                    0: { fontStyle: 'bold', cellWidth: 70 },
-                    1: { cellWidth: 'auto' }
-                },
-                margin: { left: 20, right: 20 },
-                didParseCell: function(data) {
-                    if (data.column.index === 1) {
-                        data.cell.styles.overflow = 'linebreak';
+            // Dados da 2ª Etapa
+            if (s) {
+                tableData.push([{ content: 'DADOS DO FORMULÁRIO (2ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+                s.headers.forEach((header, i) => {
+                    const val = s.valores[i];
+                    if (val && val.toString().trim()) {
+                        tableData.push([header, val.toString().trim()]);
                     }
-                }
-            });
-
-            // Rodapé
-            const pageCount = doc.internal.getNumberOfPages();
-            for(let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8);
-                doc.setTextColor(150);
-                doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 285);
-                doc.text(`Página ${i} de ${pageCount}`, 190, 285, { align: "right" });
+                });
             }
 
-            // Abrir PDF em nova aba
+            doc.autoTable({
+                startY: 40,
+                body: tableData,
+                theme: 'grid',
+                styles: { fontSize: 9, cellPadding: 4 },
+                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }
+            });
+
             window.open(doc.output('bloburl'), '_blank');
         }
 
-        // Carregar dados ao iniciar
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('contactModal')) closeModal();
+        }
+
         loadData();
     </script>
 </body>

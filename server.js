@@ -14,6 +14,11 @@ app.use(express.static(path.join(__dirname)));
 const CALENDAR_ID = 'oto.bezerra@ufsc.br';
 let googleAuthClient;
 
+// Armazenamento temporário em memória para a Primeira Etapa (Agendamentos)
+// Em produção real, isso deveria estar em um banco de dados como MongoDB ou PostgreSQL
+// No Vercel, essa memória é efêmera por requisição/instância, mas servirá para o fluxo imediato
+let agendamentosPrimeiraEtapa = [];
+
 const initGoogleAuth = async () => {
     try {
         const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
@@ -243,6 +248,16 @@ app.post('/api/agendar', async (req, res) => {
         );
 
         if (emailProponente || emailAdmin) {
+            // Salvar no "banco" em memória
+            agendamentosPrimeiraEtapa.push({
+                id: Date.now().toString(),
+                nome,
+                email,
+                telefone,
+                evento,
+                etapas,
+                timestamp: new Date().toLocaleString('pt-BR')
+            });
             res.json({ success: true });
         } else {
             res.status(500).json({ error: 'Erro ao enviar e-mails de confirmação.' });
@@ -286,6 +301,88 @@ app.get('/api/admin/dados-forms', async (req, res) => {
         console.error('❌ [Google Sheets] Erro ao buscar dados:', error.message);
         res.status(500).json({ error: 'Erro ao consultar a planilha do Google Sheets' });
     }
+});
+
+// Rota Unificada para o Painel Admin (Cruzando 1ª e 2ª Etapas)
+app.get('/api/admin/dados-unificados', async (req, res) => {
+    if (!googleAuthClient) {
+        await initGoogleAuth();
+        if (!googleAuthClient) return res.status(500).json({ error: 'Erro na autenticação com Google' });
+    }
+
+    try {
+        // 1. Buscar dados da Segunda Etapa (Google Sheets)
+        const response = await sheets.spreadsheets.values.get({
+            auth: googleAuthClient,
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Respostas ao formulário 1!A:AZ',
+        });
+
+        const rows = response.data.values || [];
+        const headers = rows[0] || [];
+        const dataSegundaEtapa = rows.slice(1);
+
+        // 2. Unificar os dados
+        // Mapear dados da segunda etapa por email para facilitar o cruzamento
+        const idxEmailSheet = headers.findIndex(h => {
+            const l = h.toLowerCase();
+            return l.includes('endereço de e-mail') || l === 'e-mail' || l === 'email';
+        });
+
+        const unificados = agendamentosPrimeiraEtapa.map(p => {
+            // Tentar encontrar correspondência na segunda etapa por e-mail ou telefone
+            const correspondencia = dataSegundaEtapa.find(s => {
+                const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
+                // Busca simples por email ou telefone nos campos da planilha
+                return (emailSheet && emailSheet.toLowerCase() === p.email.toLowerCase()) || 
+                       s.some(val => val && (val.toString().includes(p.email) || val.toString().includes(p.telefone)));
+            });
+
+            return {
+                primeiraEtapa: p,
+                segundaEtapa: correspondencia ? {
+                    headers: headers,
+                    valores: correspondencia
+                } : null,
+                status: correspondencia ? 'Completo' : 'Pendente (Falta Forms)'
+            };
+        });
+
+        // Adicionar também quem preencheu o forms mas não tem registro na 1ª etapa (opcional, mas bom para auditoria)
+        dataSegundaEtapa.forEach(s => {
+            const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
+            const jaExiste = unificados.some(u => u.primeiraEtapa.email.toLowerCase() === (emailSheet || '').toLowerCase());
+            
+            if (!jaExiste) {
+                unificados.push({
+                    primeiraEtapa: {
+                        nome: 'Não registrado na 1ª etapa',
+                        email: emailSheet || 'N/A',
+                        telefone: 'N/A',
+                        evento: 'N/A',
+                        etapas: {}
+                    },
+                    segundaEtapa: {
+                        headers: headers,
+                        valores: s
+                    },
+                    status: 'Incompleto (Falta Agendamento)'
+                });
+            }
+        });
+
+        res.json(unificados);
+    } catch (error) {
+        console.error('❌ [Unificados] Erro:', error.message);
+        res.status(500).json({ error: 'Erro ao gerar dados unificados' });
+    }
+});
+
+// Rota para deletar inscrição
+app.post('/api/admin/deletar', async (req, res) => {
+    const { email } = req.body;
+    agendamentosPrimeiraEtapa = agendamentosPrimeiraEtapa.filter(a => a.email !== email);
+    res.json({ success: true });
 });
 
 const PORT = process.env.PORT || 3000;
