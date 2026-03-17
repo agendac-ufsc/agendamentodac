@@ -48,7 +48,7 @@ const saveAgendamento = async (novoAgendamento) => {
             const agendamentos = await getAgendamentos();
             agendamentos.push(novoAgendamento);
             await redis.set(AGENDAMENTOS_KEY, JSON.stringify(agendamentos));
-            console.log('✅ [Redis] Agendamento salvo com sucesso.');
+            console.log("✅ [Redis] Agendamento salvo com sucesso. Dados:", JSON.stringify(novoAgendamento));
             return true;
         }
     } catch (error) {
