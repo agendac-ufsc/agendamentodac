@@ -331,15 +331,15 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
         const unificados = agendamentosPrimeiraEtapa.map(p => {
             // Tentar encontrar correspondência na segunda etapa por e-mail ou telefone
-            const correspondencia = dataSegundaEtapa.find(s => {
+            // IMPORTANTE: Buscamos de trás para frente (reverse) para pegar a resposta mais RECENTE
+            const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
                 const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-                // Normalização básica para e-mails (trim e lowercase)
                 const pEmail = (p.email || '').trim().toLowerCase();
                 const sEmail = (emailSheet || '').trim().toLowerCase();
                 
                 // Comparação por e-mail (prioritário) ou telefone
-                return (sEmail === pEmail) || 
-                       s.some(val => val && val.toString().includes(p.telefone));
+                return (sEmail === pEmail && pEmail !== '') || 
+                       (p.telefone && p.telefone.length > 5 && s.some(val => val && val.toString().includes(p.telefone)));
             });
 
             return {
