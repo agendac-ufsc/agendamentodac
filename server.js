@@ -329,6 +329,11 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             return l.includes('endereço de e-mail') || l === 'e-mail' || l === 'email';
         });
 
+        const mapeamentoLocais = {
+            'oto.bezerra@ufsc.br': 'Teatro',
+            'agendac.ufsc@gmail.com': 'Geral' // Exemplo de outro local
+        };
+
         const unificados = agendamentosPrimeiraEtapa.map(p => {
             // Tentar encontrar correspondência na segunda etapa por e-mail ou telefone
             // IMPORTANTE: Buscamos de trás para frente (reverse) para pegar a resposta mais RECENTE
@@ -342,8 +347,11 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                        (p.telefone && p.telefone.length > 5 && s.some(val => val && val.toString().includes(p.telefone)));
             });
 
+            // Adicionar o nome do local baseado no ID do calendário
+            const localNome = mapeamentoLocais[p.calendarId] || 'N/A';
+
             return {
-                primeiraEtapa: p,
+                primeiraEtapa: { ...p, localNome },
                 segundaEtapa: correspondencia ? {
                     headers: headers,
                     valores: correspondencia

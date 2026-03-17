@@ -201,15 +201,14 @@
                         const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
                         if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
                     }
-
-                    // Extrair Local (Espaço Solicitado) se existir no forms
-                    let local = 'N/A';
-                    if (s) {
-                        const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado'));
-                        if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
-                    }
-
-                    // Formatar Etapas (apenas se houver etapas registradas na 1ª etapa)
+205	                    // Extrair Local (Prioriza 1ª etapa, depois Forms)
+206	                    let local = 'N/A';
+207	                    if (p.localNome && p.localNome !== 'N/A') {
+208	                        local = p.localNome;
+209	                    } else if (s) {
+210	                        const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado') || h.toLowerCase().includes('local'));
+211	                        if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
+212	                    }/ Formatar Etapas (apenas se houver etapas registradas na 1ª etapa)
                     let etapasHtml = '';
                     const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
                     if (p.etapas && Object.keys(p.etapas).length > 0) {
@@ -317,11 +316,10 @@
 
             const tableData = [];
             // Dados da 1ª Etapa
-            tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
-            tableData.push(['Nome do Proponente', p.nome]);
-            tableData.push(['E-mail', p.email]);
-            tableData.push(['Telefone', p.telefone]);
-            
+            tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }])316	            tableData.push(['Nome do Proponente', p.nome]);
+317	            tableData.push(['E-mail', p.email]);
+318	            tableData.push(['Telefone', p.telefone]);
+319	            tableData.push(['Local Solicitado', p.localNome || 'N/A']);   
             let cronogramaStr = '';
             const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
             if (p.etapas && Object.keys(p.etapas).length > 0) {
