@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - DAC</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f4f7f6;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .table-container {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #667eea;
+            color: white;
+            font-weight: 600;
+        }
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+            font-size: 18px;
+            color: #667eea;
+        }
+        .error {
+            color: #d9534f;
+            text-align: center;
+            padding: 20px;
+        }
+        .refresh-btn {
+            display: block;
+            margin: 0 auto 20px;
+            padding: 10px 20px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .refresh-btn:hover {
+            background-color: #5a6fd6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Respostas da Segunda Etapa (Google Forms)</h1>
+        <button class="refresh-btn" onclick="loadData()">Atualizar Dados</button>
+        <div id="content">
+            <div class="loading">Carregando dados da planilha...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadData() {
+            const content = document.getElementById('content');
+            content.innerHTML = '<div class="loading">Carregando dados da planilha...</div>';
+            
+            try {
+                const response = await fetch('/api/admin/dados-forms');
+                if (!response.ok) {
+                    throw new Error('Erro ao buscar dados do servidor');
+                }
+                
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    content.innerHTML = '<p style="text-align: center;">Nenhuma resposta encontrada.</p>';
+                    return;
+                }
+                
+                let html = '<div class="table-container"><table><thead><tr>';
+                
+                // Cabeçalhos (primeira linha da planilha)
+                const headers = data[0];
+                headers.forEach(header => {
+                    html += `<th>${header}</th>`;
+                });
+                
+                html += '</tr></thead><tbody>';
+                
+                // Dados (restante das linhas)
+                for (let i = 1; i < data.length; i++) {
+                    html += '<tr>';
+                    data[i].forEach(cell => {
+                        html += `<td>${cell || ''}</td>`;
+                    });
+                    html += '</tr>';
+                }
+                
+                html += '</tbody></table></div>';
+                content.innerHTML = html;
+                
+            } catch (error) {
+                content.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+            }
+        }
+
+        // Carregar dados ao iniciar
+        loadData();
+    </script>
+</body>
+</html>

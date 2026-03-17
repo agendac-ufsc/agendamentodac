@@ -24,8 +24,11 @@ const initGoogleAuth = async () => {
                     client_email: credentials.client_email,
                     private_key: credentials.private_key,
                 },
-                scopes: ['https://www.googleapis.com/auth/calendar'],
-            });
+            scopes: [
+                'https://www.googleapis.com/auth/calendar',
+                'https://www.googleapis.com/auth/spreadsheets.readonly'
+            ],
+        });
             googleAuthClient = await auth.getClient();
             console.log('✅ [Google] Autenticação configurada com sucesso.');
         } else {
@@ -39,6 +42,8 @@ const initGoogleAuth = async () => {
 initGoogleAuth();
 
 const calendar = google.calendar({ version: 'v3' });
+const sheets = google.sheets({ version: 'v4' });
+const SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
 
 const createCalendarEvent = async (summary, description, date, timeRange) => {
     if (!googleAuthClient) {
@@ -251,6 +256,36 @@ app.post('/api/agendar', async (req, res) => {
 
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/admin', (req, res) => {
+    res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
+// Rota para buscar dados do Google Sheets (Segunda Etapa)
+app.get('/api/admin/dados-forms', async (req, res) => {
+    if (!googleAuthClient) {
+        await initGoogleAuth();
+        if (!googleAuthClient) return res.status(500).json({ error: 'Erro na autenticação com Google' });
+    }
+
+    try {
+        const response = await sheets.spreadsheets.values.get({
+            auth: googleAuthClient,
+            spreadsheetId: SPREADSHEET_ID,
+            range: 'Respostas ao formulário 1!A:Z', // Ajuste o nome da aba se necessário
+        });
+
+        const rows = response.data.values;
+        if (!rows || rows.length === 0) {
+            return res.json([]);
+        }
+
+        res.json(rows);
+    } catch (error) {
+        console.error('❌ [Google Sheets] Erro ao buscar dados:', error.message);
+        res.status(500).json({ error: 'Erro ao consultar a planilha do Google Sheets' });
+    }
 });
 
 const PORT = process.env.PORT || 3000;

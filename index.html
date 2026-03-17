@@ -576,9 +576,25 @@
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
-                    msg.textContent = '✅ Inscrição realizada com sucesso!';
+                    msg.textContent = '✅ Primeira etapa concluída com sucesso!';
                     msg.className = 'message success';
-                    setTimeout(() => location.reload(), 3000);
+                    
+                    // Criar e exibir o botão para a segunda etapa
+                    const secondStepBtn = document.createElement('a');
+                    secondStepBtn.href = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+                    secondStepBtn.target = '_blank';
+                    secondStepBtn.className = 'submit';
+                    secondStepBtn.style.display = 'block';
+                    secondStepBtn.style.textAlign = 'center';
+                    secondStepBtn.style.textDecoration = 'none';
+                    secondStepBtn.style.marginTop = '20px';
+                    secondStepBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
+                    secondStepBtn.textContent = 'Ir para Segunda Etapa (Google Forms)';
+                    
+                    msg.after(secondStepBtn);
+                    
+                    // Não recarregar a página automaticamente para que o usuário possa clicar no botão
+                    // setTimeout(() => location.reload(), 3000);
                 } else {
                     const result = await res.json();
                     msg.textContent = '❌ Erro: ' + result.error;
