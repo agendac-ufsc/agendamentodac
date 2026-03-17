@@ -241,24 +241,44 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const idxEmailSheet = headers.findIndex(h => { const l = h.toLowerCase(); return l.includes('endereço de e-mail') || l === 'e-mail' || l === 'email'; });
         const mapeamentoLocais = { 'oto.bezerra@ufsc.br': 'Teatro' };
         const agendamentosPrimeiraEtapa = await getAgendamentos();
-        const unificados = agendamentosPrimeiraEtapa.map(p => {
-            const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
+            const unificados = [];
+
+            // Processar agendamentos da primeira etapa (site)
+            for (const p of agendamentosPrimeiraEtapa) {
+                const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
+                    const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
+                    const pEmail = (p.email || '').trim().toLowerCase();
+                    const sEmail = (emailSheet || '').trim().toLowerCase();
+                    return (sEmail === pEmail && pEmail !== '') || (p.telefone && p.telefone.length > 5 && s.some(val => val && val.toString().includes(p.telefone)));
+                });
+
+                unificados.push({
+                    primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                    segundaEtapa: correspondencia ? { headers, valores: correspondencia } : null,
+                    status: correspondencia ? 'Completo' : 'Pendente (Falta Forms)'
+                });
+
+                // Remover a correspondência da segunda etapa para evitar duplicatas
+                if (correspondencia) {
+                    const index = dataSegundaEtapa.indexOf(correspondencia);
+                    if (index > -1) {
+                        dataSegundaEtapa.splice(index, 1);
+                    }
+                }
+            }
+
+            // Adicionar agendamentos da segunda etapa (Forms) que não tiveram correspondência na primeira etapa
+            dataSegundaEtapa.forEach(s => {
                 const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-                const pEmail = (p.email || '').trim().toLowerCase();
-                const sEmail = (emailSheet || '').trim().toLowerCase();
-                return (sEmail === pEmail && pEmail !== '') || (p.telefone && p.telefone.length > 5 && s.some(val => val && val.toString().includes(p.telefone)));
-            });
-            return { primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' }, segundaEtapa: correspondencia ? { headers, valores: correspondencia } : null, status: correspondencia ? 'Completo' : 'Pendente (Falta Forms)' };
-        });
-        dataSegundaEtapa.forEach(s => {
-            const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-            if (!unificados.some(u => u.primeiraEtapa && u.primeiraEtapa.email && emailSheet && u.primeiraEtapa.email.toLowerCase() === emailSheet.toLowerCase())) {
                 const idxNomeEvento = headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
                 const idxNomeProponente = headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
                 const idxTelefone = headers.findIndex(h => h.toLowerCase().includes('celular') || h.toLowerCase().includes('telefone'));
-                unificados.push({ primeiraEtapa: { nome: idxNomeProponente >= 0 ? s[idxNomeProponente] : 'Inscrição Legada', email: emailSheet || 'N/A', telefone: idxTelefone >= 0 ? s[idxTelefone] : 'N/A', evento: idxNomeEvento >= 0 ? s[idxNomeEvento] : 'Evento (Forms)', etapas: {}, isLegada: true }, segundaEtapa: { headers, valores: s }, status: 'Completo (Forms)' });
-            }
-        });
+                unificados.push({
+                    primeiraEtapa: { nome: idxNomeProponente >= 0 ? s[idxNomeProponente] : 'Inscrição Legada', email: emailSheet || 'N/A', telefone: idxTelefone >= 0 ? s[idxTelefone] : 'N/A', evento: idxNomeEvento >= 0 ? s[idxNomeEvento] : 'Evento (Forms)', etapas: {}, isLegada: true },
+                    segundaEtapa: { headers, valores: s },
+                    status: 'Completo (Forms)'
+                });
+            });
         res.json(unificados);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao gerar dados unificados' });
