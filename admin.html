@@ -195,32 +195,43 @@
                     const s = item.segundaEtapa;
                     const id = (index + 1).toString().padStart(2, '0');
                     
+                    // Extrair Nome do Evento do Forms caso não tenha na 1ª etapa
+                    let nomeEvento = p.evento || 'SEM NOME';
+                    if (s && (!p.evento || p.evento === 'N/A' || p.evento === 'Evento (Forms)')) {
+                        const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
+                        if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
+                    }
+
                     // Extrair Local (Espaço Solicitado) se existir no forms
                     let local = 'N/A';
                     if (s) {
                         const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado'));
-                        if (idxEspaco >= 0) local = s.valores[idxEspaco];
+                        if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
                     }
 
-                    // Formatar Etapas
+                    // Formatar Etapas (apenas se houver etapas registradas na 1ª etapa)
                     let etapasHtml = '';
                     const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-                    for (const key in p.etapas) {
-                        const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
-                        itens.forEach((it, i) => {
-                            const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                            const dataFormatada = it.data.split('-').reverse().join('/');
-                            etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
-                        });
+                    if (p.etapas && Object.keys(p.etapas).length > 0) {
+                        for (const key in p.etapas) {
+                            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                            itens.forEach((it, i) => {
+                                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                                const dataFormatada = it.data.split('-').reverse().join('/');
+                                etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
+                            });
+                        }
+                    } else {
+                        etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
                     }
 
-                    const statusClass = item.status === 'Completo' ? 'status-completo' : 'status-pendente';
-                    const statusText = item.status === 'Completo' ? '1/1' : '0/1';
+                    const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
+                    const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
 
                     html += `
                         <tr>
                             <td class="col-id">${id}</td>
-                            <td class="col-evento">${p.evento.toUpperCase()}</td>
+                            <td class="col-evento">${nomeEvento.toUpperCase()}</td>
                             <td class="col-local">
                                 <span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span>
                             </td>

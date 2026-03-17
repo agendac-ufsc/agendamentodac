@@ -348,25 +348,37 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             };
         });
 
-        // Adicionar também quem preencheu o forms mas não tem registro na 1ª etapa (opcional, mas bom para auditoria)
+        // 3. Adicionar inscrições legadas (quem preencheu o forms mas não tem registro na 1ª etapa em memória)
         dataSegundaEtapa.forEach(s => {
             const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-            const jaExiste = unificados.some(u => u.primeiraEtapa.email.toLowerCase() === (emailSheet || '').toLowerCase());
+            // Verificar se esse e-mail já foi processado no passo anterior (cruzamento)
+            const jaProcessado = unificados.some(u => 
+                u.primeiraEtapa && 
+                u.primeiraEtapa.email && 
+                emailSheet && 
+                u.primeiraEtapa.email.toLowerCase() === emailSheet.toLowerCase()
+            );
             
-            if (!jaExiste) {
+            if (!jaProcessado) {
+                // Tentar encontrar o Nome do Evento e o Nome do Proponente nas colunas do Forms
+                const idxNomeEvento = headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
+                const idxNomeProponente = headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+                const idxTelefone = headers.findIndex(h => h.toLowerCase().includes('celular') || h.toLowerCase().includes('telefone'));
+
                 unificados.push({
                     primeiraEtapa: {
-                        nome: 'Não registrado na 1ª etapa',
+                        nome: idxNomeProponente >= 0 ? s[idxNomeProponente] : 'Inscrição Legada',
                         email: emailSheet || 'N/A',
-                        telefone: 'N/A',
-                        evento: 'N/A',
-                        etapas: {}
+                        telefone: idxTelefone >= 0 ? s[idxTelefone] : 'N/A',
+                        evento: idxNomeEvento >= 0 ? s[idxNomeEvento] : 'Evento (Forms)',
+                        etapas: {}, // Sem etapas da 1ª etapa
+                        isLegada: true
                     },
                     segundaEtapa: {
                         headers: headers,
                         valores: s
                     },
-                    status: 'Incompleto (Falta Agendamento)'
+                    status: 'Completo (Forms)'
                 });
             }
         });
