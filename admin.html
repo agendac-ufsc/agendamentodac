@@ -199,12 +199,15 @@
                     let nomeEvento = p.evento || '';
                     
                     // Se o nome for genérico ou vazio, tenta buscar no Forms
-                    if (s && (!nomeEvento || nomeEvento === 'SEM NOME' || nomeEvento === 'N/A' || nomeEvento === 'Evento (Forms)')) {
+                    if (s && (!nomeEvento || nomeEvento === 'SEM NOME' || nomeEvento === 'N/A' || nomeEvento === 'Evento (Forms)' || nomeEvento.includes('"'))) {
                         const idxNomeEv = s.headers.findIndex(h => {
                             const l = h.toLowerCase();
-                            return l.includes('nome do evento') || l.includes('título do projeto') || l.includes('nome do projeto');
+                            return l.includes('nome do evento') || l.includes('título do projeto') || l.includes('nome do projeto') || l.includes('nome completo');
                         });
-                        if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
+                        if (idxNomeEv >= 0 && s.valores[idxNomeEv]) {
+                            const val = s.valores[idxNomeEv];
+                            if (val && val.length > 3) nomeEvento = val;
+                        }
                     }
                     
                     if (!nomeEvento || nomeEvento.trim() === '') nomeEvento = 'SEM NOME';
@@ -243,7 +246,10 @@
                     
                     // Se ainda não tiver etapas, tenta buscar no Forms (segunda etapa)
                     if (!etapasHtml && s) {
-                        const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
+                        const idxCronograma = s.headers.findIndex(h => {
+                            const l = h.toLowerCase();
+                            return l.includes('cronograma') || l.includes('datas') || l.includes('horário') || l.includes('periodo');
+                        });
                         if (idxCronograma >= 0 && s.valores[idxCronograma]) {
                             etapasHtml = `<span class="etapa-item" style="color: #666;">${s.valores[idxCronograma]}</span>`;
                         }

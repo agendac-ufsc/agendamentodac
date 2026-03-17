@@ -238,19 +238,41 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const rows = response.data.values || [];
         const headers = rows[0] || [];
         const dataSegundaEtapa = rows.slice(1);
-        const idxEmailSheet = headers.findIndex(h => { const l = h.toLowerCase(); return l.includes('endereço de e-mail') || l === 'e-mail' || l === 'email'; });
+        // Identificar colunas de e-mail e telefone (pode haver mais de uma)
+        const findIndices = (keywords) => headers.reduce((acc, h, i) => {
+            if (keywords.some(k => h.toLowerCase().includes(k))) acc.push(i);
+            return acc;
+        }, []);
+
+        const indicesEmail = findIndices(['endereço de e-mail', 'e-mail', 'email']);
+        const indicesTelefone = findIndices(['telefone', 'celular', 'contato']);
+        
         const mapeamentoLocais = { 'oto.bezerra@ufsc.br': 'Teatro' };
         const agendamentosPrimeiraEtapa = await getAgendamentos();
-            const unificados = [];
+        const unificados = [];
 
-            // Processar agendamentos da primeira etapa (site)
-            for (const p of agendamentosPrimeiraEtapa) {
-                const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
-                    const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-                    const pEmail = (p.email || '').trim().toLowerCase();
-                    const sEmail = (emailSheet || '').trim().toLowerCase();
+        // Processar agendamentos da primeira etapa (site)
+        for (const p of agendamentosPrimeiraEtapa) {
+            const pEmail = (p.email || '').trim().toLowerCase();
+            const pTelefone = (p.telefone || '').replace(/\D/g, '');
+
+            const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
+                // Tenta cruzar por qualquer coluna de e-mail
+                const matchesEmail = indicesEmail.some(idx => {
+                    const sEmail = (s[idx] || '').trim().toLowerCase();
                     return pEmail && sEmail && pEmail === sEmail;
                 });
+                if (matchesEmail) return true;
+
+                // Se não achou por e-mail, tenta por telefone (se ambos existirem)
+                if (pTelefone && pTelefone.length >= 8) {
+                    return indicesTelefone.some(idx => {
+                        const sTelefone = (s[idx] || '').replace(/\D/g, '');
+                        return sTelefone && sTelefone.includes(pTelefone);
+                    });
+                }
+                return false;
+            });
 
                 // Se houver correspondência, usar os dados da primeira etapa e mesclar com a segunda
                 if (correspondencia) {
