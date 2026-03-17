@@ -227,6 +227,10 @@
 
                     const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
                     const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
+                    
+                    // Mostrar timestamp do Forms para confirmar que é a versão correta
+                    let formsTime = '';
+                    if (s && s.valores[0]) formsTime = `<br><small style="color: #999; font-size: 10px;">Enviado em: ${s.valores[0]}</small>`;
 
                     html += `
                         <tr>
@@ -242,6 +246,7 @@
                                     <a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;">
                                         <i class="far fa-file-pdf"></i> Ficha (PDF)
                                     </a>
+                                    ${formsTime}
                                 ` : '<span style="color: #ccc;">Aguardando Forms</span>'}
                             </td>
                             <td style="text-align: center;">
