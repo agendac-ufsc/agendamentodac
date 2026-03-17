@@ -4,131 +4,40 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Administrativo - DAC</title>
-    <!-- Bibliotecas para geração de PDF e Ícones -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: #f8f9fa;
-            color: #333;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-        }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; color: #333; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
         h1 { font-size: 22px; color: #444; }
-        .refresh-btn {
-            padding: 8px 15px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        /* Table Styles */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th {
-            background: #f1f3f5;
-            color: #666;
-            text-transform: uppercase;
-            font-size: 11px;
-            font-weight: 700;
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 2px solid #dee2e6;
-        }
-        td {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            vertical-align: middle;
-            font-size: 13px;
-        }
+        .refresh-btn { padding: 8px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th { background: #f1f3f5; color: #666; text-transform: uppercase; font-size: 11px; font-weight: 700; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dee2e6; }
+        td { padding: 15px; border-bottom: 1px solid #eee; vertical-align: middle; font-size: 13px; }
         tr:hover { background: #fcfcfc; }
-        
         .col-id { color: #888; width: 50px; }
         .col-evento { font-weight: 700; color: #d9534f; min-width: 150px; }
         .col-local { min-width: 120px; }
-        .local-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 10px;
-            background: #f0f4ff;
-            color: #5a6fd6;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-        }
+        .local-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: #f0f4ff; color: #5a6fd6; border-radius: 20px; font-size: 11px; font-weight: 600; }
         .col-etapas { color: #555; line-height: 1.6; }
         .etapa-item { display: block; margin-bottom: 2px; }
-        
-        .btn-action {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 16px;
-            padding: 5px;
-            transition: transform 0.2s;
-        }
+        .btn-action { background: none; border: none; cursor: pointer; font-size: 16px; padding: 5px; transition: transform 0.2s; }
         .btn-action:hover { transform: scale(1.2); }
         .btn-pdf { color: #d9534f; display: flex; align-items: center; gap: 5px; text-decoration: none; font-weight: 600; }
         .btn-contact { color: #666; }
         .btn-delete { color: #d9534f; }
-        
-        .status-badge {
-            font-weight: 700;
-            font-size: 14px;
-        }
+        .status-badge { font-weight: 700; font-size: 14px; }
         .status-completo { color: #28a745; }
         .status-pendente { color: #f0ad4e; }
-
-        /* Modal Contact */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.5);
-            align-items: center; justify-content: center;
-            z-index: 1000;
-        }
-        .modal-content {
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            width: 90%;
-            max-width: 400px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-        }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         .modal-header { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
         .modal-body p { margin-bottom: 10px; font-size: 14px; }
         .modal-footer { margin-top: 20px; text-align: right; }
         .btn-close { padding: 8px 20px; background: #eee; border: none; border-radius: 5px; cursor: pointer; }
-
         .loading { text-align: center; padding: 50px; color: #667eea; font-size: 18px; }
     </style>
 </head>
@@ -140,13 +49,10 @@
                 <i class="fas fa-sync-alt"></i> Atualizar Lista
             </button>
         </header>
-
         <div id="content">
             <div class="loading">Carregando inscrições unificadas...</div>
         </div>
     </div>
-
-    <!-- Modal Contato -->
     <div id="contactModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h3>Dados do Proponente</h3></div>
@@ -163,23 +69,20 @@
         async function loadData() {
             const content = document.getElementById('content');
             content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Carregando dados unificados...</div>';
-            
             try {
                 const response = await fetch('/api/admin/dados-unificados');
                 const data = await response.json();
                 allUnificados = data;
-                
                 if (data.length === 0) {
                     content.innerHTML = '<p style="text-align: center; padding: 40px;">Nenhuma inscrição encontrada.</p>';
                     return;
                 }
-                
                 let html = `
                     <table>
                         <thead>
                             <tr>
                                 <th class="col-id">#</th>
-                                <th>Evento</th>
+                                <th>Proponente / Evento</th>
                                 <th>Local</th>
                                 <th>Etapas Agendadas</th>
                                 <th>Status</th>
@@ -189,43 +92,33 @@
                         </thead>
                         <tbody>
                 `;
-                
                 data.forEach((item, index) => {
                     const p = item.primeiraEtapa;
                     const s = item.segundaEtapa;
                     const id = (index + 1).toString().padStart(2, '0');
                     
-                    // Extrair Nome do Evento
-                    let nomeEvento = p.evento || '';
+                    // Priorizar nome do proponente e evento da primeira etapa se disponível
+                    let nomeProponente = p.nome || 'SEM NOME';
+                    let nomeEvento = p.evento || 'SEM EVENTO';
                     
-                    // Se o nome for genérico ou vazio, tenta buscar no Forms
-                    if (s && (!nomeEvento || nomeEvento === 'SEM NOME' || nomeEvento === 'N/A' || nomeEvento === 'Evento (Forms)' || nomeEvento.includes('"'))) {
-                        const idxNomeEv = s.headers.findIndex(h => {
-                            const l = h.toLowerCase();
-                            return l.includes('nome do evento') || l.includes('título do projeto') || l.includes('nome do projeto') || l.includes('nome completo');
-                        });
-                        if (idxNomeEv >= 0 && s.valores[idxNomeEv]) {
-                            const val = s.valores[idxNomeEv];
-                            if (val && val.length > 3) nomeEvento = val;
-                        }
+                    // Se for legada ou faltar dados, tenta buscar no Forms
+                    if (s && (nomeProponente === 'SEM NOME' || nomeProponente === 'Inscrição Forms')) {
+                        const idxNomeProp = s.headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+                        if (idxNomeProp >= 0 && s.valores[idxNomeProp]) nomeProponente = s.valores[idxNomeProp];
                     }
-                    
-                    if (!nomeEvento || nomeEvento.trim() === '') nomeEvento = 'SEM NOME';
+                    if (s && (nomeEvento === 'SEM EVENTO' || nomeEvento === 'Evento (Forms)')) {
+                        const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
+                        if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
+                    }
 
-                    // Extrair Local
-                    let local = 'N/A';
-                    if (p.localNome && p.localNome !== 'N/A') {
-                        local = p.localNome;
-                    } else if (s) {
+                    let local = p.localNome || 'N/A';
+                    if (local === 'N/A' && s) {
                         const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado') || h.toLowerCase().includes('local'));
                         if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
                     }
 
-                    // Formatar Etapas
                     let etapasHtml = '';
                     const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-                    
-                    // Verifica se há etapas registradas na primeira etapa
                     const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
                         const val = p.etapas[k];
                         return Array.isArray(val) ? val.length > 0 : !!val;
@@ -242,58 +135,39 @@
                                 }
                             });
                         }
-                    } 
-                    
-                    // Se ainda não tiver etapas, tenta buscar no Forms (segunda etapa)
-                    if (!etapasHtml && s) {
-                        const idxCronograma = s.headers.findIndex(h => {
-                            const l = h.toLowerCase();
-                            return l.includes('cronograma') || l.includes('datas') || l.includes('horário') || l.includes('periodo');
-                        });
+                    } else if (s) {
+                        const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
                         if (idxCronograma >= 0 && s.valores[idxCronograma]) {
                             etapasHtml = `<span class="etapa-item" style="color: #666;">${s.valores[idxCronograma]}</span>`;
                         }
                     }
 
-                    if (!etapasHtml) {
-                        etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
-                    }
+                    if (!etapasHtml) etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
 
                     const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
                     const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
-                    
-                    let formsTime = '';
-                    if (s && s.valores[0]) formsTime = `<br><small style="color: #999; font-size: 10px;">Enviado em: ${s.valores[0]}</small>`;
+                    let formsTime = s && s.valores[0] ? `<br><small style="color: #999; font-size: 10px;">Enviado em: ${s.valores[0]}</small>` : '';
 
                     html += `
                         <tr>
                             <td class="col-id">${id}</td>
-                            <td class="col-evento">${nomeEvento.toUpperCase()}</td>
-                            <td class="col-local">
-                                <span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span>
+                            <td>
+                                <div style="font-weight: bold; color: #333;">${nomeProponente.toUpperCase()}</div>
+                                <div style="font-size: 11px; color: #d9534f; font-weight: bold; margin-top: 2px;">${nomeEvento.toUpperCase()}</div>
                             </td>
-                            <td class="col-etapas">${etapasHtml || 'Sem etapas'}</td>
+                            <td class="col-local"><span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span></td>
+                            <td class="col-etapas">${etapasHtml}</td>
                             <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                             <td>
-                                ${s ? `
-                                    <a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;">
-                                        <i class="far fa-file-pdf"></i> Ficha (PDF)
-                                    </a>
-                                    ${formsTime}
-                                ` : '<span style="color: #ccc;">Aguardando Forms</span>'}
+                                ${s ? `<a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;"><i class="far fa-file-pdf"></i> Ficha (PDF)</a>${formsTime}` : '<span style="color: #ccc;">Aguardando Forms</span>'}
                             </td>
                             <td style="text-align: center;">
-                                <button class="btn-action btn-contact" onclick="showContact(${index})" title="Ver Contatos">
-                                    <i class="far fa-address-card"></i>
-                                </button>
-                                <button class="btn-action btn-delete" onclick="deleteInscricao('${p.email}')" title="Excluir">
-                                    <i class="far fa-trash-alt"></i>
-                                </button>
+                                <button class="btn-action btn-contact" onclick="showContact(${index})" title="Ver Contatos"><i class="far fa-address-card"></i></button>
+                                <button class="btn-action btn-delete" onclick="deleteInscricao('${p.email}')" title="Excluir"><i class="far fa-trash-alt"></i></button>
                             </td>
                         </tr>
                     `;
                 });
-                
                 html += '</tbody></table>';
                 content.innerHTML = html;
             } catch (error) {
@@ -306,32 +180,19 @@
             const item = allUnificados[index];
             const p = item.primeiraEtapa;
             const body = document.getElementById('contactBody');
-            body.innerHTML = `
-                <p><strong>Nome:</strong> ${p.nome || 'N/A'}</p>
-                <p><strong>E-mail:</strong> ${p.email || 'N/A'}</p>
-                <p><strong>Telefone:</strong> ${p.telefone || 'N/A'}</p>
-            `;
+            body.innerHTML = `<p><strong>Nome:</strong> ${p.nome || 'N/A'}</p><p><strong>E-mail:</strong> ${p.email || 'N/A'}</p><p><strong>Telefone:</strong> ${p.telefone || 'N/A'}</p>`;
             document.getElementById('contactModal').style.display = 'flex';
         }
 
-        function closeModal() {
-            document.getElementById('contactModal').style.display = 'none';
-        }
+        function closeModal() { document.getElementById('contactModal').style.display = 'none'; }
 
         async function deleteInscricao(email) {
             if (!confirm(`Deseja realmente excluir a inscrição de ${email}?`)) return;
-            
             try {
                 const response = await fetch(`/api/admin/excluir/${email}`, { method: 'DELETE' });
-                if (response.ok) {
-                    alert('Inscrição excluída com sucesso!');
-                    loadData();
-                } else {
-                    alert('Erro ao excluir inscrição.');
-                }
-            } catch (error) {
-                alert('Erro na requisição.');
-            }
+                if (response.ok) { alert('Inscrição excluída com sucesso!'); loadData(); }
+                else { alert('Erro ao excluir inscrição.'); }
+            } catch (error) { alert('Erro na requisição.'); }
         }
 
         function generatePDF(index) {
@@ -339,38 +200,35 @@
             const p = item.primeiraEtapa;
             const s = item.segundaEtapa;
             const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
-
-            // Extrair Nome do Evento (mesma lógica da tabela)
-            let nomeEvento = p.evento || '';
-            if (s && (!nomeEvento || nomeEvento === 'SEM NOME' || nomeEvento === 'N/A' || nomeEvento === 'Evento (Forms)')) {
-                const idxNomeEv = s.headers.findIndex(h => {
-                    const l = h.toLowerCase();
-                    return l.includes('nome do evento') || l.includes('título do projeto') || l.includes('nome do projeto');
-                });
-                if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
+            const doc = jsPDF();
+            
+            let nomeProponente = p.nome || 'SEM NOME';
+            let nomeEvento = p.evento || 'SEM EVENTO';
+            if (s && (nomeProponente === 'SEM NOME' || nomeProponente === 'Inscrição Forms')) {
+                const idx = s.headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+                if (idx >= 0 && s.valores[idx]) nomeProponente = s.valores[idx];
             }
-            if (!nomeEvento || nomeEvento.trim() === '') nomeEvento = 'SEM NOME';
+            if (s && (nomeEvento === 'SEM EVENTO' || nomeEvento === 'Evento (Forms)')) {
+                const idx = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
+                if (idx >= 0 && s.valores[idx]) nomeEvento = s.valores[idx];
+            }
 
-            doc.setFontSize(18);
-            doc.text('FICHA DE INSCRIÇÃO UNIFICADA - DAC', 20, 20);
-            doc.setFontSize(12);
-            doc.text(`PROJETO: ${nomeEvento.toUpperCase()}`, 20, 30);
-            doc.setFontSize(10);
-            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 38);
-            doc.line(20, 45, 190, 45);
+            doc.setFontSize(18); doc.text('FICHA DE INSCRIÇÃO UNIFICADA - DAC', 20, 20);
+            doc.setFontSize(12); doc.text(`PROPONENTE: ${nomeProponente.toUpperCase()}`, 20, 30);
+            doc.text(`PROJETO: ${nomeEvento.toUpperCase()}`, 20, 38);
+            doc.setFontSize(10); doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 45);
+            doc.line(20, 48, 190, 48);
 
             const tableData = [];
             tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+            tableData.push(['Nome do Proponente', nomeProponente]);
             tableData.push(['Nome do Evento', nomeEvento]);
-            tableData.push(['Nome do Proponente', p.nome]);
             tableData.push(['E-mail', p.email]);
             tableData.push(['Telefone', p.telefone]);
             tableData.push(['Local Solicitado', p.localNome || 'N/A']);
             
             let cronogramaStr = '';
             const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-            
             const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
                 const val = p.etapas[k];
                 return Array.isArray(val) ? val.length > 0 : !!val;
@@ -382,44 +240,25 @@
                     itens.forEach((it, i) => {
                         if (it && it.data && it.horario) {
                             const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                            const dataFormatada = it.data.split('-').reverse().join('/');
-                            cronogramaStr += `${label}: ${dataFormatada} (${it.horario})\n`;
+                            cronogramaStr += `${label}: ${it.data.split('-').reverse().join('/')} (${it.horario})\n`;
                         }
                     });
                 }
-            } 
-            
-            if (!cronogramaStr && s) {
-                const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
-                if (idxCronograma >= 0 && s.valores[idxCronograma]) {
-                    cronogramaStr = s.valores[idxCronograma];
-                }
+            } else if (s) {
+                const idx = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
+                if (idx >= 0 && s.valores[idx]) cronogramaStr = s.valores[idx];
             }
-
-            if (!cronogramaStr) {
-                cronogramaStr = 'Não registrado via site';
-            }
-            tableData.push(['Cronograma Solicitado', cronogramaStr]);
+            tableData.push(['Cronograma Solicitado', cronogramaStr || 'Não registrado']);
 
             if (s) {
                 tableData.push([{ content: 'DADOS DO FORMULÁRIO (2ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
                 s.headers.forEach((header, i) => {
                     const valor = s.valores[i];
-                    if (valor && valor.toString().trim() !== '') {
-                        tableData.push([header, valor.toString()]);
-                    }
+                    if (valor && valor.toString().trim() !== '') tableData.push([header, valor.toString()]);
                 });
             }
 
-            doc.autoTable({
-                startY: 50,
-                head: [['Campo', 'Informação']],
-                body: tableData,
-                theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 3 },
-                columnStyles: { 0: { fontStyle: 'bold', width: 60 } }
-            });
-
+            doc.autoTable({ startY: 52, head: [['Campo', 'Informação']], body: tableData, theme: 'grid', styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { fontStyle: 'bold', width: 60 } } });
             doc.save(`inscricao_${p.email.replace(/[^a-z0-9]/gi, '_')}.pdf`);
         }
 

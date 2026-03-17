@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
 const { google } = require('googleapis');
-const { createClient } = require('@vercel/kv');
+const Redis = require('ioredis');
 
 const app = express();
 app.use(cors());
@@ -15,74 +15,59 @@ app.use(express.static(path.join(__dirname)));
 const CALENDAR_ID = 'oto.bezerra@ufsc.br';
 let googleAuthClient;
 
-// Funções para persistência com Vercel KV / Redis
+// Funções para persistência com Redis (ioredis)
 const AGENDAMENTOS_KEY = 'agendamentos_v1';
 
-// Tenta criar o cliente KV usando as variáveis disponíveis no Vercel
-// Suporta tanto o padrão nativo (KV_URL) quanto a integração Redis (REDIS_URL)
-let kv;
+let redis;
 try {
-    const kvUrl = process.env.KV_REST_API_URL || process.env.REDIS_URL;
-    const kvToken = process.env.KV_REST_API_TOKEN || process.env.REDIS_REST_API_TOKEN;
-    
-    if (kvUrl && kvToken) {
-        kv = createClient({
-            url: kvUrl,
-            token: kvToken,
-        });
-        console.log('✅ [KV] Cliente Redis/KV inicializado com sucesso.');
-        } else if (process.env.REDIS_URL && !process.env.REDIS_REST_API_TOKEN) {
-            // Se for uma URL direta do Redis (sem ser REST), o @vercel/kv pode não funcionar diretamente
-            // mas tentaremos usar a URL como base se for o formato redis:// ou https://
-            if (process.env.REDIS_URL.startsWith('https') || process.env.REDIS_URL.startsWith('redis')) {
-            kv = createClient({
-                url: process.env.REDIS_URL,
-                token: process.env.REDIS_TOKEN || '', // Algumas integrações usam REDIS_TOKEN
-            });
-        }
+    if (process.env.REDIS_URL) {
+        redis = new Redis(process.env.REDIS_URL);
+        console.log('✅ [Redis] Cliente ioredis inicializado com sucesso.');
+    } else {
+        console.warn('⚠️ [Redis] REDIS_URL não encontrada no ambiente.');
     }
 } catch (e) {
-    console.error('❌ [KV] Erro ao inicializar cliente:', e.message);
+    console.error('❌ [Redis] Erro ao inicializar cliente:', e.message);
 }
 
 const getAgendamentos = async () => {
     try {
-        if (kv) {
-            const data = await kv.get(AGENDAMENTOS_KEY);
-            return data || [];
+        if (redis) {
+            const data = await redis.get(AGENDAMENTOS_KEY);
+            return data ? JSON.parse(data) : [];
         }
     } catch (error) {
-        console.error('❌ [KV] Erro ao buscar agendamentos:', error.message);
+        console.error('❌ [Redis] Erro ao buscar agendamentos:', error.message);
     }
     return [];
 };
 
 const saveAgendamento = async (novoAgendamento) => {
     try {
-        if (kv) {
+        if (redis) {
             const agendamentos = await getAgendamentos();
             agendamentos.push(novoAgendamento);
-            await kv.set(AGENDAMENTOS_KEY, agendamentos);
-            console.log('✅ [KV] Agendamento salvo com sucesso.');
+            await redis.set(AGENDAMENTOS_KEY, JSON.stringify(agendamentos));
+            console.log('✅ [Redis] Agendamento salvo com sucesso.');
             return true;
         }
     } catch (error) {
-        console.error('❌ [KV] Erro ao salvar agendamento:', error.message);
+        console.error('❌ [Redis] Erro ao salvar agendamento:', error.message);
     }
     return false;
 };
 
 const deleteAgendamentoByEmail = async (email) => {
     try {
-        if (kv) {
+        if (redis) {
             const agendamentos = await getAgendamentos();
             const filtrados = agendamentos.filter(a => a.email !== email);
-            await kv.set(AGENDAMENTOS_KEY, filtrados);
-            console.log(`✅ [KV] Agendamento de ${email} removido.`);
+            await redis.set(AGENDAMENTOS_KEY, JSON.stringify(filtrados));
+            console.log(`✅ [Redis] Agendamento de ${email} removido.`);
             return true;
         }
     } catch (error) {
-        console.error('❌ [KV] Erro ao deletar agendamento:', error.message);
+        console.error('❌ [Redis] Erro ao deletar agendamento:', error.message);
     }
     return false;
 };
@@ -97,11 +82,11 @@ const initGoogleAuth = async () => {
                     client_email: credentials.client_email,
                     private_key: credentials.private_key,
                 },
-            scopes: [
-                'https://www.googleapis.com/auth/calendar',
-                'https://www.googleapis.com/auth/spreadsheets.readonly'
-            ],
-        });
+                scopes: [
+                    'https://www.googleapis.com/auth/calendar',
+                    'https://www.googleapis.com/auth/spreadsheets.readonly'
+                ],
+            });
             googleAuthClient = await auth.getClient();
             console.log('✅ [Google] Autenticação configurada com sucesso.');
         }
@@ -219,7 +204,7 @@ app.post('/api/agendar', async (req, res) => {
         }
         const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
-        await sendEmail(email, '✅ Confirmação de Inscrição de Projeto - DAC', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá ${nome}!</h2><p>Sua inscrição para o evento <strong>${evento}</strong> foi recebida com sucesso.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Resumo do Cronograma:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><p>Caso precise realizar alterações, entre em contato respondendo a este e-mail.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`);
+        await sendEmail(email, '✅ Confirmação de Inscrição de Projeto - DAC', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá ${nome}!</h2><p>Sua inscription para o evento <strong>${evento}</strong> foi recebida com sucesso.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Resumo do Cronograma:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><p>Caso precise realizar alterações, entre em contato respondendo a este e-mail.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`);
         await sendEmail(adminEmail, `📅 NOVA INSCRIÇÃO: ${evento} (${nome})`, `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #333;">Nova Inscrição de Projeto</h2><p>Um novo projeto foi inscrito com o seguinte cronograma:</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Dados do Proponente:</strong></p><p>👤 <strong>Nome:</strong> ${nome}</p><p>📧 <strong>E-mail:</strong> ${email}</p><p>📞 <strong>Telefone:</strong> ${telefone}</p><p>🎭 <strong>Evento:</strong> ${evento}</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Cronograma do Projeto:</strong></p>${tabelaHtml}</div>`);
         await saveAgendamento({ id: Date.now().toString(), nome, email, telefone, evento, etapas, calendarId: CALENDAR_ID, timestamp: new Date().toLocaleString('pt-BR') });
         res.json({ success: true });
@@ -238,7 +223,8 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const rows = response.data.values || [];
         const headers = rows[0] || [];
         const dataSegundaEtapa = rows.slice(1);
-        // Identificar colunas de e-mail e telefone (pode haver mais de uma)
+
+        // Identificar colunas de e-mail e telefone
         const findIndices = (keywords) => headers.reduce((acc, h, i) => {
             if (keywords.some(k => h.toLowerCase().includes(k))) acc.push(i);
             return acc;
@@ -246,7 +232,9 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
         const indicesEmail = findIndices(['endereço de e-mail', 'e-mail', 'email']);
         const indicesTelefone = findIndices(['telefone', 'celular', 'contato']);
-        
+        const idxNomeEventoSheet = headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
+        const idxNomeProponenteSheet = headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+
         const mapeamentoLocais = { 'oto.bezerra@ufsc.br': 'Teatro' };
         const agendamentosPrimeiraEtapa = await getAgendamentos();
         const unificados = [];
@@ -257,14 +245,12 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             const pTelefone = (p.telefone || '').replace(/\D/g, '');
 
             const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
-                // Tenta cruzar por qualquer coluna de e-mail
                 const matchesEmail = indicesEmail.some(idx => {
                     const sEmail = (s[idx] || '').trim().toLowerCase();
                     return pEmail && sEmail && pEmail === sEmail;
                 });
                 if (matchesEmail) return true;
 
-                // Se não achou por e-mail, tenta por telefone (se ambos existirem)
                 if (pTelefone && pTelefone.length >= 8) {
                     return indicesTelefone.some(idx => {
                         const sTelefone = (s[idx] || '').replace(/\D/g, '');
@@ -274,50 +260,44 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 return false;
             });
 
-                // Se houver correspondência, usar os dados da primeira etapa e mesclar com a segunda
-                if (correspondencia) {
-                    unificados.push({
-                        primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
-                        segundaEtapa: { headers, valores: correspondencia },
-                        status: 'Completo'
-                    });
-                } else {
-                    // Se não houver correspondência na segunda etapa, adicionar apenas a primeira etapa como pendente
-                    unificados.push({
-                        primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
-                        segundaEtapa: null,
-                        status: 'Pendente (Falta Forms)'
-                    });
-                }
-
-                // Remover a correspondência da segunda etapa para evitar duplicatas
-                if (correspondencia) {
-                    const index = dataSegundaEtapa.indexOf(correspondencia);
-                    if (index > -1) {
-                        dataSegundaEtapa.splice(index, 1);
-                    }
-                }
-            }
-
-            // Adicionar agendamentos da segunda etapa (Forms) que não tiveram correspondência na primeira etapa
-            dataSegundaEtapa.forEach(s => {
-                const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
-                const idxNomeEvento = headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
-                const idxNomeProponente = headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
-                const idxTelefone = headers.findIndex(h => h.toLowerCase().includes('celular') || h.toLowerCase().includes('telefone'));
+            if (correspondencia) {
                 unificados.push({
-                    primeiraEtapa: { 
-                        nome: idxNomeProponente >= 0 ? s[idxNomeProponente] : 'Inscrição Forms',
-                        email: emailSheet || 'N/A',
-                        telefone: idxTelefone >= 0 ? s[idxTelefone] : 'N/A',
-                        evento: idxNomeEvento >= 0 ? s[idxNomeEvento] : 'Evento (Forms)',
-                        etapas: {},
-                        isLegada: true 
-                    },
-                    segundaEtapa: { headers, valores: s },
-                    status: 'Completo (Forms)'
+                    primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                    segundaEtapa: { headers, valores: correspondencia },
+                    status: 'Completo'
                 });
+                const index = dataSegundaEtapa.indexOf(correspondencia);
+                if (index > -1) dataSegundaEtapa.splice(index, 1);
+            } else {
+                unificados.push({
+                    primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                    segundaEtapa: null,
+                    status: 'Pendente (Falta Forms)'
+                });
+            }
+        }
+
+        // Adicionar o que sobrou da segunda etapa (Forms)
+        dataSegundaEtapa.forEach(s => {
+            const emailSheet = indicesEmail.length > 0 ? s[indicesEmail[0]] : 'N/A';
+            const telefoneSheet = indicesTelefone.length > 0 ? s[indicesTelefone[0]] : 'N/A';
+            const nomeEventoSheet = idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)';
+            const nomeProponenteSheet = idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms';
+
+            unificados.push({
+                primeiraEtapa: { 
+                    nome: nomeProponenteSheet,
+                    email: emailSheet,
+                    telefone: telefoneSheet,
+                    evento: nomeEventoSheet,
+                    etapas: {},
+                    isLegada: true 
+                },
+                segundaEtapa: { headers, valores: s },
+                status: 'Completo (Forms)'
             });
+        });
+
         console.log(`[DEBUG] Gerados ${unificados.length} registros unificados.`);
         res.json(unificados);
     } catch (error) {
