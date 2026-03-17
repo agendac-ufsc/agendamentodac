@@ -249,14 +249,24 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                     const emailSheet = idxEmailSheet >= 0 ? s[idxEmailSheet] : null;
                     const pEmail = (p.email || '').trim().toLowerCase();
                     const sEmail = (emailSheet || '').trim().toLowerCase();
-                    return (sEmail === pEmail && pEmail !== '') || (p.telefone && p.telefone.length > 5 && s.some(val => val && val.toString().includes(p.telefone)));
+                    return pEmail && sEmail && pEmail === sEmail;
                 });
 
-                unificados.push({
-                    primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
-                    segundaEtapa: correspondencia ? { headers, valores: correspondencia } : null,
-                    status: correspondencia ? 'Completo' : 'Pendente (Falta Forms)'
-                });
+                // Se houver correspondência, usar os dados da primeira etapa e mesclar com a segunda
+                if (correspondencia) {
+                    unificados.push({
+                        primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                        segundaEtapa: { headers, valores: correspondencia },
+                        status: 'Completo'
+                    });
+                } else {
+                    // Se não houver correspondência na segunda etapa, adicionar apenas a primeira etapa como pendente
+                    unificados.push({
+                        primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                        segundaEtapa: null,
+                        status: 'Pendente (Falta Forms)'
+                    });
+                }
 
                 // Remover a correspondência da segunda etapa para evitar duplicatas
                 if (correspondencia) {
@@ -274,7 +284,14 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 const idxNomeProponente = headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
                 const idxTelefone = headers.findIndex(h => h.toLowerCase().includes('celular') || h.toLowerCase().includes('telefone'));
                 unificados.push({
-                    primeiraEtapa: { nome: idxNomeProponente >= 0 ? s[idxNomeProponente] : 'Inscrição Legada', email: emailSheet || 'N/A', telefone: idxTelefone >= 0 ? s[idxTelefone] : 'N/A', evento: idxNomeEvento >= 0 ? s[idxNomeEvento] : 'Evento (Forms)', etapas: {}, isLegada: true },
+                    primeiraEtapa: { 
+                        nome: idxNomeProponente >= 0 ? s[idxNomeProponente] : 'Inscrição Forms',
+                        email: emailSheet || 'N/A',
+                        telefone: idxTelefone >= 0 ? s[idxTelefone] : 'N/A',
+                        evento: idxNomeEvento >= 0 ? s[idxNomeEvento] : 'Evento (Forms)',
+                        etapas: {},
+                        isLegada: true 
+                    },
                     segundaEtapa: { headers, valores: s },
                     status: 'Completo (Forms)'
                 });
