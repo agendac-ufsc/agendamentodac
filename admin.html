@@ -142,6 +142,10 @@
                 headers = data[0];
                 allData = data.slice(1);
                 
+                // Debug: Log para verificar os dados recebidos
+                console.log('Headers:', headers);
+                console.log('Dados completos:', allData);
+                
                 let html = '<div class="list-container">';
                 
                 allData.forEach((row, index) => {
@@ -175,6 +179,11 @@
             const doc = new jsPDF();
             const row = allData[index];
             const identifier = row[1] || row[2] || 'Sem Nome';
+            
+            // Debug: Log para verificar os dados da linha específica
+            console.log(`Gerando PDF para índice ${index}`);
+            console.log('Dados da linha:', row);
+            console.log('Headers:', headers);
 
             // Configurações do PDF
             doc.setFont("helvetica", "bold");
@@ -193,11 +202,15 @@
             const tableData = [];
             headers.forEach((header, i) => {
                 const value = row[i] ? row[i].toString().trim() : "";
-                // Só adiciona se o valor não for vazio, não for apenas espaços e não for "---"
-                if (value && value !== "" && value !== "---") {
+                // Só adiciona se o valor não for vazio, não for apenas espaços
+                if (value && value !== "") {
                     tableData.push([header, value]);
+                    console.log(`Campo incluído: "${header}" = "${value}"`);
+                } else {
+                    console.log(`Campo excluído (vazio): "${header}"`);
                 }
             });
+            console.log('Dados para tabela:', tableData);
 
             // Gerar tabela organizada
             doc.autoTable({
