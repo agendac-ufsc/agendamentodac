@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel Administrativo - DAC</title>
+    <!-- Bibliotecas para geração de PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -12,7 +15,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 1200px;
+            max-width: 900px;
             margin: 0 auto;
             background: white;
             padding: 30px;
@@ -21,34 +24,66 @@
         }
         h1 {
             color: #333;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             text-align: center;
         }
-        .table-container {
-            overflow-x: auto;
+        p.subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+        }
+        .list-container {
             margin-top: 20px;
         }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+        .inscription-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 20px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            transition: all 0.2s;
         }
-        th, td {
-            padding: 12px 15px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
+        .inscription-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
         }
-        th {
-            background-color: #667eea;
-            color: white;
+        .inscription-info {
+            display: flex;
+            flex-direction: column;
+        }
+        .inscription-title {
             font-weight: 600;
+            color: #333;
+            font-size: 16px;
         }
-        tr:hover {
-            background-color: #f5f5f5;
+        .inscription-date {
+            font-size: 13px;
+            color: #888;
+            margin-top: 4px;
+        }
+        .btn-pdf {
+            padding: 8px 16px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+        .btn-pdf:hover {
+            background-color: #218838;
         }
         .loading {
             text-align: center;
-            padding: 20px;
+            padding: 40px;
             font-size: 18px;
             color: #667eea;
         }
@@ -75,17 +110,21 @@
 </head>
 <body>
     <div class="container">
-        <h1>📊 Respostas da Segunda Etapa (Google Forms)</h1>
-        <button class="refresh-btn" onclick="loadData()">Atualizar Dados</button>
+        <h1>📊 Painel Administrativo - DAC</h1>
+        <p class="subtitle">Segunda Etapa - Google Forms</p>
+        <button class="refresh-btn" onclick="loadData()">Atualizar Lista</button>
         <div id="content">
-            <div class="loading">Carregando dados da planilha...</div>
+            <div class="loading">Carregando inscrições...</div>
         </div>
     </div>
 
     <script>
+        let allData = [];
+        let headers = [];
+
         async function loadData() {
             const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading">Carregando dados da planilha...</div>';
+            content.innerHTML = '<div class="loading">Carregando inscrições...</div>';
             
             try {
                 const response = await fetch('/api/admin/dados-forms');
@@ -95,36 +134,94 @@
                 
                 const data = await response.json();
                 
-                if (data.length === 0) {
-                    content.innerHTML = '<p style="text-align: center;">Nenhuma resposta encontrada.</p>';
+                if (data.length <= 1) {
+                    content.innerHTML = '<p style="text-align: center; padding: 20px;">Nenhuma inscrição encontrada.</p>';
                     return;
                 }
                 
-                let html = '<div class="table-container"><table><thead><tr>';
+                headers = data[0];
+                allData = data.slice(1);
                 
-                // Cabeçalhos (primeira linha da planilha)
-                const headers = data[0];
-                headers.forEach(header => {
-                    html += `<th>${header}</th>`;
+                let html = '<div class="list-container">';
+                
+                allData.forEach((row, index) => {
+                    // Tenta pegar o nome ou identificador (geralmente na coluna 1 ou 2)
+                    const identifier = row[1] || row[2] || 'Sem Nome';
+                    const timestamp = row[0] || 'Data não disponível';
+                    
+                    html += `
+                        <div class="inscription-item">
+                            <div class="inscription-info">
+                                <span class="inscription-title">Inscrição ${index + 1}: ${identifier}</span>
+                                <span class="inscription-date">Enviado em: ${timestamp}</span>
+                            </div>
+                            <button class="btn-pdf" onclick="generatePDF(${index})">
+                                📄 Gerar PDF
+                            </button>
+                        </div>
+                    `;
                 });
                 
-                html += '</tr></thead><tbody>';
-                
-                // Dados (restante das linhas)
-                for (let i = 1; i < data.length; i++) {
-                    html += '<tr>';
-                    data[i].forEach(cell => {
-                        html += `<td>${cell || ''}</td>`;
-                    });
-                    html += '</tr>';
-                }
-                
-                html += '</tbody></table></div>';
+                html += '</div>';
                 content.innerHTML = html;
                 
             } catch (error) {
                 content.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
             }
+        }
+
+        function generatePDF(index) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            const row = allData[index];
+            const identifier = row[1] || row[2] || 'Sem Nome';
+
+            // Configurações do PDF
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(18);
+            doc.setTextColor(40, 40, 40);
+            doc.text("Ficha de Inscrição - DAC", 105, 20, { align: "center" });
+            
+            doc.setFontSize(12);
+            doc.setFont("helvetica", "normal");
+            doc.text(`Inscrição #${index + 1} - ${identifier}`, 105, 28, { align: "center" });
+            
+            doc.setLineWidth(0.5);
+            doc.line(20, 35, 190, 35);
+
+            // Preparar dados para a tabela vertical
+            const tableData = [];
+            headers.forEach((header, i) => {
+                tableData.push([header, row[i] || "---"]);
+            });
+
+            // Gerar tabela organizada
+            doc.autoTable({
+                startY: 40,
+                head: [['Campo', 'Resposta']],
+                body: tableData,
+                theme: 'striped',
+                headStyles: { fillColor: [102, 126, 234], textColor: 255, fontSize: 10 },
+                bodyStyles: { fontSize: 9, cellPadding: 5 },
+                columnStyles: {
+                    0: { fontStyle: 'bold', cellWidth: 60 },
+                    1: { cellWidth: 'auto' }
+                },
+                margin: { left: 20, right: 20 }
+            });
+
+            // Rodapé
+            const pageCount = doc.internal.getNumberOfPages();
+            for(let i = 1; i <= pageCount; i++) {
+                doc.setPage(i);
+                doc.setFontSize(8);
+                doc.setTextColor(150);
+                doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 285);
+                doc.text(`Página ${i} de ${pageCount}`, 190, 285, { align: "right" });
+            }
+
+            // Abrir PDF em nova aba
+            window.open(doc.output('bloburl'), '_blank');
         }
 
         // Carregar dados ao iniciar
