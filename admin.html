@@ -195,20 +195,23 @@
                     const s = item.segundaEtapa;
                     const id = (index + 1).toString().padStart(2, '0');
                     
-                    // Extrair Nome do Evento do Forms caso não tenha na 1ª etapa
+                    // Extrair Nome do Evento
                     let nomeEvento = p.evento || 'SEM NOME';
                     if (s && (!p.evento || p.evento === 'N/A' || p.evento === 'Evento (Forms)')) {
                         const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento'));
                         if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
                     }
-205	                    // Extrair Local (Prioriza 1ª etapa, depois Forms)
-206	                    let local = 'N/A';
-207	                    if (p.localNome && p.localNome !== 'N/A') {
-208	                        local = p.localNome;
-209	                    } else if (s) {
-210	                        const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado') || h.toLowerCase().includes('local'));
-211	                        if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
-212	                    }/ Formatar Etapas (apenas se houver etapas registradas na 1ª etapa)
+
+                    // Extrair Local
+                    let local = 'N/A';
+                    if (p.localNome && p.localNome !== 'N/A') {
+                        local = p.localNome;
+                    } else if (s) {
+                        const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado') || h.toLowerCase().includes('local'));
+                        if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
+                    }
+
+                    // Formatar Etapas
                     let etapasHtml = '';
                     const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
                     if (p.etapas && Object.keys(p.etapas).length > 0) {
@@ -227,7 +230,6 @@
                     const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
                     const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
                     
-                    // Mostrar timestamp do Forms para confirmar que é a versão correta
                     let formsTime = '';
                     if (s && s.valores[0]) formsTime = `<br><small style="color: #999; font-size: 10px;">Enviado em: ${s.valores[0]}</small>`;
 
@@ -262,20 +264,20 @@
                 
                 html += '</tbody></table>';
                 content.innerHTML = html;
-                
             } catch (error) {
-                content.innerHTML = `<div class="error">Erro: ${error.message}</div>`;
+                console.error('Erro:', error);
+                content.innerHTML = '<p style="color: red; text-align: center;">Erro ao carregar dados.</p>';
             }
         }
 
         function showContact(index) {
-            const p = allUnificados[index].primeiraEtapa;
+            const item = allUnificados[index];
+            const p = item.primeiraEtapa;
             const body = document.getElementById('contactBody');
             body.innerHTML = `
-                <p><strong><i class="fas fa-user"></i> Nome:</strong> ${p.nome}</p>
-                <p><strong><i class="fas fa-envelope"></i> E-mail:</strong> ${p.email}</p>
-                <p><strong><i class="fas fa-phone"></i> Telefone:</strong> ${p.telefone}</p>
-                <p><strong><i class="fas fa-calendar-alt"></i> Inscrito em:</strong> ${p.timestamp || 'N/A'}</p>
+                <p><strong>Nome:</strong> ${p.nome || 'N/A'}</p>
+                <p><strong>E-mail:</strong> ${p.email || 'N/A'}</p>
+                <p><strong>Telefone:</strong> ${p.telefone || 'N/A'}</p>
             `;
             document.getElementById('contactModal').style.display = 'flex';
         }
@@ -285,41 +287,41 @@
         }
 
         async function deleteInscricao(email) {
-            if (!confirm('Tem certeza que deseja excluir esta inscrição?')) return;
+            if (!confirm(`Deseja realmente excluir a inscrição de ${email}?`)) return;
+            
             try {
-                const res = await fetch('/api/admin/deletar', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-                if (res.ok) loadData();
-            } catch (e) { alert('Erro ao deletar'); }
+                const response = await fetch(`/api/admin/excluir/${email}`, { method: 'DELETE' });
+                if (response.ok) {
+                    alert('Inscrição excluída com sucesso!');
+                    loadData();
+                } else {
+                    alert('Erro ao excluir inscrição.');
+                }
+            } catch (error) {
+                alert('Erro na requisição.');
+            }
         }
 
         function generatePDF(index) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF();
             const item = allUnificados[index];
             const p = item.primeiraEtapa;
             const s = item.segundaEtapa;
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
 
-            doc.setFont("helvetica", "bold");
             doc.setFontSize(18);
-            doc.text("Ficha de Inscrição Unificada - DAC", 105, 20, { align: "center" });
-            
-            doc.setFontSize(12);
-            doc.setFont("helvetica", "normal");
-            doc.text(`Evento: ${p.evento}`, 105, 28, { align: "center" });
-            
-            doc.setLineWidth(0.5);
+            doc.text('FICHA DE INSCRIÇÃO UNIFICADA - DAC', 20, 20);
+            doc.setFontSize(10);
+            doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 28);
             doc.line(20, 35, 190, 35);
 
             const tableData = [];
-            // Dados da 1ª Etapa
-            tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }])316	            tableData.push(['Nome do Proponente', p.nome]);
-317	            tableData.push(['E-mail', p.email]);
-318	            tableData.push(['Telefone', p.telefone]);
-319	            tableData.push(['Local Solicitado', p.localNome || 'N/A']);   
+            tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+            tableData.push(['Nome do Proponente', p.nome]);
+            tableData.push(['E-mail', p.email]);
+            tableData.push(['Telefone', p.telefone]);
+            tableData.push(['Local Solicitado', p.localNome || 'N/A']);
+            
             let cronogramaStr = '';
             const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
             if (p.etapas && Object.keys(p.etapas).length > 0) {
@@ -336,33 +338,29 @@
             }
             tableData.push(['Cronograma Solicitado', cronogramaStr]);
 
-            // Dados da 2ª Etapa
             if (s) {
                 tableData.push([{ content: 'DADOS DO FORMULÁRIO (2ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
                 s.headers.forEach((header, i) => {
-                    const val = s.valores[i];
-                    if (val && val.toString().trim()) {
-                        tableData.push([header, val.toString().trim()]);
+                    const valor = s.valores[i];
+                    if (valor && valor.toString().trim() !== '') {
+                        tableData.push([header, valor.toString()]);
                     }
                 });
             }
 
             doc.autoTable({
                 startY: 40,
+                head: [['Campo', 'Informação']],
                 body: tableData,
                 theme: 'grid',
-                styles: { fontSize: 9, cellPadding: 4 },
-                columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60 } }
+                styles: { fontSize: 9, cellPadding: 3 },
+                columnStyles: { 0: { fontStyle: 'bold', width: 60 } }
             });
 
-            window.open(doc.output('bloburl'), '_blank');
+            doc.save(`inscricao_${p.email.replace(/[^a-z0-9]/gi, '_')}.pdf`);
         }
 
-        window.onclick = function(event) {
-            if (event.target == document.getElementById('contactModal')) closeModal();
-        }
-
-        loadData();
+        window.onload = loadData;
     </script>
 </body>
 </html>
