@@ -428,5 +428,53 @@ app.delete('/api/agendamentos/:id', async (req, res) => {
     }
 });
 
+// Rota para exclusão geral de todos os agendamentos
+app.delete('/api/admin/excluir-tudo', async (req, res) => {
+    try {
+        if (!googleAuthClient) await initGoogleAuth();
+        
+        // Obter todos os agendamentos
+        const agendamentos = await getAgendamentos();
+        console.log(`🗑️ [Exclusão Geral] Iniciando limpeza de ${agendamentos.length} agendamentos...`);
+        
+        // Deletar eventos do Google Calendar
+        const allEvents = await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId: CALENDAR_ID,
+            maxResults: 2500,
+            singleEvents: true
+        });
+        
+        let eventosDeletedos = 0;
+        for (const event of allEvents.data.items) {
+            try {
+                await calendar.events.delete({
+                    auth: googleAuthClient,
+                    calendarId: CALENDAR_ID,
+                    eventId: event.id
+                });
+                eventosDeletedos++;
+            } catch (error) {
+                console.warn(`⚠️ Erro ao deletar evento ${event.id}:`, error.message);
+            }
+        }
+        
+        // Limpar o Redis
+        if (redis) {
+            await redis.del('agendamentos');
+            console.log(`✅ [Exclusão Geral] Redis limpo com sucesso`);
+        }
+        
+        console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos do calendário, ${agendamentos.length} registros removidos do banco de dados`);
+        res.json({ 
+            success: true, 
+            message: `Limpeza concluída: ${eventosDeletedos} eventos removidos, ${agendamentos.length} registros apagados` 
+        });
+    } catch (error) {
+        console.error('❌ Erro ao executar exclusão geral:', error.message);
+        res.status(500).json({ success: false, error: 'Erro ao executar exclusão geral' });
+    }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Servidor rodando em http://localhost:${PORT}`));

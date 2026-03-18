@@ -16,6 +16,8 @@
         .header-actions { display: flex; align-items: center; gap: 15px; }
         .filter-select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; outline: none; background: white; cursor: pointer; }
         .refresh-btn { padding: 8px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .delete-all-btn { padding: 8px 15px; background: #fff; color: #d9534f; border: 1px solid #d9534f; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
+        .delete-all-btn:hover { background: #d9534f; color: white; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th { background: #f1f3f5; color: #666; text-transform: uppercase; font-size: 11px; font-weight: 700; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dee2e6; }
         td { padding: 15px; border-bottom: 1px solid #eee; vertical-align: middle; font-size: 13px; }
@@ -58,6 +60,9 @@
                 </select>
                 <button class="refresh-btn" onclick="loadData()">
                     <i class="fas fa-sync-alt"></i> Atualizar Lista
+                </button>
+                <button class="delete-all-btn" onclick="deleteAllInscricoes()">
+                    <i class="fas fa-trash-sweep"></i> Excluir Tudo
                 </button>
             </div>
         </header>
@@ -253,6 +258,36 @@
             } catch (error) {
                 console.error('Erro ao excluir:', error);
                 alert('Erro ao excluir inscrição.');
+            }
+        }
+
+        async function deleteAllInscricoes() {
+            const confirm1 = confirm('⚠️ ATENÇÃO: Isso excluirá TODOS os agendamentos do banco de dados e do Google Calendar. Esta ação não pode ser desfeita. Deseja continuar?');
+            if (!confirm1) return;
+            
+            const confirm2 = confirm('Você tem CERTEZA ABSOLUTA? Todos os horários no calendário serão liberados.');
+            if (!confirm2) return;
+
+            const btn = document.querySelector('.delete-all-btn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+
+            try {
+                const response = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
+                const result = await response.json();
+                if (response.ok) {
+                    alert(result.message || 'Limpeza geral concluída com sucesso!');
+                    loadData();
+                } else {
+                    alert('Erro ao realizar exclusão geral: ' + (result.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                console.error('Erro ao excluir tudo:', error);
+                alert('Erro ao realizar exclusão geral.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
             }
         }
 
