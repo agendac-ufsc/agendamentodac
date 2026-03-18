@@ -6,6 +6,8 @@
     <title>Painel Administrativo - DAC</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -63,6 +65,9 @@
                 </button>
                 <button class="delete-all-btn" onclick="deleteAllInscricoes()">
                     <i class="fas fa-trash-sweep"></i> Excluir Tudo
+                </button>
+                <button class="refresh-btn" onclick="downloadAllPDFs()" style="background: #28a745;">
+                    <i class="fas fa-download"></i> Baixar Todos PDFs
                 </button>
             </div>
         </header>
@@ -396,6 +401,108 @@
             
             // Liberar a URL do objeto após um tempo para evitar vazamento de memória
             setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
+        }
+
+        async function downloadAllPDFs() {
+            const { jsPDF } = window.jspdf;
+            const zip = new JSZip();
+            const filteredData = allUnificados.filter(item => {
+                const localFilter = document.getElementById('localFilter').value;
+                if (localFilter === 'todos') return true;
+                return item.primeiraEtapa.localNome === localFilter;
+            });
+
+            if (filteredData.length === 0) {
+                alert('Nenhuma inscrição para baixar com o filtro selecionado.');
+                return;
+            }
+
+            const btn = document.querySelector('button[onclick="downloadAllPDFs()"]');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Gerando...';
+
+            try {
+                for (let i = 0; i < filteredData.length; i++) {
+                    const item = filteredData[i];
+                    const p = item.primeiraEtapa;
+                    const s = item.segundaEtapa;
+                    
+                    const doc = new jsPDF();
+                    
+                    let nomeProponente = p.nome || 'SEM NOME';
+                    let nomeEvento = p.evento || 'SEM EVENTO';
+                    if (s && (nomeProponente === 'SEM NOME' || nomeProponente === 'Inscrição Forms')) {
+                        const idx = s.headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+                        if (idx >= 0 && s.valores[idx]) nomeProponente = s.valores[idx];
+                    }
+                    if (s && (nomeEvento === 'SEM EVENTO' || nomeEvento === 'Evento (Forms)')) {
+                        const idx = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
+                        if (idx >= 0 && s.valores[idx]) nomeEvento = s.valores[idx];
+                    }
+
+                    doc.setFontSize(18); doc.text('FICHA DE INSCRIÇÃO UNIFICADA - DAC', 20, 20);
+                    doc.setFontSize(12); doc.text(`PROPONENTE: ${nomeProponente.toUpperCase()}`, 20, 30);
+                    doc.text(`PROJETO: ${nomeEvento.toUpperCase()}`, 20, 38);
+                    doc.setFontSize(10); doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, 20, 45);
+                    doc.line(20, 48, 190, 48);
+
+                    const tableData = [];
+                    tableData.push([{ content: 'DADOS DO AGENDAMENTO (1ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+                    tableData.push(['Nome do Proponente', nomeProponente]);
+                    tableData.push(['Nome do Evento', nomeEvento]);
+                    tableData.push(['E-mail', p.email]);
+                    tableData.push(['Telefone', p.telefone]);
+                    tableData.push(['Local Solicitado', p.localNome || 'N/A']);
+                    
+                    let cronogramaStr = '';
+                    const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                    const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
+                        const val = p.etapas[k];
+                        return Array.isArray(val) ? val.length > 0 : !!val;
+                    });
+
+                    if (temEtapasSite) {
+                        for (const key in p.etapas) {
+                            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                            itens.forEach((it, i) => {
+                                if (it && it.data && it.horario) {
+                                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                                    cronogramaStr += `${label}: ${it.data.split('-').reverse().join('/')} (${it.horario})\n`;
+                                }
+                            });
+                        }
+                    } else if (s) {
+                        const idx = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
+                        if (idx >= 0 && s.valores[idx]) cronogramaStr = s.valores[idx];
+                    }
+                    tableData.push(['Cronograma Solicitado', cronogramaStr || 'Não registrado']);
+
+                    if (s) {
+                        tableData.push([{ content: 'DADOS DO FORMULÁRIO (2ª ETAPA)', colSpan: 2, styles: { fillColor: [240, 240, 240], fontStyle: 'bold' } }]);
+                        s.headers.forEach((header, i) => {
+                            const valor = s.valores[i];
+                            if (valor && valor.toString().trim() !== '') tableData.push([header, valor.toString()]);
+                        });
+                    }
+
+                    doc.autoTable({ startY: 52, head: [['Campo', 'Informação']], body: tableData, theme: 'grid', styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { fontStyle: 'bold', width: 60 } } });
+                    
+                    const pdfBlob = doc.output('blob');
+                    const fileName = `${nomeEvento.replace(/[^a-z0-9]/gi, '_').toLowerCase()}_${nomeProponente.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;
+                    zip.file(fileName, pdfBlob);
+                }
+
+                const zipBlob = await zip.generateAsync({ type: 'blob' });
+                saveAs(zipBlob, `fichas_inscricoes_${new Date().toISOString().split('T')[0]}.zip`);
+                alert(`${filteredData.length} PDF(s) baixado(s) com sucesso!`);
+            } catch (error) {
+                console.error('Erro ao gerar ZIP:', error);
+                alert('Erro ao gerar arquivo ZIP.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
         }
 
         window.onload = loadData;
