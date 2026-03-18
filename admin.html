@@ -11,8 +11,10 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; color: #333; padding: 20px; }
         .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #eee; }
+        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 15px; }
         h1 { font-size: 22px; color: #444; }
+        .header-actions { display: flex; align-items: center; gap: 15px; }
+        .filter-select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; outline: none; background: white; cursor: pointer; }
         .refresh-btn { padding: 8px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th { background: #f1f3f5; color: #666; text-transform: uppercase; font-size: 11px; font-weight: 700; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dee2e6; }
@@ -45,9 +47,16 @@
     <div class="container">
         <header>
             <h1>📊 Painel Administrativo - DAC</h1>
-            <button class="refresh-btn" onclick="loadData()">
-                <i class="fas fa-sync-alt"></i> Atualizar Lista
-            </button>
+            <div class="header-actions">
+                <select id="localFilter" class="filter-select" onchange="renderizarTabela()">
+                    <option value="todos">Todos os Locais</option>
+                    <option value="Teatro">Teatro</option>
+                    <option value="Igrejinha">Igrejinha</option>
+                </select>
+                <button class="refresh-btn" onclick="loadData()">
+                    <i class="fas fa-sync-alt"></i> Atualizar Lista
+                </button>
+            </div>
         </header>
         <div id="content">
             <div class="loading">Carregando inscrições unificadas...</div>
@@ -73,132 +82,175 @@
                 const response = await fetch('/api/admin/dados-unificados');
                 const data = await response.json();
                 allUnificados = data;
-                if (data.length === 0) {
-                    content.innerHTML = '<p style="text-align: center; padding: 40px;">Nenhuma inscrição encontrada.</p>';
-                    return;
-                }
-                let html = `
-                    <table>
-                        <thead>
-                            <tr>
-                                <th class="col-id">#</th>
-                                <th>Evento</th>
-                                <th>Local</th>
-                                <th>Etapas Agendadas</th>
-                                <th>Status</th>
-                                <th>Arquivos</th>
-                                <th style="text-align: center;">Ações</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-                data.forEach((item, index) => {
-                    const p = item.primeiraEtapa;
-                    const s = item.segundaEtapa;
-                    const id = (index + 1).toString().padStart(2, '0');
-                    
-                    // Priorizar nome do proponente e evento da primeira etapa se disponível
-                    let nomeProponente = p.nome || 'SEM NOME';
-                    let nomeEvento = p.evento || 'SEM EVENTO';
-                    
-                    // Se for legada ou faltar dados, tenta buscar no Forms
-                    if (s && (nomeProponente === 'SEM NOME' || nomeProponente === 'Inscrição Forms')) {
-                        const idxNomeProp = s.headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
-                        if (idxNomeProp >= 0 && s.valores[idxNomeProp]) nomeProponente = s.valores[idxNomeProp];
-                    }
-                    if (s && (nomeEvento === 'SEM EVENTO' || nomeEvento === 'Evento (Forms)')) {
-                        const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
-                        if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
-                    }
-
-                    let local = p.localNome || 'N/A';
-                    if (local === 'N/A' && s) {
-                        const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado') || h.toLowerCase().includes('local'));
-                        if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
-                    }
-
-                    let etapasHtml = '';
-                    const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-                    const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
-                        const val = p.etapas[k];
-                        return Array.isArray(val) ? val.length > 0 : !!val;
-                    });
-
-                    if (temEtapasSite) {
-                        for (const key in p.etapas) {
-                            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
-                            itens.forEach((it, i) => {
-                                if (it && it.data && it.horario) {
-                                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                                    const dataFormatada = it.data.split('-').reverse().join('/');
-                                    etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
-                                }
-                            });
-                        }
-                    } else if (s) {
-                        const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
-                        if (idxCronograma >= 0 && s.valores[idxCronograma]) {
-                            etapasHtml = `<span class="etapa-item" style="color: #666;">${s.valores[idxCronograma]}</span>`;
-                        }
-                    }
-
-                    if (!etapasHtml) etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
-
-                    const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
-                    const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
-
-                    html += `
-                        <tr>
-                            <td class="col-id">${id}</td>
-                            <td>
-                                <div style="font-weight: bold; color: #333;">${nomeEvento.toUpperCase()}</div>
-                            </td>
-                            <td class="col-local"><span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span></td>
-                            <td class="col-etapas">${etapasHtml}</td>
-                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                            <td>
-                                ${s ? `<a href="#" class="btn-pdf" onclick="generatePDF(${index}); return false;"><i class="far fa-file-pdf"></i> Ficha (PDF)</a>` : '<span style="color: #ccc;">Aguardando Forms</span>'}
-                            </td>
-                            <td style="text-align: center;">
-                                <button class="btn-action btn-contact" onclick="showContact(${index})" title="Ver Contatos"><i class="far fa-address-card"></i></button>
-                                <button class="btn-action btn-delete" onclick="deleteInscricao('${p.email}')" title="Excluir"><i class="far fa-trash-alt"></i></button>
-                            </td>
-                        </tr>
-                    `;
-                });
-                html += '</tbody></table>';
-                content.innerHTML = html;
+                renderizarTabela();
             } catch (error) {
-                console.error('Erro:', error);
-                content.innerHTML = '<p style="color: red; text-align: center;">Erro ao carregar dados.</p>';
+                console.error('Erro ao carregar dados:', error);
+                content.innerHTML = '<p style="color:red; text-align:center; padding:20px;">Erro ao carregar dados. Verifique o console.</p>';
             }
+        }
+
+        function renderizarTabela() {
+            const content = document.getElementById('content');
+            const filterValue = document.getElementById('localFilter').value;
+            
+            let filteredData = allUnificados;
+            if (filterValue !== 'todos') {
+                filteredData = allUnificados.filter(item => {
+                    const local = item.primeiraEtapa.localNome || '';
+                    return local.toLowerCase().includes(filterValue.toLowerCase());
+                });
+            }
+
+            if (filteredData.length === 0) {
+                content.innerHTML = '<p style="text-align: center; padding: 40px;">Nenhuma inscrição encontrada para este filtro.</p>';
+                return;
+            }
+
+            let html = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="col-id">#</th>
+                            <th>Evento</th>
+                            <th>Local</th>
+                            <th>Etapas Agendadas</th>
+                            <th>Status</th>
+                            <th>Arquivos</th>
+                            <th style="text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            filteredData.forEach((item, index) => {
+                const p = item.primeiraEtapa;
+                const s = item.segundaEtapa;
+                const id = (index + 1).toString().padStart(2, '0');
+                
+                let nomeProponente = p.nome || 'SEM NOME';
+                let nomeEvento = p.evento || 'SEM EVENTO';
+                
+                if (s && (nomeProponente === 'SEM NOME' || nomeProponente === 'Inscrição Forms')) {
+                    const idxNomeProp = s.headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+                    if (idxNomeProp >= 0 && s.valores[idxNomeProp]) nomeProponente = s.valores[idxNomeProp];
+                }
+                if (s && (nomeEvento === 'SEM EVENTO' || nomeEvento === 'Evento (Forms)')) {
+                    const idxNomeEv = s.headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
+                    if (idxNomeEv >= 0 && s.valores[idxNomeEv]) nomeEvento = s.valores[idxNomeEv];
+                }
+
+                let local = p.localNome || 'N/A';
+                if (local === 'N/A' && s) {
+                    const idxEspaco = s.headers.findIndex(h => h.toLowerCase().includes('espaço solicitado') || h.toLowerCase().includes('local'));
+                    if (idxEspaco >= 0 && s.valores[idxEspaco]) local = s.valores[idxEspaco];
+                }
+
+                let etapasHtml = '';
+                const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                const temEtapasSite = p.etapas && Object.keys(p.etapas).some(k => {
+                    const val = p.etapas[k];
+                    return Array.isArray(val) ? val.length > 0 : !!val;
+                });
+
+                if (temEtapasSite) {
+                    for (const key in p.etapas) {
+                        const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                        itens.forEach((it, i) => {
+                            if (it && it.data && it.horario) {
+                                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                                const dataFormatada = it.data.split('-').reverse().join('/');
+                                etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${dataFormatada}, ${it.horario}</span>`;
+                            }
+                        });
+                    }
+                } else if (s) {
+                    const idxCronograma = s.headers.findIndex(h => h.toLowerCase().includes('cronograma') || h.toLowerCase().includes('datas'));
+                    if (idxCronograma >= 0 && s.valores[idxCronograma]) {
+                        etapasHtml = `<span class="etapa-item" style="color: #666;">${s.valores[idxCronograma]}</span>`;
+                    }
+                }
+
+                if (!etapasHtml) etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
+
+                const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
+                const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
+
+                const originalIndex = allUnificados.indexOf(item);
+
+                html += `
+                    <tr>
+                        <td class="col-id">${id}</td>
+                        <td class="col-evento">${nomeEvento.toUpperCase()}</td>
+                        <td class="col-local"><span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span></td>
+                        <td class="col-etapas">${etapasHtml}</td>
+                        <td class="status-badge ${statusClass}">${statusText}</td>
+                        <td>
+                            <a href="#" class="btn-action btn-pdf" onclick="generatePDF(${originalIndex})">
+                                <i class="far fa-file-pdf"></i> Ficha (PDF)
+                            </a>
+                        </td>
+                        <td style="text-align: center;">
+                            <button class="btn-action btn-contact" onclick="showContact(${originalIndex})" title="Ver Contato">
+                                <i class="far fa-address-card"></i>
+                            </button>
+                            <button class="btn-action btn-delete" onclick="deleteInscricao('${p.id}')" title="Excluir">
+                                <i class="far fa-trash-alt"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            content.innerHTML = html;
         }
 
         function showContact(index) {
             const item = allUnificados[index];
             const p = item.primeiraEtapa;
+            const s = item.segundaEtapa;
+            
+            let nomeProponente = p.nome || 'N/A';
+            if (s && (nomeProponente === 'N/A' || nomeProponente === 'Inscrição Forms')) {
+                const idx = s.headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+                if (idx >= 0 && s.valores[idx]) nomeProponente = s.valores[idx];
+            }
+
             const body = document.getElementById('contactBody');
-            body.innerHTML = `<p><strong>Nome:</strong> ${p.nome || 'N/A'}</p><p><strong>E-mail:</strong> ${p.email || 'N/A'}</p><p><strong>Telefone:</strong> ${p.telefone || 'N/A'}</p>`;
+            body.innerHTML = `
+                <p><strong>Proponente:</strong> ${nomeProponente}</p>
+                <p><strong>E-mail:</strong> ${p.email}</p>
+                <p><strong>Telefone:</strong> ${p.telefone}</p>
+                <p><strong>Local:</strong> ${p.localNome || 'N/A'}</p>
+            `;
             document.getElementById('contactModal').style.display = 'flex';
         }
 
-        function closeModal() { document.getElementById('contactModal').style.display = 'none'; }
+        function closeModal() {
+            document.getElementById('contactModal').style.display = 'none';
+        }
 
-        async function deleteInscricao(email) {
-            if (!confirm(`Deseja realmente excluir a inscrição de ${email}?`)) return;
+        async function deleteInscricao(id) {
+            if (!confirm('Tem certeza que deseja excluir esta inscrição?')) return;
             try {
-                const response = await fetch(`/api/admin/excluir/${email}`, { method: 'DELETE' });
-                if (response.ok) { alert('Inscrição excluída com sucesso!'); loadData(); }
-                else { alert('Erro ao excluir inscrição.'); }
-            } catch (error) { alert('Erro na requisição.'); }
+                const response = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
+                if (response.ok) {
+                    loadData();
+                } else {
+                    alert('Erro ao excluir inscrição.');
+                }
+            } catch (error) {
+                console.error('Erro ao excluir:', error);
+                alert('Erro ao excluir inscrição.');
+            }
         }
 
         function generatePDF(index) {
+            const { jsPDF } = window.jspdf;
             const item = allUnificados[index];
             const p = item.primeiraEtapa;
             const s = item.segundaEtapa;
-            const { jsPDF } = window.jspdf;
-            const doc = jsPDF();
+            
+            const doc = new jsPDF();
             
             let nomeProponente = p.nome || 'SEM NOME';
             let nomeEvento = p.evento || 'SEM EVENTO';
