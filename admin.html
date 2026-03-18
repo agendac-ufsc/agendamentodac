@@ -356,7 +356,14 @@
             }
 
             doc.autoTable({ startY: 52, head: [['Campo', 'Informação']], body: tableData, theme: 'grid', styles: { fontSize: 9, cellPadding: 3 }, columnStyles: { 0: { fontStyle: 'bold', width: 60 } } });
-            doc.save(`inscricao_${p.email.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+            
+            // Abrir o PDF em uma nova aba em vez de fazer download direto
+            const pdfBlob = doc.output('blob');
+            const pdfUrl = URL.createObjectURL(pdfBlob);
+            window.open(pdfUrl, '_blank');
+            
+            // Liberar a URL do objeto após um tempo para evitar vazamento de memória
+            setTimeout(() => URL.revokeObjectURL(pdfUrl), 60000);
         }
 
         window.onload = loadData;
