@@ -579,9 +579,19 @@
                     msg.textContent = '✅ Primeira etapa concluída com sucesso!';
                     msg.className = 'message success';
                     
+                    // Buscar link do forms configurado
+                    let formsLink = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+                    try {
+                        const configRes = await fetch('/api/config');
+                        const config = await configRes.json();
+                        if (config.formsLink) formsLink = config.formsLink;
+                    } catch (e) {
+                        console.error('Erro ao buscar link do forms:', e);
+                    }
+
                     // Criar e exibir o botão para a segunda etapa
                     const secondStepBtn = document.createElement('a');
-                    secondStepBtn.href = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+                    secondStepBtn.href = formsLink;
                     secondStepBtn.target = '_blank';
                     secondStepBtn.className = 'submit';
                     secondStepBtn.style.display = 'block';

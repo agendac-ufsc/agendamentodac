@@ -69,6 +69,9 @@
                 <button class="refresh-btn" onclick="downloadAllPDFs()" style="background: #28a745;">
                     <i class="fas fa-download"></i> Baixar Todos PDFs
                 </button>
+                <button class="refresh-btn" onclick="openConfigModal()" style="background: #764ba2;">
+                    <i class="fas fa-cog"></i> Configurações
+                </button>
             </div>
         </header>
         <div id="content">
@@ -81,6 +84,29 @@
             <div class="modal-body" id="contactBody"></div>
             <div class="modal-footer">
                 <button class="btn-close" onclick="closeModal()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="configModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header"><h3>⚙️ Configurações dos Formulários</h3></div>
+            <div class="modal-body">
+                <p>Ajuste os links da segunda etapa da inscrição.</p>
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link do Google Forms (Segunda Etapa):</label>
+                    <input type="text" id="configFormsLink" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;">
+                    <small style="color:#888;">Link que o usuário verá após a primeira etapa.</small>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">ID da Planilha do Google Sheets:</label>
+                    <input type="text" id="configSpreadsheetId" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;">
+                    <small style="color:#888;">O ID que fica na URL da planilha (entre /d/ e /edit).</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-close" onclick="closeConfigModal()">Cancelar</button>
+                <button class="refresh-btn" onclick="saveConfigs()" style="display:inline-block; margin-left:10px;">Salvar Alterações</button>
             </div>
         </div>
     </div>
@@ -249,6 +275,50 @@
 
         function closeModal() {
             document.getElementById('contactModal').style.display = 'none';
+        }
+
+        async function openConfigModal() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                document.getElementById('configFormsLink').value = config.formsLink || '';
+                document.getElementById('configSpreadsheetId').value = config.spreadsheetId || '';
+                document.getElementById('configModal').style.display = 'flex';
+            } catch (error) {
+                alert('Erro ao carregar configurações.');
+            }
+        }
+
+        function closeConfigModal() {
+            document.getElementById('configModal').style.display = 'none';
+        }
+
+        async function saveConfigs() {
+            const formsLink = document.getElementById('configFormsLink').value;
+            const spreadsheetId = document.getElementById('configSpreadsheetId').value;
+
+            if (!formsLink || !spreadsheetId) {
+                alert('Por favor, preencha todos os campos.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/admin/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ formsLink, spreadsheetId })
+                });
+                const result = await response.json();
+                if (result.success) {
+                    alert('Configurações salvas com sucesso!');
+                    closeConfigModal();
+                    loadData(); // Recarregar dados com a nova planilha
+                } else {
+                    alert('Erro ao salvar: ' + (result.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro de conexão ao salvar configurações.');
+            }
         }
 
         async function deleteInscricao(id) {

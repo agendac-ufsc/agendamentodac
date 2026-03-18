@@ -193,7 +193,49 @@ initGoogleAuth();
 
 const calendar = google.calendar({ version: 'v3' });
 const sheets = google.sheets({ version: 'v4' });
-const SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
+let SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
+let FORMS_LINK = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+
+const CONFIG_KEY = 'agendamentos_config';
+
+const getConfigs = async () => {
+    try {
+        if (redis) {
+            const data = await redis.get(CONFIG_KEY);
+            if (data) {
+                const configs = JSON.parse(data);
+                SPREADSHEET_ID = configs.spreadsheetId || SPREADSHEET_ID;
+                FORMS_LINK = configs.formsLink || FORMS_LINK;
+                return configs;
+            }
+        }
+    } catch (error) {
+        console.error('❌ [Redis] Erro ao buscar configurações:', error.message);
+    }
+    return { spreadsheetId: SPREADSHEET_ID, formsLink: FORMS_LINK };
+};
+
+const saveConfigs = async (configs) => {
+    try {
+        // Atualiza em memória primeiro
+        SPREADSHEET_ID = configs.spreadsheetId || SPREADSHEET_ID;
+        FORMS_LINK = configs.formsLink || FORMS_LINK;
+
+        if (redis) {
+            await redis.set(CONFIG_KEY, JSON.stringify(configs));
+            console.log('✅ [Redis] Configurações persistidas.');
+        } else {
+            console.warn('⚠️ [Config] Salvo apenas em memória (Redis indisponível).');
+        }
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao salvar configurações:', error.message);
+    }
+    return false;
+};
+
+// Carregar configurações iniciais
+getConfigs();
 
 const createCalendarEvent = async (summary, description, date, timeRange) => {
     if (!googleAuthClient) await initGoogleAuth();
@@ -218,6 +260,22 @@ const createCalendarEvent = async (summary, description, date, timeRange) => {
         return null;
     }
 };
+
+// Rota para obter configurações (pública para o site poder pegar o link do forms)
+app.get('/api/config', async (req, res) => {
+    const configs = await getConfigs();
+    res.json(configs);
+});
+
+// Rota para salvar configurações (administrativa)
+app.post('/api/admin/config', async (req, res) => {
+    const { spreadsheetId, formsLink } = req.body;
+    if (!spreadsheetId || !formsLink) {
+        return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
+    }
+    const success = await saveConfigs({ spreadsheetId, formsLink });
+    res.json({ success });
+});
 
 app.get('/api/disponibilidade', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
@@ -355,6 +413,7 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html'))
 app.get('/api/admin/dados-unificados', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
+                await getConfigs(); // Garantir que temos o ID mais recente
         const response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:ZZ' });
         const rows = response.data.values || [];
         const headers = rows[0] || []; console.log("DEBUG: Headers encontrados:", headers.length, headers.slice(0, 5));
