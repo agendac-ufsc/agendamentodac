@@ -34,6 +34,9 @@
         .status-badge { font-weight: 700; font-size: 14px; }
         .status-completo { color: #28a745; }
         .status-pendente { color: #f0ad4e; }
+        .status-cancelado { color: #d9534f; font-size: 11px; font-style: italic; }
+        .row-cancelada { opacity: 0.6; background-color: #fff5f5 !important; }
+        .btn-disabled { color: #ccc !important; cursor: not-allowed !important; pointer-events: none; }
         .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
         .modal-content { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
         .modal-header { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
@@ -172,20 +175,29 @@
 
                 if (!etapasHtml) etapasHtml = '<span style="color: #bbb; font-style: italic;">Não agendado via site</span>';
 
-                const statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
-                const statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
+                let statusClass = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? 'status-completo' : 'status-pendente';
+                let statusText = (item.status === 'Completo' || item.status === 'Completo (Forms)') ? '1/1' : '0/1';
+                let rowClass = '';
+                let pdfDisabledClass = '';
+
+                if (item.status === 'Cancelado (Eventos Removidos)') {
+                    statusClass = 'status-cancelado';
+                    statusText = 'CANCELADO';
+                    rowClass = 'row-cancelada';
+                    pdfDisabledClass = 'btn-disabled';
+                }
 
                 const originalIndex = allUnificados.indexOf(item);
 
                 html += `
-                    <tr>
+                    <tr class="${rowClass}">
                         <td class="col-id">${id}</td>
                         <td class="col-evento">${nomeEvento.toUpperCase()}</td>
                         <td class="col-local"><span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span></td>
                         <td class="col-etapas">${etapasHtml}</td>
                         <td class="status-badge ${statusClass}">${statusText}</td>
                         <td>
-                            <a href="#" class="btn-action btn-pdf" onclick="generatePDF(${originalIndex})">
+                            <a href="#" class="btn-action btn-pdf ${pdfDisabledClass}" onclick="generatePDF(${originalIndex})">
                                 <i class="far fa-file-pdf"></i> Ficha (PDF)
                             </a>
                         </td>

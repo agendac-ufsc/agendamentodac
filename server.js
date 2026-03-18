@@ -57,6 +57,44 @@ const saveAgendamento = async (novoAgendamento) => {
     return false;
 };
 
+const verificarEventosNoCalendario = async (agendamento) => {
+    if (!googleAuthClient) await initGoogleAuth();
+    try {
+        const allEvents = await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId: CALENDAR_ID,
+            maxResults: 2500,
+            singleEvents: true
+        });
+        
+        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const eventosEsperados = [];
+        
+        // Listar todos os eventos esperados para este agendamento
+        for (const key in agendamento.etapas) {
+            const itens = Array.isArray(agendamento.etapas[key]) ? agendamento.etapas[key] : [agendamento.etapas[key]];
+            itens.forEach((item, i) => {
+                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                const eventSummary = `${label}: ${agendamento.evento}`;
+                eventosEsperados.push(eventSummary);
+            });
+        }
+        
+        // Verificar se os eventos ainda existem no calendário
+        const eventosEncontrados = allEvents.data.items.filter(e => 
+            eventosEsperados.includes(e.summary) && 
+            e.description && 
+            e.description.includes(agendamento.email)
+        );
+        
+        // Se nenhum evento foi encontrado, significa que foram apagados
+        return eventosEncontrados.length > 0;
+    } catch (error) {
+        console.error('⚠️ [Google Calendar] Erro ao verificar eventos:', error.message);
+        return true; // Assume que existem para não quebrar o fluxo
+    }
+};
+
 const deleteAgendamentoByEmail = async (email) => {
     try {
         if (redis) {
@@ -307,17 +345,22 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 return matchesEmail || matchesTelefone;
             });
 
+            // Verificar se os eventos ainda existem no Google Calendar
+            const eventosExistem = await verificarEventosNoCalendario(p);
+            
             if (correspondencia) {
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
                     segundaEtapa: { headers, valores: correspondencia },
-                    status: 'Completo'
+                    status: eventosExistem ? 'Completo' : 'Cancelado (Eventos Removidos)',
+                    eventosExistem: eventosExistem
                 });
             } else {
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
                     segundaEtapa: null,
-                    status: 'Pendente (Falta Forms)'
+                    status: eventosExistem ? 'Pendente (Falta Forms)' : 'Cancelado (Eventos Removidos)',
+                    eventosExistem: eventosExistem
                 });
             }
         }
