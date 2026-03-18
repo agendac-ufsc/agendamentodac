@@ -215,10 +215,22 @@ const getConfigs = async () => {
     return { spreadsheetId: SPREADSHEET_ID, formsLink: FORMS_LINK };
 };
 
+const extractSpreadsheetId = (input) => {
+    if (!input) return null;
+    // Se já for apenas um ID (não contém barras), retorna ele mesmo
+    if (!input.includes('/')) return input.trim();
+    // Regex para extrair o ID entre /d/ e /edit (ou o final da URL)
+    const match = input.match(/\/d\/([a-zA-Z0-9-_]+)/);
+    return match ? match[1] : input.trim();
+};
+
 const saveConfigs = async (configs) => {
     try {
+        // Extrair o ID caso tenham colado a URL completa
+        const cleanSpreadsheetId = extractSpreadsheetId(configs.spreadsheetId);
+        
         // Atualiza em memória primeiro
-        SPREADSHEET_ID = configs.spreadsheetId || SPREADSHEET_ID;
+        SPREADSHEET_ID = cleanSpreadsheetId || SPREADSHEET_ID;
         FORMS_LINK = configs.formsLink || FORMS_LINK;
 
         if (redis) {
