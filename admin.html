@@ -246,18 +246,33 @@
             document.getElementById('contactModal').style.display = 'none';
         }
 
-        async function deleteInscricao(id) {
+        async function deleteInscricao(index) {
+            const id = allUnificados[index].primeiraEtapa.id;
             if (!confirm('Tem certeza que deseja excluir esta inscrição?')) return;
+            
             try {
                 const response = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
                 if (response.ok) {
                     loadData();
                 } else {
-                    alert('Erro ao excluir inscrição.');
+                    // Se falhar a exclusão normal (ex: registro legado), tenta a exclusão visual (Blacklist)
+                    console.log('Tentando exclusão visual (Blacklist)...');
+                    const blResponse = await fetch(`/api/admin/blacklist/${id}`, { method: 'POST' });
+                    if (blResponse.ok) {
+                        loadData();
+                    } else {
+                        alert('Erro ao excluir inscrição.');
+                    }
                 }
             } catch (error) {
                 console.error('Erro ao excluir:', error);
-                alert('Erro ao excluir inscrição.');
+                // Tenta exclusão visual em caso de erro de rede/servidor também
+                const blResponse = await fetch(`/api/admin/blacklist/${id}`, { method: 'POST' });
+                if (blResponse.ok) {
+                    loadData();
+                } else {
+                    alert('Erro ao excluir inscrição.');
+                }
             }
         }
 

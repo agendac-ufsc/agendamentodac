@@ -239,6 +239,48 @@ app.get('/api/disponibilidade', async (req, res) => {
     }
 });
 
+// Função para obter a lista de exclusão (Blacklist)
+const getBlacklist = async () => {
+    if (!redis) return [];
+    try {
+        const blacklist = await redis.get('agendamentos_blacklist');
+        return blacklist ? JSON.parse(blacklist) : [];
+    } catch (error) {
+        console.warn('⚠️ Erro ao obter Blacklist:', error.message);
+        return [];
+    }
+};
+
+// Função para adicionar um ID à Blacklist
+const addToBlacklist = async (id) => {
+    if (!redis) return false;
+    try {
+        const blacklist = await getBlacklist();
+        if (!blacklist.includes(id)) {
+            blacklist.push(id);
+            await redis.set('agendamentos_blacklist', JSON.stringify(blacklist));
+            console.log(`✅ [Blacklist] ID ${id} adicionado à lista de exclusão`);
+        }
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao adicionar à Blacklist:', error.message);
+        return false;
+    }
+};
+
+// Função para limpar a Blacklist
+const clearBlacklist = async () => {
+    if (!redis) return false;
+    try {
+        await redis.del('agendamentos_blacklist');
+        console.log('✅ [Blacklist] Limpa com sucesso');
+        return true;
+    } catch (error) {
+        console.error('❌ Erro ao limpar Blacklist:', error.message);
+        return false;
+    }
+};
+
 const sendEmail = async (to, subject, htmlContent) => {
     const apiKey = process.env.BREVO_API_KEY;
     if (!apiKey) return null;
@@ -387,11 +429,33 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             });
         });
 
-        console.log(`[DEBUG] Gerados ${unificados.length} registros unificados.`);
-        res.json(unificados);
+        // Filtrar registros que estao na Blacklist
+        const blacklist = await getBlacklist();
+        const unificadosFiltrados = unificados.filter(u => {
+            const id = u.primeiraEtapa.id || `forms_${u.primeiraEtapa.email}`;
+            return !blacklist.includes(id);
+        });
+        
+        console.log(`[DEBUG] Gerados ${unificados.length} registros unificados. ${blacklist.length} filtrados pela Blacklist.`);
+        res.json(unificadosFiltrados);
     } catch (error) {
         console.error('[DEBUG] Erro ao gerar dados unificados:', error);
         res.status(500).json({ error: 'Erro ao gerar dados unificados' });
+    }
+});
+
+// Rota para adicionar um ID a Blacklist (exclusao visual)
+app.post('/api/admin/blacklist/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        if (!id || id === 'undefined') {
+            return res.status(400).json({ success: false, error: 'ID nao fornecido' });
+        }
+        const success = await addToBlacklist(id);
+        res.json({ success, message: 'Registro adicionado a lista de exclusao' });
+    } catch (error) {
+        console.error('Erro ao adicionar a Blacklist:', error.message);
+        res.status(500).json({ success: false, error: 'Erro ao adicionar a Blacklist' });
     }
 });
 
@@ -482,6 +546,9 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
                     await redis.del('agendamentos');
                     console.log(`✅ [Exclusão Geral] Redis limpo com sucesso`);
                 }
+                
+                // Limpar a Blacklist tambem
+                await clearBlacklist();
                 
                 console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos do calendário, ${agendamentos.length} registros removidos do banco de dados`);
             } catch (error) {
