@@ -437,42 +437,60 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
         const agendamentos = await getAgendamentos();
         console.log(`🗑️ [Exclusão Geral] Iniciando limpeza de ${agendamentos.length} agendamentos...`);
         
-        // Deletar eventos do Google Calendar
-        const allEvents = await calendar.events.list({
-            auth: googleAuthClient,
-            calendarId: CALENDAR_ID,
-            maxResults: 2500,
-            singleEvents: true
-        });
-        
-        let eventosDeletedos = 0;
-        for (const event of allEvents.data.items) {
-            try {
-                await calendar.events.delete({
-                    auth: googleAuthClient,
-                    calendarId: CALENDAR_ID,
-                    eventId: event.id
-                });
-                eventosDeletedos++;
-            } catch (error) {
-                console.warn(`⚠️ Erro ao deletar evento ${event.id}:`, error.message);
-            }
-        }
-        
-        // Limpar o Redis
-        if (redis) {
-            await redis.del('agendamentos');
-            console.log(`✅ [Exclusão Geral] Redis limpo com sucesso`);
-        }
-        
-        console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos do calendário, ${agendamentos.length} registros removidos do banco de dados`);
+        // Responder imediatamente ao cliente para evitar timeout
         res.json({ 
             success: true, 
-            message: `Limpeza concluída: ${eventosDeletedos} eventos removidos, ${agendamentos.length} registros apagados` 
+            message: 'Limpeza iniciada. O processo está sendo executado em segundo plano. Atualize a página em alguns segundos.' 
         });
+        
+        // Processar a exclusão em segundo plano
+        (async () => {
+            try {
+                // Deletar eventos do Google Calendar em paralelo (máximo 5 simultâneos)
+                const allEvents = await calendar.events.list({
+                    auth: googleAuthClient,
+                    calendarId: CALENDAR_ID,
+                    maxResults: 2500,
+                    singleEvents: true
+                });
+                
+                const events = allEvents.data.items || [];
+                console.log(`🗑️ [Exclusão Geral] Deletando ${events.length} eventos do calendário...`);
+                
+                let eventosDeletedos = 0;
+                const batchSize = 5;
+                
+                for (let i = 0; i < events.length; i += batchSize) {
+                    const batch = events.slice(i, i + batchSize);
+                    await Promise.all(
+                        batch.map(event => 
+                            calendar.events.delete({
+                                auth: googleAuthClient,
+                                calendarId: CALENDAR_ID,
+                                eventId: event.id
+                            }).then(() => {
+                                eventosDeletedos++;
+                            }).catch(error => {
+                                console.warn(`⚠️ Erro ao deletar evento ${event.id}:`, error.message);
+                            })
+                        )
+                    );
+                }
+                
+                // Limpar o Redis
+                if (redis) {
+                    await redis.del('agendamentos');
+                    console.log(`✅ [Exclusão Geral] Redis limpo com sucesso`);
+                }
+                
+                console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos do calendário, ${agendamentos.length} registros removidos do banco de dados`);
+            } catch (error) {
+                console.error('❌ Erro na exclusão geral em segundo plano:', error.message);
+            }
+        })();
     } catch (error) {
-        console.error('❌ Erro ao executar exclusão geral:', error.message);
-        res.status(500).json({ success: false, error: 'Erro ao executar exclusão geral' });
+        console.error('❌ Erro ao iniciar exclusão geral:', error.message);
+        res.status(500).json({ success: false, error: 'Erro ao iniciar exclusão geral' });
     }
 });
 
