@@ -247,17 +247,27 @@
         }
 
         async function deleteInscricao(index) {
-            const id = allUnificados[index].primeiraEtapa.id;
+            const item = allUnificados[index];
+            const id = item.primeiraEtapa.id;
+            
+            if (!id) {
+                alert('Erro: Esta inscrição não possui um ID válido para exclusão.');
+                return;
+            }
+
             if (!confirm('Tem certeza que deseja excluir esta inscrição?')) return;
             
             try {
+                // Tenta a exclusão normal primeiro
                 const response = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
-                if (response.ok) {
+                const result = await response.json();
+
+                if (response.ok && result.success) {
                     loadData();
                 } else {
-                    // Se falhar a exclusão normal (ex: registro legado), tenta a exclusão visual (Blacklist)
-                    console.log('Tentando exclusão visual (Blacklist)...');
-                    const blResponse = await fetch(`/api/admin/blacklist/${id}`, { method: 'POST' });
+                    // Se falhar a exclusão normal ou não encontrar no Redis, usa a Blacklist
+                    console.log('Usando exclusão visual (Blacklist) para ID:', id);
+                    const blResponse = await fetch(`/api/admin/blacklist/${encodeURIComponent(id)}`, { method: 'POST' });
                     if (blResponse.ok) {
                         loadData();
                     } else {
@@ -266,8 +276,8 @@
                 }
             } catch (error) {
                 console.error('Erro ao excluir:', error);
-                // Tenta exclusão visual em caso de erro de rede/servidor também
-                const blResponse = await fetch(`/api/admin/blacklist/${id}`, { method: 'POST' });
+                // Tenta Blacklist como último recurso
+                const blResponse = await fetch(`/api/admin/blacklist/${encodeURIComponent(id)}`, { method: 'POST' });
                 if (blResponse.ok) {
                     loadData();
                 } else {

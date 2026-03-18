@@ -46,6 +46,10 @@ const saveAgendamento = async (novoAgendamento) => {
     try {
         if (redis) {
             const agendamentos = await getAgendamentos();
+            // Garantir que o agendamento tenha um ID único
+            if (!novoAgendamento.id) {
+                novoAgendamento.id = `site_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
             agendamentos.push(novoAgendamento);
             await redis.set(AGENDAMENTOS_KEY, JSON.stringify(agendamentos));
             console.log("✅ [Redis] Agendamento salvo com sucesso. Dados:", JSON.stringify(novoAgendamento));
@@ -409,14 +413,17 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
         // Adicionar o que sobrou da segunda etapa (Forms)
         dataSegundaEtapa.forEach((s, idx) => {
-            const emailSheet = indicesEmail.length > 0 ? s[indicesEmail[0]] : 'N/A';
-            const telefoneSheet = indicesTelefone.length > 0 ? s[indicesTelefone[0]] : 'N/A';
-            const nomeEventoSheet = idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)';
-            const nomeProponenteSheet = idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms';
+            const emailSheet = (indicesEmail.length > 0 ? s[indicesEmail[0]] : 'N/A') || 'N/A';
+            const telefoneSheet = (indicesTelefone.length > 0 ? s[indicesTelefone[0]] : 'N/A') || 'N/A';
+            const nomeEventoSheet = (idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)') || 'Evento (Forms)';
+            const nomeProponenteSheet = (idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms') || 'Inscrição Forms';
+
+            // Gerar um ID determinístico baseado no conteúdo para que a Blacklist funcione
+            const deterministicId = `forms_${emailSheet.trim().toLowerCase()}_${nomeEventoSheet.trim().toLowerCase()}`.replace(/\s+/g, '_');
 
             unificados.push({
                 primeiraEtapa: { 
-                    id: `forms_${idx}_${Date.now()}`,
+                    id: deterministicId,
                     nome: nomeProponenteSheet,
                     email: emailSheet,
                     telefone: telefoneSheet,
@@ -432,8 +439,8 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         // Filtrar registros que estao na Blacklist
         const blacklist = await getBlacklist();
         const unificadosFiltrados = unificados.filter(u => {
-            const id = u.primeiraEtapa.id || `forms_${u.primeiraEtapa.email}`;
-            return !blacklist.includes(id);
+            const id = u.primeiraEtapa.id;
+            return id && !blacklist.includes(id);
         });
         
         console.log(`[DEBUG] Gerados ${unificados.length} registros unificados. ${blacklist.length} filtrados pela Blacklist.`);
