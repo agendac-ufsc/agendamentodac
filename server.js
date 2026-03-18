@@ -550,7 +550,7 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
                 
                 // Limpar o Redis
                 if (redis) {
-                    await redis.del('agendamentos');
+                    await redis.del(AGENDAMENTOS_KEY);
                     console.log(`✅ [Exclusão Geral] Redis limpo com sucesso`);
                 }
                 

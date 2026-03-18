@@ -299,14 +299,23 @@
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
 
             try {
-                const response = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
-                const result = await response.json();
-                if (response.ok) {
-                    alert(result.message || 'Limpeza geral concluída com sucesso!');
+                // Enviar requisição sem esperar resposta (fire-and-forget)
+                fetch('/api/admin/excluir-tudo', { method: 'DELETE' })
+                    .then(response => response.json())
+                    .then(result => {
+                        console.log('Limpeza iniciada:', result);
+                    })
+                    .catch(error => {
+                        console.error('Erro ao iniciar limpeza:', error);
+                    });
+                
+                // Mostrar mensagem de sucesso imediatamente
+                alert('Limpeza iniciada! O processo está sendo executado em segundo plano. Atualize a página em alguns segundos.');
+                
+                // Aguardar 3 segundos e recarregar
+                setTimeout(() => {
                     loadData();
-                } else {
-                    alert('Erro ao realizar exclusão geral: ' + (result.error || 'Erro desconhecido'));
-                }
+                }, 3000);
             } catch (error) {
                 console.error('Erro ao excluir tudo:', error);
                 alert('Erro ao realizar exclusão geral.');
