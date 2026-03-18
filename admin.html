@@ -210,7 +210,7 @@
                             <button class="btn-action btn-contact" onclick="showContact(${originalIndex})" title="Ver Contato">
                                 <i class="far fa-address-card"></i>
                             </button>
-                            <button class="btn-action btn-delete" onclick="deleteInscricao(${originalIndex})" title="Excluir">
+                            <button class="btn-action btn-delete" onclick="deleteInscricao('${p.id}')" title="Excluir">
                                 <i class="far fa-trash-alt"></i>
                             </button>
                         </td>
@@ -246,9 +246,7 @@
             document.getElementById('contactModal').style.display = 'none';
         }
 
-        async function deleteInscricao(index) {
-            const item = allUnificados[index];
-            const id = item.primeiraEtapa.id;
+        async function deleteInscricao(id) {
             
             if (!id) {
                 alert('Erro: Esta inscrição não possui um ID válido para exclusão.');
