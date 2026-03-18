@@ -61,6 +61,58 @@ const deleteAgendamentoByEmail = async (email) => {
     try {
         if (redis) {
             const agendamentos = await getAgendamentos();
+            const agendamentoAExcluir = agendamentos.find(a => a.email === email);
+            
+            // Se encontrou o agendamento, tenta deletar os eventos do calendário
+            if (agendamentoAExcluir && agendamentoAExcluir.etapas) {
+                if (!googleAuthClient) await initGoogleAuth();
+                try {
+                    // Buscar todos os eventos do calendário para encontrar os que correspondem a este agendamento
+                    const allEvents = await calendar.events.list({
+                        auth: googleAuthClient,
+                        calendarId: CALENDAR_ID,
+                        maxResults: 2500,
+                        singleEvents: true
+                    });
+                    
+                    const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                    const eventosADeletar = [];
+                    
+                    // Identificar eventos que pertencem a este agendamento
+                    for (const key in agendamentoAExcluir.etapas) {
+                        const itens = Array.isArray(agendamentoAExcluir.etapas[key]) ? agendamentoAExcluir.etapas[key] : [agendamentoAExcluir.etapas[key]];
+                        itens.forEach((item, i) => {
+                            const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                            const eventSummary = `${label}: ${agendamentoAExcluir.evento}`;
+                            
+                            // Procurar eventos com este resumo
+                            const matchingEvents = allEvents.data.items.filter(e => 
+                                e.summary === eventSummary && 
+                                e.description && 
+                                e.description.includes(email)
+                            );
+                            eventosADeletar.push(...matchingEvents);
+                        });
+                    }
+                    
+                    // Deletar os eventos encontrados
+                    for (const event of eventosADeletar) {
+                        try {
+                            await calendar.events.delete({
+                                auth: googleAuthClient,
+                                calendarId: CALENDAR_ID,
+                                eventId: event.id
+                            });
+                            console.log(`✅ [Google Calendar] Evento deletado: ${event.summary}`);
+                        } catch (err) {
+                            console.error(`⚠️ [Google Calendar] Erro ao deletar evento ${event.id}:`, err.message);
+                        }
+                    }
+                } catch (calendarError) {
+                    console.error('⚠️ [Google Calendar] Erro ao processar exclusão de eventos:', calendarError.message);
+                }
+            }
+            
             const filtrados = agendamentos.filter(a => a.email !== email);
             await redis.set(AGENDAMENTOS_KEY, JSON.stringify(filtrados));
             console.log(`✅ [Redis] Agendamento de ${email} removido.`);
@@ -303,6 +355,24 @@ app.delete('/api/admin/excluir/:email', async (req, res) => {
     const { email } = req.params;
     const success = await deleteAgendamentoByEmail(email);
     res.json({ success });
+});
+
+// Rota alternativa para compatibilidade com admin.html (usando ID em vez de email)
+app.delete('/api/agendamentos/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const agendamentos = await getAgendamentos();
+        const agendamento = agendamentos.find(a => a.id === id);
+        if (agendamento) {
+            const success = await deleteAgendamentoByEmail(agendamento.email);
+            res.json({ success });
+        } else {
+            res.status(404).json({ success: false, error: 'Agendamento não encontrado' });
+        }
+    } catch (error) {
+        console.error('Erro ao deletar agendamento:', error.message);
+        res.status(500).json({ success: false, error: 'Erro ao deletar agendamento' });
+    }
 });
 
 const PORT = process.env.PORT || 3000;
