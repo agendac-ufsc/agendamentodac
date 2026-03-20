@@ -524,13 +524,17 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
                     segundaEtapa: { headers, valores: correspondencia },
-                    status: eventosExistem ? 'Completo' : 'Cancelado (Eventos Removidos)',
+                    // Se houver correspondência na planilha, o status é Completo, 
+                    // independente da verificação do calendário (que pode falhar por delay)
+                    status: 'Completo',
                     eventosExistem: eventosExistem
                 });
             } else {
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
                     segundaEtapa: null,
+                    // Se não houver correspondência, mas os eventos existem, está Pendente.
+                    // Se os eventos NÃO existem e NÃO há correspondência, aí sim é Cancelado.
                     status: eventosExistem ? 'Pendente (Falta Forms)' : 'Cancelado (Eventos Removidos)',
                     eventosExistem: eventosExistem
                 });

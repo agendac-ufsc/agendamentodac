@@ -228,7 +228,9 @@
                     statusClass = 'status-cancelado';
                     statusText = 'CANCELADO';
                     rowClass = 'row-cancelada';
-                    pdfDisabledClass = 'btn-disabled';
+                    // Removemos a desabilitação do PDF para que o administrador 
+                    // sempre possa acessar os dados, mesmo que o evento tenha sido removido do calendário.
+                    pdfDisabledClass = ''; 
                 }
 
                 const originalIndex = allUnificados.indexOf(item);
