@@ -204,9 +204,10 @@ const getConfigs = async () => {
             const data = await redis.get(CONFIG_KEY);
             if (data) {
                 const configs = JSON.parse(data);
-                SPREADSHEET_ID = configs.spreadsheetId || SPREADSHEET_ID;
+                // Garantir que o ID em memória esteja sempre limpo
+                SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
-                return configs;
+                return { spreadsheetId: SPREADSHEET_ID, formsLink: FORMS_LINK };
             }
         }
     } catch (error) {
@@ -217,11 +218,20 @@ const getConfigs = async () => {
 
 const extractSpreadsheetId = (input) => {
     if (!input) return null;
-    // Se já for apenas um ID (não contém barras), retorna ele mesmo
-    if (!input.includes('/')) return input.trim();
-    // Regex para extrair o ID entre /d/ e /edit (ou o final da URL)
-    const match = input.match(/\/d\/([a-zA-Z0-9-_]+)/);
-    return match ? match[1] : input.trim();
+    let id = input.trim();
+    
+    // Se for uma URL completa do Google Sheets
+    if (id.includes('/d/')) {
+        const match = id.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (match) return match[1];
+    }
+    
+    // Se for um link que começa direto pelo ID (ex: 1cQ0w.../edit)
+    if (id.includes('/')) {
+        return id.split('/')[0];
+    }
+    
+    return id;
 };
 
 const saveConfigs = async (configs) => {
