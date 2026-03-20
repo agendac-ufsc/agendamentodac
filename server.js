@@ -85,14 +85,18 @@ const verificarEventosNoCalendario = async (agendamento) => {
         }
         
         // Verificar se os eventos ainda existem no calendário
-        const eventosEncontrados = allEvents.data.items.filter(e => 
-            eventosEsperados.includes(e.summary) && 
-            e.description && 
-            e.description.includes(agendamento.email)
-        );
+        // Usamos uma lógica mais flexível: se encontrarmos QUALQUER evento que mencione o e-mail do proponente
+        // e tenha o nome do evento no título, consideramos que o agendamento ainda é válido.
+        const eventosEncontrados = allEvents.data.items.filter(e => {
+            const summaryMatch = e.summary && e.summary.toLowerCase().includes(agendamento.evento.toLowerCase());
+            const descriptionMatch = e.description && e.description.toLowerCase().includes(agendamento.email.toLowerCase());
+            return summaryMatch && descriptionMatch;
+        });
         
         // Se nenhum evento foi encontrado, significa que foram apagados
-        return eventosEncontrados.length > 0;
+        // Para agendamentos muito recentes (menos de 5 minutos), assumimos que existem (evita delay de propagação do Google)
+        const isRecent = agendamento.id && (Date.now() - parseInt(agendamento.id)) < 300000;
+        return eventosEncontrados.length > 0 || isRecent;
     } catch (error) {
         console.error('⚠️ [Google Calendar] Erro ao verificar eventos:', error.message);
         return true; // Assume que existem para não quebrar o fluxo
