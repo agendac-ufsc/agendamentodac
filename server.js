@@ -426,7 +426,16 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
                 await getConfigs(); // Garantir que temos o ID mais recente
-        const response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:ZZ' });
+        let response;
+        try {
+            response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:ZZ' });
+        } catch (sheetError) {
+            console.warn('⚠️ [Sheets] Aba "Respostas ao formulário 1" não encontrada, tentando primeira aba disponível.');
+            // Se a aba específica não existir, tenta pegar a primeira aba da planilha
+            const meta = await sheets.spreadsheets.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID });
+            const firstSheetName = meta.data.sheets[0].properties.title;
+            response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: `${firstSheetName}!A:ZZ` });
+        }
         const rows = response.data.values || [];
         const headers = rows[0] || []; console.log("DEBUG: Headers encontrados:", headers.length, headers.slice(0, 5));
         const dataSegundaEtapa = rows.slice(1); console.log("DEBUG: Linhas de dados encontradas:", dataSegundaEtapa.length);
@@ -437,10 +446,18 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             return acc;
         }, []);
 
-        const indicesEmail = findIndices(['endereço de e-mail', 'e-mail', 'email']);
-        const indicesTelefone = findIndices(['telefone', 'celular', 'contato']);
-        const idxNomeEventoSheet = headers.findIndex(h => h.toLowerCase().includes('nome do evento') || h.toLowerCase().includes('título do projeto'));
-        const idxNomeProponenteSheet = headers.findIndex(h => h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante'));
+        const indicesEmail = findIndices(['endereço de e-mail', 'e-mail', 'email', 'e mail']);
+        const indicesTelefone = findIndices(['telefone', 'celular', 'contato', 'phone', 'whatsapp', 'mobile']);
+        const idxNomeEventoSheet = headers.findIndex(h => 
+            h.toLowerCase().includes('nome do evento') || 
+            h.toLowerCase().includes('título do projeto') ||
+            h.toLowerCase().includes('event name') ||
+            h.toLowerCase().includes('project title')
+        );
+        const idxNomeProponenteSheet = headers.findIndex(h => 
+            (h.toLowerCase().includes('nome completo') && !h.toLowerCase().includes('representante')) ||
+            h.toLowerCase().includes('full name')
+        );
 
         const mapeamentoLocais = { 'oto.bezerra@ufsc.br': 'Teatro' };
         const agendamentosPrimeiraEtapa = await getAgendamentos();

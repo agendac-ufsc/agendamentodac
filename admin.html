@@ -120,11 +120,19 @@
             try {
                 const response = await fetch('/api/admin/dados-unificados');
                 const data = await response.json();
-                allUnificados = data;
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                allUnificados = Array.isArray(data) ? data : [];
                 renderizarTabela();
             } catch (error) {
                 console.error('Erro ao carregar dados:', error);
-                content.innerHTML = '<p style="color:red; text-align:center; padding:20px;">Erro ao carregar dados. Verifique o console.</p>';
+                content.innerHTML = `<div style="color:#d9534f; text-align:center; padding:40px; background:#fff5f5; border-radius:8px; border:1px solid #fabebc;">
+                    <i class="fas fa-exclamation-triangle" style="font-size:30px; margin-bottom:15px;"></i>
+                    <p><strong>Erro ao carregar dados unificados</strong></p>
+                    <p style="font-size:13px; margin-top:10px;">${error.message || 'Verifique se a planilha está compartilhada com o e-mail de serviço e se o link está correto.'}</p>
+                    <button onclick="loadData()" class="refresh-btn" style="margin:20px auto 0; background:#d9534f;">Tentar Novamente</button>
+                </div>`;
             }
         }
 
