@@ -602,9 +602,19 @@
                     secondStepBtn.textContent = 'Ir para Segunda Etapa (Google Forms)';
                     
                     msg.after(secondStepBtn);
+
+                    // Adicionar botão de "Fazer Outra Inscrição" para resetar o formulário
+                    const resetBtn = document.createElement('button');
+                    resetBtn.type = 'button';
+                    resetBtn.className = 'submit';
+                    resetBtn.style.background = '#6c757d';
+                    resetBtn.style.marginTop = '10px';
+                    resetBtn.textContent = 'Fazer Outra Inscrição (Limpar Formulário)';
+                    resetBtn.onclick = () => location.reload();
+                    secondStepBtn.after(resetBtn);
                     
-                    // Não recarregar a página automaticamente para que o usuário possa clicar no botão
-                    // setTimeout(() => location.reload(), 3000);
+                    // Esconder o botão de finalizar original para não confundir
+                    submitBtn.style.display = 'none';
                 } else {
                     const result = await res.json();
                     msg.textContent = '❌ Erro: ' + result.error;
