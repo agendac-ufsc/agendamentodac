@@ -428,13 +428,32 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 await getConfigs(); // Garantir que temos o ID mais recente
         let response;
         try {
-            response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: 'Respostas ao formulário 1!A:ZZ' });
+            // Tentar primeiro a aba padrão
+            response = await sheets.spreadsheets.values.get({ 
+                auth: googleAuthClient, 
+                spreadsheetId: SPREADSHEET_ID, 
+                range: 'Respostas ao formulário 1!A:ZZ' 
+            });
         } catch (sheetError) {
-            console.warn('⚠️ [Sheets] Aba "Respostas ao formulário 1" não encontrada, tentando primeira aba disponível.');
-            // Se a aba específica não existir, tenta pegar a primeira aba da planilha
-            const meta = await sheets.spreadsheets.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID });
-            const firstSheetName = meta.data.sheets[0].properties.title;
-            response = await sheets.spreadsheets.values.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID, range: `${firstSheetName}!A:ZZ` });
+            console.warn('⚠️ [Sheets] Aba "Respostas ao formulário 1" não encontrada, tentando fallback...');
+            try {
+                // Fallback: Pegar a primeira aba disponível dinamicamente
+                const meta = await sheets.spreadsheets.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID });
+                if (meta.data && meta.data.sheets && meta.data.sheets.length > 0) {
+                    const firstSheetName = meta.data.sheets[0].properties.title;
+                    console.log(`[Sheets] Tentando aba: ${firstSheetName}`);
+                    response = await sheets.spreadsheets.values.get({ 
+                        auth: googleAuthClient, 
+                        spreadsheetId: SPREADSHEET_ID, 
+                        range: `'${firstSheetName}'!A:ZZ` 
+                    });
+                } else {
+                    throw new Error('Nenhuma aba encontrada na planilha.');
+                }
+            } catch (fallbackError) {
+                console.error('❌ [Sheets] Erro crítico ao acessar planilha:', fallbackError.message);
+                return res.status(404).json({ error: 'Não foi possível ler a planilha. Verifique se ela está compartilhada com o e-mail de serviço e se o link está correto.' });
+            }
         }
         const rows = response.data.values || [];
         const headers = rows[0] || []; console.log("DEBUG: Headers encontrados:", headers.length, headers.slice(0, 5));
@@ -499,29 +518,38 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             }
         }
 
-        // Adicionar o que sobrou da segunda etapa (Forms)
+        // Adicionar o que sobrou da segunda etapa (Forms) - apenas os que não foram unificados ainda
         dataSegundaEtapa.forEach((s, idx) => {
-            const emailSheet = (indicesEmail.length > 0 ? s[indicesEmail[0]] : 'N/A') || 'N/A';
-            const telefoneSheet = (indicesTelefone.length > 0 ? s[indicesTelefone[0]] : 'N/A') || 'N/A';
-            const nomeEventoSheet = (idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)') || 'Evento (Forms)';
-            const nomeProponenteSheet = (idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms') || 'Inscrição Forms';
-
-            // Gerar um ID determinístico baseado no conteúdo para que a Blacklist funcione
-            const deterministicId = `forms_${emailSheet.trim().toLowerCase()}_${nomeEventoSheet.trim().toLowerCase()}`.replace(/\s+/g, '_');
-
-            unificados.push({
-                primeiraEtapa: { 
-                    id: deterministicId,
-                    nome: nomeProponenteSheet,
-                    email: emailSheet,
-                    telefone: telefoneSheet,
-                    evento: nomeEventoSheet,
-                    etapas: {},
-                    isLegada: true 
-                },
-                segundaEtapa: { headers, valores: s },
-                status: 'Completo (Forms)'
+            const emailSheet = (indicesEmail.length > 0 ? (s[indicesEmail[0]] || '').trim().toLowerCase() : '');
+            const telefoneSheet = (indicesTelefone.length > 0 ? (s[indicesTelefone[0]] || '').replace(/\D/g, '') : '');
+            
+            // Verificar se já foi unificado (pelo email ou telefone)
+            const jaUnificado = unificados.some(u => {
+                const uEmail = (u.primeiraEtapa.email || '').trim().toLowerCase();
+                const uTelefone = (u.primeiraEtapa.telefone || '').replace(/\D/g, '');
+                return (emailSheet && uEmail === emailSheet) || (telefoneSheet && uTelefone === telefoneSheet);
             });
+
+            if (!jaUnificado) {
+                const nomeEventoSheet = (idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)') || 'Evento (Forms)';
+                const nomeProponenteSheet = (idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms') || 'Inscrição Forms';
+
+                const deterministicId = `forms_${(emailSheet || 'noemail')}_${nomeEventoSheet.trim().toLowerCase()}`.replace(/\s+/g, '_');
+
+                unificados.push({
+                    primeiraEtapa: { 
+                        id: deterministicId,
+                        nome: nomeProponenteSheet,
+                        email: emailSheet || 'N/A',
+                        telefone: (indicesTelefone.length > 0 ? s[indicesTelefone[0]] : 'N/A') || 'N/A',
+                        evento: nomeEventoSheet,
+                        etapas: {},
+                        isLegada: true 
+                    },
+                    segundaEtapa: { headers, valores: s },
+                    status: 'Completo (Forms)'
+                });
+            }
         });
 
         // Filtrar registros que estao na Blacklist
