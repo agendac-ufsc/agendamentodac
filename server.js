@@ -234,8 +234,13 @@ const saveConfigs = async (configs) => {
         FORMS_LINK = configs.formsLink || FORMS_LINK;
 
         if (redis) {
-            await redis.set(CONFIG_KEY, JSON.stringify(configs));
-            console.log('✅ [Redis] Configurações persistidas.');
+            // Persistir o ID limpo e o link do forms
+            const configToSave = {
+                spreadsheetId: cleanSpreadsheetId,
+                formsLink: FORMS_LINK
+            };
+            await redis.set(CONFIG_KEY, JSON.stringify(configToSave));
+            console.log('✅ [Redis] Configurações persistidas com ID limpo:', cleanSpreadsheetId);
         } else {
             console.warn('⚠️ [Config] Salvo apenas em memória (Redis indisponível).');
         }
