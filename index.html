@@ -192,9 +192,10 @@
         let googleEvents = [];
         let permitirDisputa = true; // Padrão
 	        let horariosLimites = {
-	            ensaio: { inicio: '08:00', fim: '21:00' },
-	            montagem: { inicio: '08:00', fim: '21:00' },
-	            desmontagem: { inicio: '08:00', fim: '21:00' }
+	            ensaio: { fim: '17:00' },
+	            montagem: { fim: '21:00' },
+	            evento: { fim: '22:00' },
+	            desmontagem: { fim: '21:00' }
 	        };
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
 
@@ -380,26 +381,33 @@
             }
         }
 
-        function renderTimeSlots(step) {
-            const container = document.getElementById(`slots-${step}`);
-            container.innerHTML = '';
-            const sel = selections[step];
-            if (!sel.date) return;
-
-            const dateStr = sel.date.toISOString().split('T')[0];
-            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
-
-            const hLimit = horariosLimites[step] || { inicio: '08:00', fim: '21:00' };
-            const minTime = parseInt(hLimit.inicio.replace(':', ''));
-            const maxTime = parseInt(hLimit.fim.replace(':', ''));
-
-            for (let h = 0; h <= 23; h++) {
-                [0, 30].forEach(m => {
-                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                    const timeVal = parseInt(time.replace(':', ''));
-                    
-                    if (timeVal < minTime || timeVal > maxTime) return;
-                    if (h === 23 && m === 30) return; // Limite máximo absoluto
+	        function renderTimeSlots(step) {
+	            const container = document.getElementById(`slots-${step}`);
+	            container.innerHTML = '';
+	            const sel = selections[step];
+	            if (!sel.date) return;
+	
+	            const dateStr = sel.date.toISOString().split('T')[0];
+	            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+	
+	            const hLimit = horariosLimites[step] || { fim: '21:00' };
+	            const minTime = 800; // Início fixo às 08:00
+	            const maxTime = parseInt(hLimit.fim.replace(':', ''));
+	            
+	            // Regra de 1 hora de diferença para o início
+	            const maxStartTime = maxTime - 100;
+	
+	            for (let h = 0; h <= 23; h++) {
+	                [0, 30].forEach(m => {
+	                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+	                    const timeVal = parseInt(time.replace(':', ''));
+	                    
+	                    if (timeVal < minTime || timeVal > maxTime) return;
+	                    
+	                    // Se estivermos selecionando o horário de INÍCIO, respeitar o maxStartTime
+	                    if (!sel.start && timeVal > maxStartTime) return;
+	                    
+	                    if (h === 23 && m === 30) return; // Limite máximo absoluto
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
                     slot.textContent = time;

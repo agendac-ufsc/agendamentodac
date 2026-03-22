@@ -183,24 +183,21 @@
                         <div class="horario-row">
                             <span class="horario-label">Ensaio:</span>
                             <div class="horario-input-wrapper">
-                                <input type="text" id="h-ensaio-inicio" class="horario-input" placeholder="08:00" value="08:00">
-                                <span class="horario-sep">-</span>
-                                <input type="text" id="h-ensaio-fim" class="horario-input" placeholder="21:00" value="21:00">
+                                <span style="font-size: 13px; color: #888;">Limite Final:</span>
+                                <input type="text" id="h-ensaio-fim" class="horario-input" placeholder="17:00" value="17:00">
                             </div>
                         </div>
                         <div class="horario-row">
                             <span class="horario-label">Montagem:</span>
                             <div class="horario-input-wrapper">
-                                <input type="text" id="h-montagem-inicio" class="horario-input" placeholder="08:00" value="08:00">
-                                <span class="horario-sep">-</span>
+                                <span style="font-size: 13px; color: #888;">Limite Final:</span>
                                 <input type="text" id="h-montagem-fim" class="horario-input" placeholder="21:00" value="21:00">
                             </div>
                         </div>
                         <div class="horario-row">
                             <span class="horario-label">Desmontagem:</span>
                             <div class="horario-input-wrapper">
-                                <input type="text" id="h-desmontagem-inicio" class="horario-input" placeholder="08:00" value="08:00">
-                                <span class="horario-sep">-</span>
+                                <span style="font-size: 13px; color: #888;">Limite Final:</span>
                                 <input type="text" id="h-desmontagem-fim" class="horario-input" placeholder="21:00" value="21:00">
                             </div>
                         </div>
@@ -345,15 +342,12 @@
 	                document.getElementById('configSpreadsheetId').value = config.spreadsheetId || '';
 	                document.getElementById('configPermitirDisputa').checked = config.permitirDisputa !== false;
 	                
-	                if (config.horariosLimites) {
-	                    const hl = config.horariosLimites;
-	                    document.getElementById('h-ensaio-inicio').value = hl.ensaio?.inicio || '08:00';
-	                    document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '21:00';
-	                    document.getElementById('h-montagem-inicio').value = hl.montagem?.inicio || '08:00';
+		                if (config.horariosLimites) {
+		                    const hl = config.horariosLimites;
+		                    document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
 		                    document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
-		                    document.getElementById('h-desmontagem-inicio').value = hl.desmontagem?.inicio || '08:00';
-	                    document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
-	                }
+		                    document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
+		                }
 
 	                switchTab('forms');
                 document.getElementById('configModal').style.display = 'flex';
@@ -367,11 +361,11 @@
                 formsLink: document.getElementById('configFormsLink').value,
                 spreadsheetId: document.getElementById('configSpreadsheetId').value,
                 permitirDisputa: document.getElementById('configPermitirDisputa').checked,
-                horariosLimites: {
-	                    ensaio: { inicio: document.getElementById('h-ensaio-inicio').value, fim: document.getElementById('h-ensaio-fim').value },
-	                    montagem: { inicio: document.getElementById('h-montagem-inicio').value, fim: document.getElementById('h-montagem-fim').value },
-	                    desmontagem: { inicio: document.getElementById('h-desmontagem-inicio').value, fim: document.getElementById('h-desmontagem-fim').value }
-                }
+	                horariosLimites: {
+		                    ensaio: { fim: document.getElementById('h-ensaio-fim').value },
+		                    montagem: { fim: document.getElementById('h-montagem-fim').value },
+		                    desmontagem: { fim: document.getElementById('h-desmontagem-fim').value }
+	                }
             };
             try {
                 const res = await fetch('/api/admin/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

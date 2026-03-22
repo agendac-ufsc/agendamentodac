@@ -267,13 +267,17 @@ const saveConfigs = async (configs) => {
         if (configs.permitirDisputa !== undefined) {
             PERMITIR_DISPUTA = configs.permitirDisputa;
         }
+        if (configs.horariosLimites) {
+            HORARIOS_LIMITES = configs.horariosLimites;
+        }
 
         if (redis) {
             // Persistir as configurações
             const configToSave = {
                 spreadsheetId: cleanSpreadsheetId,
                 formsLink: FORMS_LINK,
-                permitirDisputa: PERMITIR_DISPUTA
+                permitirDisputa: PERMITIR_DISPUTA,
+                horariosLimites: HORARIOS_LIMITES
             };
             await redis.set(CONFIG_KEY, JSON.stringify(configToSave));
             console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
