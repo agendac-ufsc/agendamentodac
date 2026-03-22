@@ -130,34 +130,34 @@
     </div>
 
     <!-- Modal Adicionar Outro -->
-	    <div class="modal-overlay" id="modalAddAnother">
-	        <div class="modal-content">
-	            <h2 id="modalAddTitle" style="color: #764ba2; margin-bottom: 10px;">Adicionado!</h2>
-	            <p id="modalAddText" style="color: #666; margin-bottom: 20px;">Deseja adicionar outro?</p>
-	            <div class="modal-actions">
-	                <button type="button" class="btn-modal btn-yes" id="btnAddYes">Sim</button>
-	                <button type="button" class="btn-modal btn-no" id="btnAddNo">Não</button>
-	            </div>
-	        </div>
-	    </div>
-	
-	    <div class="modal-overlay" id="modalCalendar">
-	        <div class="modal-content" style="max-width: 900px; width: 95%;">
-	            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-	                <h2 style="color: #764ba2; margin: 0;">Calendário de Eventos</h2>
-	                <button type="button" onclick="document.getElementById('modalCalendar').style.display='none'" style="background: #eee; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Fechar</button>
-	            </div>
-	            <iframe src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="500" frameborder="0" scrolling="no"></iframe>
-	        </div>
-	    </div>
+    <div class="modal-overlay" id="modalAddAnother">
+        <div class="modal-content">
+            <h2 id="modalAddTitle" style="color: #764ba2; margin-bottom: 10px;">Adicionado!</h2>
+            <p id="modalAddText" style="color: #666; margin-bottom: 20px;">Deseja adicionar outro?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-yes" id="btnAddYes">Sim</button>
+                <button type="button" class="btn-modal btn-no" id="btnAddNo">Não</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalCalendar">
+        <div class="modal-content" style="max-width: 900px; width: 95%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #764ba2; margin: 0;">Calendário de Eventos</h2>
+                <button type="button" onclick="document.getElementById('modalCalendar').style.display='none'" style="background: #eee; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Fechar</button>
+            </div>
+            <iframe src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="500" frameborder="0" scrolling="no"></iframe>
+        </div>
+    </div>
 
     <div class="container">
-	        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
-	            <h1 style="margin-bottom: 0;">📅 Inscrição de Projeto</h1>
-	            <button type="button" onclick="document.getElementById('modalCalendar').style.display='flex'" style="background: #764ba2; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px;">
-	                <i class="fas fa-calendar-alt"></i> Ver Calendário
-	            </button>
-	        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <h1 style="margin-bottom: 0;">📅 Inscrição de Projeto</h1>
+            <button type="button" onclick="document.getElementById('modalCalendar').style.display='flex'" style="background: #764ba2; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-calendar-alt"></i> Ver Calendário
+            </button>
+        </div>
         <form id="agendamentoForm">
             <div class="form-group"><label>Nome Completo *</label><input type="text" id="nome" required></div>
             <div class="form-group"><label>E-mail *</label><input type="email" id="email" required></div>
@@ -196,8 +196,7 @@
             montagem: { fim: '21:00' },
             desmontagem: { fim: '21:00' }
         };
-        let datasBloqueadas = [];	            desmontagem: { fim: '21:00' }
-	        };
+        let datasBloqueadas = [];
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
 
         steps.forEach(s => {
@@ -206,22 +205,20 @@
 
         async function fetchAvailability() {
             try {
-                // Buscar configurações primeiro para saber se permite disputa
                 const configRes = await fetch('/api/config');
-if (configRes.ok) {
+                if (configRes.ok) {
                     const config = await configRes.json();
                     permitirDisputa = config.permitirDisputa !== false;
                     if (config.horariosLimites) horariosLimites = config.horariosLimites;
                     datasBloqueadas = config.datasBloqueadas || [];
-	                    
-	                    // Atualizar aviso de atenção se disputa estiver desativada
+                    
                     const aviso = document.querySelector('div[style*="background: #fff3cd"]');
                     if (aviso) {
                         if (permitirDisputa) {
                             aviso.style.display = 'block';
                             aviso.innerHTML = '<strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.';
                         } else {
-                            aviso.style.display = 'none'; // Esconde o aviso de disputa se ela não for permitida
+                            aviso.style.display = 'none';
                         }
                     }
                 }
@@ -242,9 +239,7 @@ if (configRes.ok) {
             }
         }
 
-        // Buscar disponibilidade ao carregar
         fetchAvailability();
-        // Atualizar a cada 2 minutos
         setInterval(fetchAvailability, 120000);
 
         function initAccordion() {
@@ -284,7 +279,7 @@ if (configRes.ok) {
                     content.classList.toggle('show', !isShowing);
                     header.classList.toggle('active', !isShowing);
                     if (!isShowing) {
-                        fetchAvailability(); // Atualizar ao abrir aba
+                        fetchAvailability();
                         renderStepCalendar(s);
                     }
                 } else {
@@ -338,34 +333,29 @@ if (configRes.ok) {
                         d.title = 'Data bloqueada administrativamente';
                         d.onclick = null;
                         d.style.cursor = 'not-allowed';
-                        grid.appendChild(d);
-                        return;
-                    }
-                    
-                    // Verificar se o usuário já selecionou algo neste dia
-                    let isUserSelected = false;
-                    steps.forEach(s => {
-                        confirmedSteps[s].forEach(conf => {
-                            if (conf.date.toDateString() === date.toDateString()) isUserSelected = true;
+                    } else {
+                        let isUserSelected = false;
+                        steps.forEach(s => {
+                            confirmedSteps[s].forEach(conf => {
+                                if (conf.date.toDateString() === date.toDateString()) isUserSelected = true;
+                            });
                         });
-                    });
-                    if (isUserSelected) d.classList.add('user-selected');
+                        if (isUserSelected) d.classList.add('user-selected');
 
-                    // Verificar ocupação no Google Calendar
-                    const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
-                    if (eventsOnDay.length > 0) {
-                        if (eventsOnDay.length >= 15) d.classList.add('busy-full');
-                        else d.classList.add('busy-partial');
-                        
-                        // Se disputa não for permitida e o dia estiver cheio, desabilita clique
-                        if (!permitirDisputa && eventsOnDay.length >= 15) {
-                            d.onclick = null;
-                            d.style.cursor = 'not-allowed';
+                        const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+                        if (eventsOnDay.length > 0) {
+                            if (eventsOnDay.length >= 15) d.classList.add('busy-full');
+                            else d.classList.add('busy-partial');
+                            
+                            if (!permitirDisputa && eventsOnDay.length >= 15) {
+                                d.onclick = null;
+                                d.style.cursor = 'not-allowed';
+                            }
                         }
-                    }
 
-                    d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
-                    if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
+                        d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
+                        if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
+                    }
                 }
                 grid.appendChild(d);
             }
@@ -384,7 +374,6 @@ if (configRes.ok) {
             renderTimeSlots(step);
             updateStepUI(step);
             
-            // Rolagem automática para os slots de horário
             const slotsElement = document.getElementById(`slots-${step}`);
             if (slotsElement) {
                 setTimeout(() => {
@@ -393,110 +382,66 @@ if (configRes.ok) {
             }
         }
 
-	        function renderTimeSlots(step) {
-	            const container = document.getElementById(`slots-${step}`);
-	            container.innerHTML = '';
-	            const sel = selections[step];
-	            if (!sel.date) return;
-	
-	            const dateStr = sel.date.toISOString().split('T')[0];
-	            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
-	
-	            const hLimit = horariosLimites[step] || { fim: '21:00' };
-	            const minTime = 800; // Início fixo às 08:00
-	            const maxTime = parseInt(hLimit.fim.replace(':', ''));
-	            
-	            // Regra de 1 hora de diferença para o início
-	            const maxStartTime = maxTime - 100;
-	
-	            for (let h = 0; h <= 23; h++) {
-	                [0, 30].forEach(m => {
-	                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-	                    const timeVal = parseInt(time.replace(':', ''));
-	                    
-	                    if (timeVal < minTime || timeVal > maxTime) return;
-	                    
-	                    // Se estivermos selecionando o horário de INÍCIO, respeitar o maxStartTime
-	                    if (!sel.start && timeVal > maxStartTime) return;
-	                    
-	                    if (h === 23 && m === 30) return; // Limite máximo absoluto
+        function renderTimeSlots(step) {
+            const container = document.getElementById(`slots-${step}`);
+            container.innerHTML = '';
+            const sel = selections[step];
+            if (!sel.date) return;
+
+            const dateStr = sel.date.toISOString().split('T')[0];
+            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+
+            const hLimit = horariosLimites[step] || { fim: '21:00' };
+            const minTime = 800;
+            const maxTime = parseInt(hLimit.fim.replace(':', ''));
+            const maxStartTime = maxTime - 100;
+
+            for (let h = 0; h <= 23; h++) {
+                for (let m = 0; m < 60; m += 30) {
+                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                    const timeVal = parseInt(time.replace(':', ''));
+                    
+                    if (timeVal < minTime || timeVal > maxTime) continue;
+                    if (!sel.start && timeVal > maxStartTime) continue;
+
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
                     slot.textContent = time;
 
-                    const slotStart = new Date(`${dateStr}T${time}:00-03:00`);
-                    const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
-                    
-	                    // Verificar se o horário está ocupado no Google
-	                    const eventsAtThisSlot = googleEvents.filter(e => {
-	                        const eStart = new Date(e.start);
-	                        const eEnd = new Date(e.end);
-	                        return (slotStart.getTime() < eEnd.getTime()) && (slotEnd.getTime() > eStart.getTime());
-	                    });
-	                    const isBusy = eventsAtThisSlot.length > 0;
-	                    
-	                    // Verificar se TODOS os eventos neste slot são disputáveis (vieram do site)
-	                    // Um evento é considerado do site se tiver "Proponente:" na descrição
-	                    const allEventsAreDisputable = isBusy && eventsAtThisSlot.every(e => 
-	                        e.description && e.description.includes('Proponente:')
-	                    );
-
-                    // Verificar se o usuário já selecionou este horário em QUALQUER etapa
-                    let isUserBusy = false;
-                    steps.forEach(s => {
-                        confirmedSteps[s].forEach(conf => {
-                            if (conf.date.toDateString() === sel.date.toDateString()) {
-                                const sVal = parseInt(conf.start.replace(':', ''));
-                                const eVal = parseInt(conf.end.replace(':', ''));
-                                const cVal = parseInt(time.replace(':', ''));
-                                if (cVal >= sVal && cVal < eVal) isUserBusy = true;
-                            }
-                        });
+                    const isBusy = eventsOnDay.some(e => {
+                        const start = parseInt(e.start.split('T')[1].substring(0,5).replace(':', ''));
+                        const end = parseInt(e.end.split('T')[1].substring(0,5).replace(':', ''));
+                        return timeVal >= start && timeVal < end;
                     });
 
-	                    if (isBusy) {
-	                        slot.classList.add('busy');
-	                        // Se disputa não for permitida OU houver evento fixo (não disputável), bloqueia
-	                        if (!permitirDisputa || !allEventsAreDisputable) {
-	                            slot.onclick = null;
-	                            slot.style.cursor = 'not-allowed';
-	                            slot.title = !allEventsAreDisputable ? "Horário bloqueado (Evento Fixo DAC)" : "Horário já ocupado";
-	                        } else {
-	                            // Apenas se permitirDisputa for true E todos os eventos forem do site
-	                            slot.classList.add('dispute');
-	                            slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
-	                            slot.title = "Horário em disputa";
-	                        }
-	                    } else if (isUserBusy) {
-                        slot.classList.add('user-busy');
-                        slot.title = "Você já selecionou este horário";
-                    } else {
-                        if (sel.start === time || sel.end === time) slot.classList.add('selected');
-
-                        if (sel.start && !sel.end) {
-                            const sVal = parseInt(sel.start.replace(':', ''));
-                            const cVal = parseInt(time.replace(':', ''));
-                            if (cVal <= sVal) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
-                            else { 
-                                // Bloquear se houver um agendamento do próprio usuário entre o início e este slot
-                                let hasUserConflict = false;
-                                steps.forEach(s => {
-                                    confirmedSteps[s].forEach(conf => {
-                                        if (conf.date.toDateString() === sel.date.toDateString()) {
-                                            const confS = parseInt(conf.start.replace(':', ''));
-                                            if (confS > sVal && confS < cVal) hasUserConflict = true;
-                                        }
-                                    });
-                                });
-                                if (hasUserConflict) { slot.style.opacity = '0.3'; slot.style.cursor = 'not-allowed'; }
-                                else { slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); }; }
-                            }
+                    if (isBusy) {
+                        if (permitirDisputa) {
+                            slot.classList.add('dispute');
+                            slot.title = 'Horário já solicitado (Permite disputa)';
                         } else {
-                            slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
+                            slot.classList.add('busy');
+                            slot.onclick = null;
+                            container.appendChild(slot);
+                            continue;
                         }
                     }
+
+                    if (sel.start === time) slot.classList.add('selected');
+                    if (sel.end === time) slot.classList.add('selected');
+                    
+                    if (sel.start && !sel.end) {
+                        const sVal = parseInt(sel.start.replace(':', ''));
+                        if (timeVal > sVal && timeVal <= maxTime) {
+                            slot.onclick = () => selectTime(step, time);
+                        } else {
+                            slot.style.opacity = '0.3';
+                            slot.style.cursor = 'not-allowed';
+                        }
+                    } else {
+                        slot.onclick = () => selectTime(step, time);
+                    }
                     container.appendChild(slot);
-                });
+                }
             }
         }
 
@@ -606,7 +551,6 @@ if (configRes.ok) {
             }
         }
 
-        // Modal Handlers
         document.getElementById('btnStartOk').onclick = () => document.getElementById('modalStart').style.display = 'none';
         
         document.getElementById('btnAddYes').onclick = () => {
@@ -639,7 +583,6 @@ if (configRes.ok) {
             const loading = document.getElementById('loading');
             const msg = document.getElementById('message');
             
-            // Proteção contra cliques duplos e submissões múltiplas
             if (submitBtn.getAttribute('data-submitting') === 'true') return;
             submitBtn.setAttribute('data-submitting', 'true');
             submitBtn.disabled = true;
@@ -674,7 +617,6 @@ if (configRes.ok) {
                     msg.textContent = '✅ Primeira etapa concluída com sucesso!';
                     msg.className = 'message success';
                     
-                    // Buscar link do forms configurado
                     let formsLink = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
                     try {
                         const configRes = await fetch('/api/config');
@@ -684,7 +626,6 @@ if (configRes.ok) {
                         console.error('Erro ao buscar link do forms:', e);
                     }
 
-                    // Criar e exibir o botão para a segunda etapa
                     const secondStepBtn = document.createElement('a');
                     secondStepBtn.href = formsLink;
                     secondStepBtn.target = '_blank';
@@ -698,7 +639,6 @@ if (configRes.ok) {
                     
                     msg.after(secondStepBtn);
 
-                    // Adicionar botão de "Fazer Outra Inscrição" para resetar o formulário
                     const resetBtn = document.createElement('button');
                     resetBtn.type = 'button';
                     resetBtn.className = 'submit';
@@ -708,7 +648,6 @@ if (configRes.ok) {
                     resetBtn.onclick = () => location.reload();
                     secondStepBtn.after(resetBtn);
                     
-                    // Esconder o botão de finalizar original para não confundir
                     submitBtn.style.display = 'none';
                 } else {
                     const result = await res.json();
