@@ -95,7 +95,8 @@
             <div class="modal-body">
                 <div style="display: flex; border-bottom: 1px solid #eee; margin-bottom: 20px;">
                     <button onclick="switchTab('forms')" id="tab-forms" style="padding: 10px 20px; border: none; background: #764ba2; color: white; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Formulários</button>
-                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Regras do Calendário</button>
+                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Regras do Calendário</button>
+                    <button onclick="switchTab('horarios')" id="tab-horarios" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Controle de Horários</button>
                 </div>
 
                 <div id="content-forms">
@@ -129,6 +130,45 @@
                                     #configPermitirDisputa:checked + label:before { transform: translateX(26px); }
                                 </style>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="content-horarios" style="display: none;">
+                    <p style="margin-bottom: 15px; font-size: 14px; color: #666;"><i class="fas fa-clock"></i> <strong>Controle de Horários e Datas</strong></p>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
+                        <h4 style="font-size: 14px; color: #333; margin-bottom: 10px;">Horários Limite por Etapa</h4>
+                        <p style="font-size: 11px; color: #666; margin-bottom: 15px;">Defina o horário de início mais cedo e o horário de fim mais tarde permitidos para cada tipo de agendamento.</p>
+                        
+                        <style>
+                            .horario-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+                            .horario-label { width: 100px; font-size: 13px; font-weight: bold; color: #555; }
+                            .horario-input { width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+                        </style>
+
+                        <div class="horario-row">
+                            <span class="horario-label">Ensaio:</span>
+                            <input type="text" id="h-ensaio-inicio" class="horario-input" placeholder="08:00">
+                            <span>-</span>
+                            <input type="text" id="h-ensaio-fim" class="horario-input" placeholder="21:00">
+                        </div>
+                        <div class="horario-row">
+                            <span class="horario-label">Montagem:</span>
+                            <input type="text" id="h-montagem-inicio" class="horario-input" placeholder="08:00">
+                            <span>-</span>
+                            <input type="text" id="h-montagem-fim" class="horario-input" placeholder="21:00">
+                        </div>
+                        <div class="horario-row">
+                            <span class="horario-label">Evento:</span>
+                            <input type="text" id="h-evento-inicio" class="horario-input" placeholder="08:00">
+                            <span>-</span>
+                            <input type="text" id="h-evento-fim" class="horario-input" placeholder="21:00">
+                        </div>
+                        <div class="horario-row">
+                            <span class="horario-label">Desmontagem:</span>
+                            <input type="text" id="h-desmontagem-inicio" class="horario-input" placeholder="08:00">
+                            <span>-</span>
+                            <input type="text" id="h-desmontagem-fim" class="horario-input" placeholder="21:00">
                         </div>
                     </div>
                 </div>
@@ -233,29 +273,43 @@
         function closeModal() { document.getElementById('contactModal').style.display = 'none'; }
 
         function switchTab(tab) {
-            const formsTab = document.getElementById('tab-forms');
-            const regrasTab = document.getElementById('tab-regras');
-            const formsContent = document.getElementById('content-forms');
-            const regrasContent = document.getElementById('content-regras');
-            if (tab === 'forms') {
-                formsTab.style.background = '#764ba2'; formsTab.style.color = 'white';
-                regrasTab.style.background = '#eee'; regrasTab.style.color = '#666';
-                formsContent.style.display = 'block'; regrasContent.style.display = 'none';
-            } else {
-                regrasTab.style.background = '#764ba2'; regrasTab.style.color = 'white';
-                formsTab.style.background = '#eee'; formsTab.style.color = '#666';
-                regrasContent.style.display = 'block'; formsContent.style.display = 'none';
-            }
+            const tabs = ['forms', 'regras', 'horarios'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`tab-${t}`);
+                const content = document.getElementById(`content-${t}`);
+                if (t === tab) {
+                    btn.style.background = '#764ba2';
+                    btn.style.color = 'white';
+                    content.style.display = 'block';
+                } else {
+                    btn.style.background = '#eee';
+                    btn.style.color = '#666';
+                    content.style.display = 'none';
+                }
+            });
         }
 
         async function openConfigModal() {
             try {
                 const response = await fetch('/api/config');
                 const config = await response.json();
-                document.getElementById('configFormsLink').value = config.formsLink || '';
-                document.getElementById('configSpreadsheetId').value = config.spreadsheetId || '';
-                document.getElementById('configPermitirDisputa').checked = config.permitirDisputa !== false;
-                switchTab('forms');
+	                document.getElementById('configFormsLink').value = config.formsLink || '';
+	                document.getElementById('configSpreadsheetId').value = config.spreadsheetId || '';
+	                document.getElementById('configPermitirDisputa').checked = config.permitirDisputa !== false;
+	                
+	                if (config.horariosLimites) {
+	                    const hl = config.horariosLimites;
+	                    document.getElementById('h-ensaio-inicio').value = hl.ensaio?.inicio || '08:00';
+	                    document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '21:00';
+	                    document.getElementById('h-montagem-inicio').value = hl.montagem?.inicio || '08:00';
+	                    document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
+	                    document.getElementById('h-evento-inicio').value = hl.evento?.inicio || '08:00';
+	                    document.getElementById('h-evento-fim').value = hl.evento?.fim || '21:00';
+	                    document.getElementById('h-desmontagem-inicio').value = hl.desmontagem?.inicio || '08:00';
+	                    document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
+	                }
+
+	                switchTab('forms');
                 document.getElementById('configModal').style.display = 'flex';
             } catch (e) { alert('Erro ao carregar configurações'); }
         }
@@ -266,7 +320,13 @@
             const body = {
                 formsLink: document.getElementById('configFormsLink').value,
                 spreadsheetId: document.getElementById('configSpreadsheetId').value,
-                permitirDisputa: document.getElementById('configPermitirDisputa').checked
+                permitirDisputa: document.getElementById('configPermitirDisputa').checked,
+                horariosLimites: {
+                    ensaio: { inicio: document.getElementById('h-ensaio-inicio').value, fim: document.getElementById('h-ensaio-fim').value },
+                    montagem: { inicio: document.getElementById('h-montagem-inicio').value, fim: document.getElementById('h-montagem-fim').value },
+                    evento: { inicio: document.getElementById('h-evento-inicio').value, fim: document.getElementById('h-evento-fim').value },
+                    desmontagem: { inicio: document.getElementById('h-desmontagem-inicio').value, fim: document.getElementById('h-desmontagem-fim').value }
+                }
             };
             try {
                 const res = await fetch('/api/admin/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

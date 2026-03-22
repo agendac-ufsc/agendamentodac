@@ -200,6 +200,12 @@ const sheets = google.sheets({ version: 'v4' });
 let SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
 let FORMS_LINK = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
 let PERMITIR_DISPUTA = true; // Padrão é permitir disputa conforme comportamento atual
+let HORARIOS_LIMITES = {
+    ensaio: { inicio: '08:00', fim: '21:00' },
+    montagem: { inicio: '08:00', fim: '21:00' },
+    evento: { inicio: '08:00', fim: '21:00' },
+    desmontagem: { inicio: '08:00', fim: '21:00' }
+};
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -213,10 +219,12 @@ const getConfigs = async () => {
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
                 PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
+                HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 return { 
                     spreadsheetId: SPREADSHEET_ID, 
                     formsLink: FORMS_LINK,
-                    permitirDisputa: PERMITIR_DISPUTA
+                    permitirDisputa: PERMITIR_DISPUTA,
+                    horariosLimites: HORARIOS_LIMITES
                 };
             }
         }
@@ -226,7 +234,8 @@ const getConfigs = async () => {
     return { 
         spreadsheetId: SPREADSHEET_ID, 
         formsLink: FORMS_LINK,
-        permitirDisputa: PERMITIR_DISPUTA
+        permitirDisputa: PERMITIR_DISPUTA,
+        horariosLimites: HORARIOS_LIMITES
     };
 };
 
@@ -314,12 +323,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites });
     res.json({ success });
 });
 
