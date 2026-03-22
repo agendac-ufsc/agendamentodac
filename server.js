@@ -203,7 +203,6 @@ let PERMITIR_DISPUTA = true; // Padrão é permitir disputa conforme comportamen
 let HORARIOS_LIMITES = {
     ensaio: { inicio: '08:00', fim: '21:00' },
     montagem: { inicio: '08:00', fim: '21:00' },
-    evento: { inicio: '08:00', fim: '21:00' },
     desmontagem: { inicio: '08:00', fim: '21:00' }
 };
 

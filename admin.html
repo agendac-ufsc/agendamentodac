@@ -95,8 +95,9 @@
             <div class="modal-body">
                 <div style="display: flex; border-bottom: 1px solid #eee; margin-bottom: 20px;">
                     <button onclick="switchTab('forms')" id="tab-forms" style="padding: 10px 20px; border: none; background: #764ba2; color: white; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Formulários</button>
-                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Regras do Calendário</button>
-                    <button onclick="switchTab('horarios')" id="tab-horarios" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Controle de Horários</button>
+	                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Regras</button>
+	                    <button onclick="switchTab('horarios')" id="tab-horarios" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Horários</button>
+	                    <button onclick="switchTab('calendario')" id="tab-calendario" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Calendário</button>
                 </div>
 
                 <div id="content-forms">
@@ -134,42 +135,89 @@
                     </div>
                 </div>
 
-                <div id="content-horarios" style="display: none;">
-                    <p style="margin-bottom: 15px; font-size: 14px; color: #666;"><i class="fas fa-clock"></i> <strong>Controle de Horários e Datas</strong></p>
-                    <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #eee;">
-                        <h4 style="font-size: 14px; color: #333; margin-bottom: 10px;">Horários Limite por Etapa</h4>
-                        <p style="font-size: 11px; color: #666; margin-bottom: 15px;">Defina o horário de início mais cedo e o horário de fim mais tarde permitidos para cada tipo de agendamento.</p>
-                        
-                        <style>
-                            .horario-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-                            .horario-label { width: 100px; font-size: 13px; font-weight: bold; color: #555; }
-                            .horario-input { width: 80px; padding: 5px; border: 1px solid #ddd; border-radius: 4px; text-align: center; }
+	                <div id="content-horarios" style="display: none;">
+	                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+	                        <i class="fas fa-clock" style="font-size: 20px; color: #444;"></i>
+	                        <h3 style="font-size: 18px; color: #333; font-weight: 600;">Controle de Horários e Datas</h3>
+	                    </div>
+	                    
+	                    <div style="background: white; padding: 25px; border-radius: 12px; border: 1px solid #eef0f2; box-shadow: 0 2px 15px rgba(0,0,0,0.02);">
+	                        <h4 style="font-size: 16px; color: #333; margin-bottom: 8px; font-weight: 700;">Horários Limite por Etapa</h4>
+	                        <p style="font-size: 13px; color: #777; margin-bottom: 25px; line-height: 1.5;">Defina o horário de início mais cedo e o horário de fim mais tarde permitidos para cada tipo de agendamento.</p>
+	                        
+	                        <style>
+	                            .horario-row { display: flex; align-items: center; gap: 20px; margin-bottom: 18px; }
+	                            .horario-label { width: 110px; font-size: 14px; font-weight: 500; color: #444; }
+	                            .horario-input-wrapper { display: flex; align-items: center; gap: 12px; }
+	                            .horario-input { 
+	                                width: 110px; 
+	                                padding: 10px 15px; 
+                                border: 1.5px solid #e0e6ed; 
+                                border-radius: 8px; 
+                                text-align: center; 
+                                font-size: 14px;
+                                color: #333;
+                                transition: all 0.2s;
+                                background: #fff;
+                            }
+                            .horario-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+                            .horario-sep { color: #94a3b8; font-weight: bold; }
+                            .btn-save-horarios {
+                                background: #2563eb;
+                                color: white;
+                                border: none;
+                                padding: 12px 24px;
+                                border-radius: 8px;
+                                font-weight: 600;
+                                font-size: 14px;
+                                cursor: pointer;
+                                display: flex;
+                                align-items: center;
+                                gap: 10px;
+                                margin-top: 15px;
+                                transition: background 0.2s;
+                            }
+                            .btn-save-horarios:hover { background: #1d4ed8; }
                         </style>
 
                         <div class="horario-row">
                             <span class="horario-label">Ensaio:</span>
-                            <input type="text" id="h-ensaio-inicio" class="horario-input" placeholder="08:00">
-                            <span>-</span>
-                            <input type="text" id="h-ensaio-fim" class="horario-input" placeholder="21:00">
+                            <div class="horario-input-wrapper">
+                                <input type="text" id="h-ensaio-inicio" class="horario-input" placeholder="08:00" value="08:00">
+                                <span class="horario-sep">-</span>
+                                <input type="text" id="h-ensaio-fim" class="horario-input" placeholder="21:00" value="21:00">
+                            </div>
                         </div>
                         <div class="horario-row">
                             <span class="horario-label">Montagem:</span>
-                            <input type="text" id="h-montagem-inicio" class="horario-input" placeholder="08:00">
-                            <span>-</span>
-                            <input type="text" id="h-montagem-fim" class="horario-input" placeholder="21:00">
-                        </div>
-                        <div class="horario-row">
-                            <span class="horario-label">Evento:</span>
-                            <input type="text" id="h-evento-inicio" class="horario-input" placeholder="08:00">
-                            <span>-</span>
-                            <input type="text" id="h-evento-fim" class="horario-input" placeholder="21:00">
+                            <div class="horario-input-wrapper">
+                                <input type="text" id="h-montagem-inicio" class="horario-input" placeholder="08:00" value="08:00">
+                                <span class="horario-sep">-</span>
+                                <input type="text" id="h-montagem-fim" class="horario-input" placeholder="21:00" value="21:00">
+                            </div>
                         </div>
                         <div class="horario-row">
                             <span class="horario-label">Desmontagem:</span>
-                            <input type="text" id="h-desmontagem-inicio" class="horario-input" placeholder="08:00">
-                            <span>-</span>
-                            <input type="text" id="h-desmontagem-fim" class="horario-input" placeholder="21:00">
+                            <div class="horario-input-wrapper">
+                                <input type="text" id="h-desmontagem-inicio" class="horario-input" placeholder="08:00" value="08:00">
+                                <span class="horario-sep">-</span>
+                                <input type="text" id="h-desmontagem-fim" class="horario-input" placeholder="21:00" value="21:00">
+                            </div>
                         </div>
+                        
+                        <button class="btn-save-horarios" onclick="saveConfigs()">
+                            <i class="far fa-save"></i> Salvar Horários
+                        </button>
+                    </div>
+                </div>
+
+                <div id="content-calendario" style="display: none;">
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
+                        <i class="fas fa-calendar-alt" style="font-size: 20px; color: #444;"></i>
+                        <h3 style="font-size: 18px; color: #333; font-weight: 600;">Calendário de Eventos</h3>
+                    </div>
+                    <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #eef0f2; min-height: 400px;">
+                        <iframe id="calendar-iframe" src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="600" frameborder="0" scrolling="no"></iframe>
                     </div>
                 </div>
             </div>
@@ -272,9 +320,9 @@
 
         function closeModal() { document.getElementById('contactModal').style.display = 'none'; }
 
-        function switchTab(tab) {
-            const tabs = ['forms', 'regras', 'horarios'];
-            tabs.forEach(t => {
+	        function switchTab(tab) {
+	            const tabs = ['forms', 'regras', 'horarios', 'calendario'];
+	            tabs.forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 const content = document.getElementById(`content-${t}`);
                 if (t === tab) {
@@ -302,10 +350,8 @@
 	                    document.getElementById('h-ensaio-inicio').value = hl.ensaio?.inicio || '08:00';
 	                    document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '21:00';
 	                    document.getElementById('h-montagem-inicio').value = hl.montagem?.inicio || '08:00';
-	                    document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
-	                    document.getElementById('h-evento-inicio').value = hl.evento?.inicio || '08:00';
-	                    document.getElementById('h-evento-fim').value = hl.evento?.fim || '21:00';
-	                    document.getElementById('h-desmontagem-inicio').value = hl.desmontagem?.inicio || '08:00';
+		                    document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
+		                    document.getElementById('h-desmontagem-inicio').value = hl.desmontagem?.inicio || '08:00';
 	                    document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
 	                }
 
@@ -322,10 +368,9 @@
                 spreadsheetId: document.getElementById('configSpreadsheetId').value,
                 permitirDisputa: document.getElementById('configPermitirDisputa').checked,
                 horariosLimites: {
-                    ensaio: { inicio: document.getElementById('h-ensaio-inicio').value, fim: document.getElementById('h-ensaio-fim').value },
-                    montagem: { inicio: document.getElementById('h-montagem-inicio').value, fim: document.getElementById('h-montagem-fim').value },
-                    evento: { inicio: document.getElementById('h-evento-inicio').value, fim: document.getElementById('h-evento-fim').value },
-                    desmontagem: { inicio: document.getElementById('h-desmontagem-inicio').value, fim: document.getElementById('h-desmontagem-fim').value }
+	                    ensaio: { inicio: document.getElementById('h-ensaio-inicio').value, fim: document.getElementById('h-ensaio-fim').value },
+	                    montagem: { inicio: document.getElementById('h-montagem-inicio').value, fim: document.getElementById('h-montagem-fim').value },
+	                    desmontagem: { inicio: document.getElementById('h-desmontagem-inicio').value, fim: document.getElementById('h-desmontagem-fim').value }
                 }
             };
             try {
