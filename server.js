@@ -339,7 +339,8 @@ app.get('/api/disponibilidade', async (req, res) => {
         const ocupados = response.data.items.map(event => ({
             start: event.start.dateTime || event.start.date,
             end: event.end.dateTime || event.end.date,
-            summary: event.summary
+            summary: event.summary,
+            description: event.description || ''
         }));
         res.json(ocupados);
     } catch (error) {

@@ -379,12 +379,19 @@
                     const slotStart = new Date(`${dateStr}T${time}:00-03:00`);
                     const slotEnd = new Date(slotStart.getTime() + 30 * 60 * 1000);
                     
-                    // Verificar se o horário está ocupado no Google
-                    const isBusy = googleEvents.some(e => {
-                        const eStart = new Date(e.start);
-                        const eEnd = new Date(e.end);
-                        return (slotStart.getTime() < eEnd.getTime()) && (slotEnd.getTime() > eStart.getTime());
-                    });
+	                    // Verificar se o horário está ocupado no Google
+	                    const eventsAtThisSlot = googleEvents.filter(e => {
+	                        const eStart = new Date(e.start);
+	                        const eEnd = new Date(e.end);
+	                        return (slotStart.getTime() < eEnd.getTime()) && (slotEnd.getTime() > eStart.getTime());
+	                    });
+	                    const isBusy = eventsAtThisSlot.length > 0;
+	                    
+	                    // Verificar se TODOS os eventos neste slot são disputáveis (vieram do site)
+	                    // Um evento é considerado do site se tiver "Proponente:" na descrição
+	                    const allEventsAreDisputable = isBusy && eventsAtThisSlot.every(e => 
+	                        e.description && e.description.includes('Proponente:')
+	                    );
 
                     // Verificar se o usuário já selecionou este horário em QUALQUER etapa
                     let isUserBusy = false;
@@ -399,19 +406,20 @@
                         });
                     });
 
-                    if (isBusy) {
-                        slot.classList.add('busy');
-                        // Se disputa não for permitida, remove o clique do slot ocupado
-                        if (!permitirDisputa) {
-                            slot.onclick = null;
-                            slot.style.cursor = 'not-allowed';
-                            slot.title = "Horário já ocupado";
-                        } else {
-                            slot.classList.add('dispute');
-                            slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
-                            slot.title = "Horário em disputa";
-                        }
-                    } else if (isUserBusy) {
+	                    if (isBusy) {
+	                        slot.classList.add('busy');
+	                        // Se disputa não for permitida OU houver evento fixo (não disputável), bloqueia
+	                        if (!permitirDisputa || !allEventsAreDisputable) {
+	                            slot.onclick = null;
+	                            slot.style.cursor = 'not-allowed';
+	                            slot.title = !allEventsAreDisputable ? "Horário bloqueado (Evento Fixo DAC)" : "Horário já ocupado";
+	                        } else {
+	                            // Apenas se permitirDisputa for true E todos os eventos forem do site
+	                            slot.classList.add('dispute');
+	                            slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
+	                            slot.title = "Horário em disputa";
+	                        }
+	                    } else if (isUserBusy) {
                         slot.classList.add('user-busy');
                         slot.title = "Você já selecionou este horário";
                     } else {
