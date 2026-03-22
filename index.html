@@ -177,7 +177,10 @@
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
 
         steps.forEach(s => {
-            selections[s] = { date: null, start: null, end:        async function fetchAvailability() {
+            selections[s] = { date: null, start: null, end: null };
+        });
+
+        async function fetchAvailability() {
             try {
                 // Buscar configurações primeiro para saber se permite disputa
                 const configRes = await fetch('/api/config');
@@ -211,7 +214,9 @@
             } catch (err) {
                 console.error('Erro ao buscar disponibilidade:', err);
             }
-        }ibilidade ao carregar
+        }
+
+        // Buscar disponibilidade ao carregar
         fetchAvailability();
         // Atualizar a cada 2 minutos
         setInterval(fetchAvailability, 120000);

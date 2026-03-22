@@ -299,21 +299,71 @@
             const p = item.primeiraEtapa;
             const s = item.segundaEtapa;
             const doc = new jsPDF();
-            doc.setFontSize(18); doc.text('FICHA DE INSCRIÇÃO - DAC', 20, 20);
-            doc.setFontSize(12); doc.text(`PROPONENTE: ${p.nome.toUpperCase()}`, 20, 30);
-            doc.text(`PROJETO: ${p.evento.toUpperCase()}`, 20, 38);
-            const tableData = [['Nome', p.nome], ['E-mail', p.email], ['Telefone', p.telefone]];
-            if (s) s.headers.forEach((h, i) => { if (s.valores[i]) tableData.push([h, s.valores[i]]); });
-            doc.autoTable({ startY: 50, head: [['Campo', 'Informação']], body: tableData });
-            window.open(doc.output('bloburl'), '_blank');
+            doc.setFontSize(18); doc.text('Ficha de Inscrição - DAC', 105, 20, { align: 'center' });
+            doc.setFontSize(12); doc.text(`Evento: ${p.evento}`, 20, 40);
+            doc.text(`Proponente: ${p.nome}`, 20, 50);
+            doc.text(`E-mail: ${p.email}`, 20, 60);
+            doc.text(`Telefone: ${p.telefone}`, 20, 70);
+            let y = 90; doc.setFontSize(14); doc.text('Cronograma Agendado:', 20, y); y += 10; doc.setFontSize(10);
+            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+            for (const key in p.etapas) {
+                const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                itens.forEach((it, i) => {
+                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                    doc.text(`${label}: ${it.data.split('-').reverse().join('/')}, ${it.horario}`, 25, y); y += 7;
+                });
+            }
+            if (s && s.headers && s.valores) {
+                y += 10; doc.setFontSize(14); doc.text('Dados Complementares (Forms):', 20, y); y += 10; doc.setFontSize(9);
+                s.headers.forEach((h, i) => {
+                    if (y > 270) { doc.addPage(); y = 20; }
+                    const val = s.valores[i] || 'N/A';
+                    const lines = doc.splitTextToSize(`${h}: ${val}`, 170);
+                    doc.text(lines, 20, y); y += (lines.length * 5) + 2;
+                });
+            }
+            doc.save(`inscricao_${p.evento.replace(/\s+/g, '_')}.pdf`);
         }
 
         async function downloadAllPDFs() {
-            alert('Gerando ZIP com todos os PDFs...');
-            // Lógica simplificada para o teste
+            const zip = new JSZip();
+            const { jsPDF } = window.jspdf;
+            for (let i = 0; i < allUnificados.length; i++) {
+                const item = allUnificados[i];
+                const p = item.primeiraEtapa;
+                const s = item.segundaEtapa;
+                const doc = new jsPDF();
+                doc.setFontSize(18); doc.text('Ficha de Inscrição - DAC', 105, 20, { align: 'center' });
+                doc.setFontSize(12); doc.text(`Evento: ${p.evento}`, 20, 40);
+                doc.text(`Proponente: ${p.nome}`, 20, 50);
+                doc.text(`E-mail: ${p.email}`, 20, 60);
+                doc.text(`Telefone: ${p.telefone}`, 20, 70);
+                let y = 90; doc.setFontSize(14); doc.text('Cronograma Agendado:', 20, y); y += 10; doc.setFontSize(10);
+                const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                for (const key in p.etapas) {
+                    const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                    itens.forEach((it, i) => {
+                        const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                        doc.text(`${label}: ${it.data.split('-').reverse().join('/')}, ${it.horario}`, 25, y); y += 7;
+                    });
+                }
+                if (s && s.headers && s.valores) {
+                    y += 10; doc.setFontSize(14); doc.text('Dados Complementares (Forms):', 20, y); y += 10; doc.setFontSize(9);
+                    s.headers.forEach((h, j) => {
+                        if (y > 270) { doc.addPage(); y = 20; }
+                        const val = s.valores[j] || 'N/A';
+                        const lines = doc.splitTextToSize(`${h}: ${val}`, 170);
+                        doc.text(lines, 20, y); y += (lines.length * 5) + 2;
+                    });
+                }
+                const pdfBlob = doc.output('blob');
+                zip.file(`inscricao_${p.evento.replace(/\s+/g, '_')}_${i}.pdf`, pdfBlob);
+            }
+            const content = await zip.generateAsync({ type: 'blob' });
+            saveAs(content, 'todas_inscricoes.zip');
         }
 
-        window.onload = loadData;
+        loadData();
     </script>
 </body>
 </html>
