@@ -89,19 +89,52 @@
     </div>
 
     <div id="configModal" class="modal">
-        <div class="modal-content" style="max-width: 500px;">
-            <div class="modal-header"><h3>⚙️ Configurações dos Formulários</h3></div>
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header"><h3>⚙️ Configurações Gerais</h3></div>
             <div class="modal-body">
-                <p>Ajuste os links da segunda etapa da inscrição.</p>
-                <div style="margin-bottom: 15px;">
-                    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link do Google Forms (Segunda Etapa):</label>
-                    <input type="text" id="configFormsLink" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;">
-                    <small style="color:#888;">Link que o usuário verá após a primeira etapa.</small>
+                <!-- Abas de Configuração -->
+                <div style="display: flex; border-bottom: 1px solid #eee; margin-bottom: 20px;">
+                    <button onclick="switchTab('forms')" id="tab-forms" style="padding: 10px 20px; border: none; background: #764ba2; color: white; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Formulários</button>
+                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Regras do Calendário</button>
                 </div>
-                <div style="margin-bottom: 15px;">
-                    <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link da Planilha do Google Sheets:</label>
-                    <input type="text" id="configSpreadsheetId" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;" placeholder="Cole o link completo da planilha aqui">
-                    <small style="color:#888;">Pode colar o link inteiro. O sistema extrairá o ID automaticamente.</small>
+
+                <!-- Conteúdo Aba Formulários -->
+                <div id="content-forms">
+                    <p style="margin-bottom: 15px; font-size: 14px; color: #666;">Ajuste os links da segunda etapa da inscrição.</p>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link do Google Forms (Segunda Etapa):</label>
+                        <input type="text" id="configFormsLink" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;">
+                        <small style="color:#888;">Link que o usuário verá após a primeira etapa.</small>
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link da Planilha do Google Sheets:</label>
+                        <input type="text" id="configSpreadsheetId" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;" placeholder="Cole o link completo da planilha aqui">
+                        <small style="color:#888;">Pode colar o link inteiro. O sistema extrairá o ID automaticamente.</small>
+                    </div>
+                </div>
+
+                <!-- Conteúdo Aba Regras -->
+                <div id="content-regras" style="display: none;">
+                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #eee;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <div>
+                                <h4 style="font-size: 15px; color: #333; margin-bottom: 5px;">Permitir Disputa de Horários</h4>
+                                <p style="font-size: 12px; color: #666; line-height: 1.4;">Se ativado, permite que múltiplos proponentes solicitem o mesmo horário, gerando uma disputa.</p>
+                            </div>
+                            <div style="position: relative; display: inline-block; width: 50px; height: 24px;">
+                                <input type="checkbox" id="configPermitirDisputa" style="opacity: 0; width: 0; height: 0;">
+                                <label for="configPermitirDisputa" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px;"></label>
+                                <style>
+                                    #configPermitirDisputa:checked + label { background-color: #764ba2; }
+                                    #configPermitirDisputa + label:before {
+                                        position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+                                        background-color: white; transition: .4s; border-radius: 50%;
+                                    }
+                                    #configPermitirDisputa:checked + label:before { transform: translateX(26px); }
+                                </style>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -285,6 +318,23 @@
 
         function closeModal() {
             document.getElementById('contactModal').style.display = 'none';
+               function switchTab(tab) {
+            const formsTab = document.getElementById('tab-forms');
+            const regrasTab = document.getElementById('tab-regras');
+            const formsContent = document.getElementById('content-forms');
+            const regrasContent = document.getElementById('content-regras');
+
+            if (tab === 'forms') {
+                formsTab.style.background = '#764ba2'; formsTab.style.color = 'white';
+                regrasTab.style.background = '#eee'; regrasTab.style.color = '#666';
+                formsContent.style.display = 'block';
+                regrasContent.style.display = 'none';
+            } else {
+                regrasTab.style.background = '#764ba2'; regrasTab.style.color = 'white';
+                formsTab.style.background = '#eee'; formsTab.style.color = '#666';
+                regrasContent.style.display = 'block';
+                formsContent.style.display = 'none';
+            }
         }
 
         async function openConfigModal() {
@@ -293,9 +343,11 @@
                 const config = await response.json();
                 document.getElementById('configFormsLink').value = config.formsLink || '';
                 document.getElementById('configSpreadsheetId').value = config.spreadsheetId || '';
+                document.getElementById('configPermitirDisputa').checked = config.permitirDisputa !== false;
+                switchTab('forms');
                 document.getElementById('configModal').style.display = 'flex';
             } catch (error) {
-                alert('Erro ao carregar configurações.');
+                alert('Erro ao carregar configurações');
             }
         }
 
@@ -306,23 +358,25 @@
         async function saveConfigs() {
             const formsLink = document.getElementById('configFormsLink').value;
             const spreadsheetId = document.getElementById('configSpreadsheetId').value;
-
-            if (!formsLink || !spreadsheetId) {
-                alert('Por favor, preencha todos os campos.');
-                return;
-            }
-
+            const permitirDisputa = document.getElementById('configPermitirDisputa').checked;
+            
             try {
                 const response = await fetch('/api/admin/config', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ formsLink, spreadsheetId })
+                    body: JSON.stringify({ formsLink, spreadsheetId, permitirDisputa })
                 });
                 const result = await response.json();
                 if (result.success) {
                     alert('Configurações salvas com sucesso!');
                     closeConfigModal();
-                    loadData(); // Recarregar dados com a nova planilha
+                } else {
+                    alert('Erro ao salvar configurações');
+                }
+            } catch (error) {
+                alert('Erro de conexão ao salvar');
+            }
+        }lanilha
                 } else {
                     alert('Erro ao salvar: ' + (result.error || 'Erro desconhecido'));
                 }

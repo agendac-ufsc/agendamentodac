@@ -173,29 +173,45 @@
         const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
         let currentStepContext = null;
         let googleEvents = [];
+        let permitirDisputa = true; // Padrão
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
 
         steps.forEach(s => {
-            selections[s] = { date: null, start: null, end: null };
-        });
-
-        async function fetchAvailability() {
+            selections[s] = { date: null, start: null, end:        async function fetchAvailability() {
             try {
+                // Buscar configurações primeiro para saber se permite disputa
+                const configRes = await fetch('/api/config');
+                if (configRes.ok) {
+                    const config = await configRes.json();
+                    permitirDisputa = config.permitirDisputa !== false;
+                    
+                    // Atualizar aviso de atenção se disputa estiver desativada
+                    const aviso = document.querySelector('div[style*="background: #fff3cd"]');
+                    if (aviso) {
+                        if (permitirDisputa) {
+                            aviso.style.display = 'block';
+                            aviso.innerHTML = '<strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.';
+                        } else {
+                            aviso.style.display = 'none'; // Esconde o aviso de disputa se ela não for permitida
+                        }
+                    }
+                }
+
                 const res = await fetch('/api/disponibilidade');
                 if (res.ok) {
                     googleEvents = await res.json();
                     steps.forEach(s => {
-                        if (document.getElementById(`content-${s}`).classList.contains('show')) {
+                        const content = document.getElementById(`content-${s}`);
+                        if (content && content.classList.contains('show')) {
                             renderStepCalendar(s);
+                            renderTimeSlots(s);
                         }
                     });
                 }
             } catch (err) {
                 console.error('Erro ao buscar disponibilidade:', err);
             }
-        }
-
-        // Buscar disponibilidade ao carregar
+        }ibilidade ao carregar
         fetchAvailability();
         // Atualizar a cada 2 minutos
         setInterval(fetchAvailability, 120000);
@@ -299,6 +315,12 @@
                     if (eventsOnDay.length > 0) {
                         if (eventsOnDay.length >= 15) d.classList.add('busy-full');
                         else d.classList.add('busy-partial');
+                        
+                        // Se disputa não for permitida e o dia estiver cheio, desabilita clique
+                        if (!permitirDisputa && eventsOnDay.length >= 15) {
+                            d.onclick = null;
+                            d.style.cursor = 'not-allowed';
+                        }
                     }
 
                     d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
@@ -372,6 +394,15 @@
 
                     if (isBusy) {
                         slot.classList.add('busy');
+                        // Se disputa não for permitida, remove o clique do slot ocupado
+                        if (!permitirDisputa) {
+                            slot.onclick = null;
+                            slot.style.cursor = 'not-allowed';
+                            slot.title = "Horário já ocupado";
+                        } else {
+                            slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
+                            slot.title = "Horário em disputa";
+                        }
                     } else if (isUserBusy) {
                         slot.classList.add('user-busy');
                         slot.title = "Você já selecionou este horário";

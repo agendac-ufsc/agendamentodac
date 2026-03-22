@@ -199,6 +199,7 @@ const calendar = google.calendar({ version: 'v3' });
 const sheets = google.sheets({ version: 'v4' });
 let SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
 let FORMS_LINK = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+let PERMITIR_DISPUTA = true; // Padrão é permitir disputa conforme comportamento atual
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -211,13 +212,22 @@ const getConfigs = async () => {
                 // Garantir que o ID em memória esteja sempre limpo
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
-                return { spreadsheetId: SPREADSHEET_ID, formsLink: FORMS_LINK };
+                PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
+                return { 
+                    spreadsheetId: SPREADSHEET_ID, 
+                    formsLink: FORMS_LINK,
+                    permitirDisputa: PERMITIR_DISPUTA
+                };
             }
         }
     } catch (error) {
         console.error('❌ [Redis] Erro ao buscar configurações:', error.message);
     }
-    return { spreadsheetId: SPREADSHEET_ID, formsLink: FORMS_LINK };
+    return { 
+        spreadsheetId: SPREADSHEET_ID, 
+        formsLink: FORMS_LINK,
+        permitirDisputa: PERMITIR_DISPUTA
+    };
 };
 
 const extractSpreadsheetId = (input) => {
@@ -246,15 +256,19 @@ const saveConfigs = async (configs) => {
         // Atualiza em memória primeiro
         SPREADSHEET_ID = cleanSpreadsheetId || SPREADSHEET_ID;
         FORMS_LINK = configs.formsLink || FORMS_LINK;
+        if (configs.permitirDisputa !== undefined) {
+            PERMITIR_DISPUTA = configs.permitirDisputa;
+        }
 
         if (redis) {
-            // Persistir o ID limpo e o link do forms
+            // Persistir as configurações
             const configToSave = {
                 spreadsheetId: cleanSpreadsheetId,
-                formsLink: FORMS_LINK
+                formsLink: FORMS_LINK,
+                permitirDisputa: PERMITIR_DISPUTA
             };
             await redis.set(CONFIG_KEY, JSON.stringify(configToSave));
-            console.log('✅ [Redis] Configurações persistidas com ID limpo:', cleanSpreadsheetId);
+            console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
         } else {
             console.warn('⚠️ [Config] Salvo apenas em memória (Redis indisponível).');
         }
@@ -300,11 +314,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa } = req.body;
+    // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa });
     res.json({ success });
 });
 
