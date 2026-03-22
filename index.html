@@ -72,6 +72,8 @@
         .time-slot.selected { background: #667eea; color: white; border-color: #667eea; }
         .time-slot.busy { background: #eee; color: #bbb; border-color: #ddd; cursor: not-allowed; text-decoration: line-through; }
         .time-slot.user-busy { background: #d4edda; color: #155724; border-color: #28a745; cursor: not-allowed; font-weight: bold; }
+        .time-slot.dispute { background: #fff4cc; color: #856404; border-color: #ffe066; text-decoration: none; }
+        .time-slot.dispute:hover { background: #ffe066; }
 
         /* Step Confirmation Button */
         .btn-confirm-step {
@@ -405,6 +407,7 @@
                             slot.style.cursor = 'not-allowed';
                             slot.title = "Horário já ocupado";
                         } else {
+                            slot.classList.add('dispute');
                             slot.onclick = (e) => { e.stopPropagation(); selectTime(step, time); };
                             slot.title = "Horário em disputa";
                         }
