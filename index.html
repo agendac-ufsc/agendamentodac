@@ -190,12 +190,13 @@
         const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
         let currentStepContext = null;
         let googleEvents = [];
-        let permitirDisputa = true; // Padrão
-	        let horariosLimites = {
-	            ensaio: { fim: '17:00' },
-	            montagem: { fim: '21:00' },
-	            evento: { fim: '22:00' },
-	            desmontagem: { fim: '21:00' }
+        let permitirDisputa = true;
+        let horariosLimites = {
+            ensaio: { fim: '17:00' },
+            montagem: { fim: '21:00' },
+            desmontagem: { fim: '21:00' }
+        };
+        let datasBloqueadas = [];	            desmontagem: { fim: '21:00' }
 	        };
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
 
@@ -207,10 +208,11 @@
             try {
                 // Buscar configurações primeiro para saber se permite disputa
                 const configRes = await fetch('/api/config');
-	                if (configRes.ok) {
-	                    const config = await configRes.json();
-	                    permitirDisputa = config.permitirDisputa !== false;
-	                    if (config.horariosLimites) horariosLimites = config.horariosLimites;
+if (configRes.ok) {
+                    const config = await configRes.json();
+                    permitirDisputa = config.permitirDisputa !== false;
+                    if (config.horariosLimites) horariosLimites = config.horariosLimites;
+                    datasBloqueadas = config.datasBloqueadas || [];
 	                    
 	                    // Atualizar aviso de atenção se disputa estiver desativada
                     const aviso = document.querySelector('div[style*="background: #fff3cd"]');
@@ -329,6 +331,16 @@
                     d.classList.add('other-month');
                 } else {
                     const dateStr = date.toISOString().split('T')[0];
+                    const isBloqueada = datasBloqueadas.includes(dateStr);
+                    
+                    if (isBloqueada) {
+                        d.classList.add('busy-full');
+                        d.title = 'Data bloqueada administrativamente';
+                        d.onclick = null;
+                        d.style.cursor = 'not-allowed';
+                        grid.appendChild(d);
+                        return;
+                    }
                     
                     // Verificar se o usuário já selecionou algo neste dia
                     let isUserSelected = false;

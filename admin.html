@@ -97,7 +97,8 @@
                     <button onclick="switchTab('forms')" id="tab-forms" style="padding: 10px 20px; border: none; background: #764ba2; color: white; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Formulários</button>
 	                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Regras</button>
 	                    <button onclick="switchTab('horarios')" id="tab-horarios" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Horários</button>
-	                    <button onclick="switchTab('calendario')" id="tab-calendario" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Calendário</button>
+	                    <button onclick="switchTab('calendario')" id="tab-calendario" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Calendário</button>
+                    <button onclick="switchTab('bloqueio')" id="tab-bloqueio" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Bloqueio</button>
                 </div>
 
                 <div id="content-forms">
@@ -217,6 +218,30 @@
                         <iframe id="calendar-iframe" src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="600" frameborder="0" scrolling="no"></iframe>
                     </div>
                 </div>
+
+                <div id="content-bloqueio" style="display: none;">
+                    <div style="background: white; padding: 25px; border-radius: 12px; border: 1px solid #eef0f2; box-shadow: 0 2px 15px rgba(0,0,0,0.02);">
+                        <h4 style="font-size: 16px; color: #333; margin-bottom: 8px; font-weight: 700;">Bloqueio de Datas Específicas</h4>
+                        <p style="font-size: 13px; color: #777; margin-bottom: 20px; line-height: 1.5;">Selecione uma data para bloquear ou desbloquear no calendário de agendamento.</p>
+                        
+                        <div style="margin-bottom: 20px;">
+                            <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:8px; color: #555;">Data a Bloquear/Desbloquear</label>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="date" id="bloqueio-data" style="flex: 1; padding: 10px 15px; border: 1.5px solid #e0e6ed; border-radius: 8px; font-size: 14px; color: #333;">
+                                <button onclick="toggleBloqueioData()" style="background: #d9534f; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                    <i class="far fa-save"></i> Salvar Datas
+                                </button>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 25px;">
+                            <h5 style="font-size: 14px; color: #333; margin-bottom: 12px; font-weight: 700;">Datas Bloqueadas Atualmente:</h5>
+                            <div id="lista-datas-bloqueadas" style="font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; min-height: 50px;">
+                                Nenhuma data bloqueada.
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-close" onclick="closeConfigModal()">Cancelar</button>
@@ -317,9 +342,11 @@
 
         function closeModal() { document.getElementById('contactModal').style.display = 'none'; }
 
-	        function switchTab(tab) {
-	            const tabs = ['forms', 'regras', 'horarios', 'calendario'];
-	            tabs.forEach(t => {
+let datasBloqueadas = [];
+
+        function switchTab(tab) {
+            const tabs = ['forms', 'regras', 'horarios', 'calendario', 'bloqueio'];
+            tabs.forEach(t => {
                 const btn = document.getElementById(`tab-${t}`);
                 const content = document.getElementById(`content-${t}`);
                 if (t === tab) {
@@ -346,26 +373,30 @@
 		                    const hl = config.horariosLimites;
 		                    document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
 		                    document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
-		                    document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
-		                }
+document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
+			                }
+                            
+                            datasBloqueadas = config.datasBloqueadas || [];
+                            renderizarDatasBloqueadas();
 
-	                switchTab('forms');
+		                switchTab('forms');
                 document.getElementById('configModal').style.display = 'flex';
             } catch (e) { alert('Erro ao carregar configurações'); }
         }
 
         function closeConfigModal() { document.getElementById('configModal').style.display = 'none'; }
 
-        async function saveConfigs() {
+async function saveConfigs() {
             const body = {
                 formsLink: document.getElementById('configFormsLink').value,
                 spreadsheetId: document.getElementById('configSpreadsheetId').value,
                 permitirDisputa: document.getElementById('configPermitirDisputa').checked,
-	                horariosLimites: {
-		                    ensaio: { fim: document.getElementById('h-ensaio-fim').value },
-		                    montagem: { fim: document.getElementById('h-montagem-fim').value },
-		                    desmontagem: { fim: document.getElementById('h-desmontagem-fim').value }
-	                }
+                horariosLimites: {
+                    ensaio: { fim: document.getElementById('h-ensaio-fim').value },
+                    montagem: { fim: document.getElementById('h-montagem-fim').value },
+                    desmontagem: { fim: document.getElementById('h-desmontagem-fim').value }
+                },
+                datasBloqueadas: datasBloqueadas
             };
             try {
                 const res = await fetch('/api/admin/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -460,6 +491,47 @@
             }
             const content = await zip.generateAsync({ type: 'blob' });
             saveAs(content, 'todas_inscricoes.zip');
+        }
+
+        function toggleBloqueioData() {
+            const dataInput = document.getElementById('bloqueio-data');
+            const data = dataInput.value;
+            if (!data) return alert('Selecione uma data');
+            
+            const index = datasBloqueadas.indexOf(data);
+            if (index > -1) {
+                datasBloqueadas.splice(index, 1);
+            } else {
+                datasBloqueadas.push(data);
+                datasBloqueadas.sort();
+            }
+            
+            renderizarDatasBloqueadas();
+            dataInput.value = '';
+        }
+
+        function renderizarDatasBloqueadas() {
+            const lista = document.getElementById('lista-datas-bloqueadas');
+            if (datasBloqueadas.length === 0) {
+                lista.innerHTML = 'Nenhuma data bloqueada.';
+                return;
+            }
+            
+            let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
+            datasBloqueadas.forEach(data => {
+                const dataFormatada = data.split('-').reverse().join('/');
+                html += `<span style="background: #fff; border: 1px solid #d9534f; color: #d9534f; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; font-weight: 600;">
+                    ${dataFormatada} 
+                    <i class="fas fa-times" style="cursor: pointer;" onclick="removerData('${data}')"></i>
+                </span>`;
+            });
+            html += '</div>';
+            lista.innerHTML = html;
+        }
+
+        function removerData(data) {
+            datasBloqueadas = datasBloqueadas.filter(d => d !== data);
+            renderizarDatasBloqueadas();
         }
 
         loadData();

@@ -205,6 +205,7 @@ let HORARIOS_LIMITES = {
     montagem: { inicio: '08:00', fim: '21:00' },
     desmontagem: { inicio: '08:00', fim: '21:00' }
 };
+let DATAS_BLOQUEADAS = [];
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -219,11 +220,13 @@ const getConfigs = async () => {
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
                 PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
+                DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 return { 
                     spreadsheetId: SPREADSHEET_ID, 
                     formsLink: FORMS_LINK,
                     permitirDisputa: PERMITIR_DISPUTA,
-                    horariosLimites: HORARIOS_LIMITES
+                    horariosLimites: HORARIOS_LIMITES,
+                    datasBloqueadas: DATAS_BLOQUEADAS
                 };
             }
         }
@@ -234,7 +237,8 @@ const getConfigs = async () => {
         spreadsheetId: SPREADSHEET_ID, 
         formsLink: FORMS_LINK,
         permitirDisputa: PERMITIR_DISPUTA,
-        horariosLimites: HORARIOS_LIMITES
+        horariosLimites: HORARIOS_LIMITES,
+        datasBloqueadas: DATAS_BLOQUEADAS
     };
 };
 
@@ -270,6 +274,9 @@ const saveConfigs = async (configs) => {
         if (configs.horariosLimites) {
             HORARIOS_LIMITES = configs.horariosLimites;
         }
+        if (configs.datasBloqueadas) {
+            DATAS_BLOQUEADAS = configs.datasBloqueadas;
+        }
 
         if (redis) {
             // Persistir as configurações
@@ -277,7 +284,8 @@ const saveConfigs = async (configs) => {
                 spreadsheetId: cleanSpreadsheetId,
                 formsLink: FORMS_LINK,
                 permitirDisputa: PERMITIR_DISPUTA,
-                horariosLimites: HORARIOS_LIMITES
+                horariosLimites: HORARIOS_LIMITES,
+                datasBloqueadas: DATAS_BLOQUEADAS
             };
             await redis.set(CONFIG_KEY, JSON.stringify(configToSave));
             console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
@@ -326,12 +334,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas });
     res.json({ success });
 });
 
