@@ -20,8 +20,9 @@ const AGENDAMENTOS_KEY = 'agendamentos_v1';
 
 let redis;
 try {
-    if (process.env.REDIS_URL) {
-        redis = new Redis(process.env.REDIS_URL);
+    const redisUrl = process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL;
+    if (redisUrl) {
+        redis = new Redis(redisUrl);
         console.log('✅ [Redis] Cliente ioredis inicializado com sucesso.');
     } else {
         console.warn('⚠️ [Redis] REDIS_URL não encontrada no ambiente.');
