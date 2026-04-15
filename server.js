@@ -20,7 +20,8 @@ const AGENDAMENTOS_KEY = 'agendamentos_v1';
 
 let redis;
 try {
-    const redisUrl = process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL;
+    const rawRedisUrl = process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL || '';
+    const redisUrl = rawRedisUrl.replace(/^(%22|%27|["'])+|(%22|%27|["'])+$/gi, '');
     if (redisUrl) {
         redis = new Redis(redisUrl);
         console.log('✅ [Redis] Cliente ioredis inicializado com sucesso.');
