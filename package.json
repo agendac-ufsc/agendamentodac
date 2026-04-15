@@ -8,6 +8,7 @@
     "dev": "node server.js"
   },
   "dependencies": {
+    "@upstash/redis": "^1.37.0",
     "axios": "^1.13.6",
     "cors": "^2.8.5",
     "dotenv": "^16.6.1",
