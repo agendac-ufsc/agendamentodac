@@ -4,7 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const axios = require('axios');
 const { google } = require('googleapis');
-const Redis = require('ioredis');
+const { Redis } = require('@upstash/redis');
 
 const app = express();
 app.use(cors());
@@ -15,18 +15,22 @@ app.use(express.static(path.join(__dirname)));
 const CALENDAR_ID = 'oto.bezerra@ufsc.br';
 let googleAuthClient;
 
-// Funções para persistência com Redis (ioredis)
+// Funções para persistência com Upstash Redis (REST)
 const AGENDAMENTOS_KEY = 'agendamentos_v1';
 
 let redis;
 try {
-    const rawRedisUrl = process.env.UPSTASH_REDIS_URL || process.env.REDIS_URL || '';
-    const redisUrl = rawRedisUrl.replace(/^(%22|%27|["'])+|(%22|%27|["'])+$/gi, '');
-    if (redisUrl) {
-        redis = new Redis(redisUrl);
-        console.log('✅ [Redis] Cliente ioredis inicializado com sucesso.');
+    let url = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/^["']|["']$/g, '');
+    let token = (process.env.UPSTASH_REDIS_REST_TOKEN || '').replace(/^["']|["']$/g, '');
+    // Corrige caso as credenciais tenham sido salvas invertidas
+    if (url && token && !url.startsWith('https://') && token.startsWith('https://')) {
+        [url, token] = [token, url];
+    }
+    if (url && token) {
+        redis = new Redis({ url, token });
+        console.log('✅ [Redis] Cliente Upstash REST inicializado com sucesso.');
     } else {
-        console.warn('⚠️ [Redis] REDIS_URL não encontrada no ambiente.');
+        console.warn('⚠️ [Redis] Credenciais Upstash não encontradas no ambiente.');
     }
 } catch (e) {
     console.error('❌ [Redis] Erro ao inicializar cliente:', e.message);
