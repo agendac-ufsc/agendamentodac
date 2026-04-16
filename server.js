@@ -11,8 +11,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname)));
 
-// Configurar Google Calendar
-const CALENDAR_ID = 'oto.bezerra@ufsc.br';
+// Configurar Google Calendar — locais disponíveis
+const CALENDAR_IDS = {
+    teatro: 'oto.bezerra@ufsc.br',
+    igrejinha: process.env.IGREJINHA_CALENDAR_ID || 'c_e19d30c40d4de176bc7d4e11ada96bfaffd130b3ed499d9807c88785e2c71c05@group.calendar.google.com'
+};
+const CALENDAR_ID = CALENDAR_IDS.teatro; // retrocompatibilidade
 let googleAuthClient;
 
 // Funções para persistência com Upstash Redis (REST)
@@ -308,7 +312,7 @@ const saveConfigs = async (configs) => {
 // Carregar configurações iniciais
 getConfigs();
 
-const createCalendarEvent = async (summary, description, date, timeRange) => {
+const createCalendarEvent = async (summary, description, date, timeRange, calendarId = CALENDAR_IDS.teatro) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
         const [startTime, endTime] = timeRange.split(' às ');
@@ -322,7 +326,7 @@ const createCalendarEvent = async (summary, description, date, timeRange) => {
         };
         const response = await calendar.events.insert({
             auth: googleAuthClient,
-            calendarId: CALENDAR_ID,
+            calendarId: calendarId,
             resource: event,
         });
         return response.data;
@@ -352,10 +356,11 @@ app.post('/api/admin/config', async (req, res) => {
 app.get('/api/disponibilidade', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
-        const { start, end } = req.query;
+        const { start, end, local } = req.query;
+        const calId = CALENDAR_IDS[(local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
         const response = await calendar.events.list({
             auth: googleAuthClient,
-            calendarId: CALENDAR_ID,
+            calendarId: calId,
             timeMin: start || new Date().toISOString(),
             timeMax: end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
             singleEvents: true,
@@ -438,10 +443,13 @@ const sendEmail = async (to, subject, htmlContent) => {
 
 app.post('/api/agendar', async (req, res) => {
     try {
-        const { nome, email, telefone, evento, etapas } = req.body;
+        const { nome, email, telefone, evento, etapas, local } = req.body;
         if (!nome || !email || !telefone || !evento || !etapas) {
             return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         }
+        const localKey = (local || 'teatro').toLowerCase();
+        const calId = CALENDAR_IDS[localKey] || CALENDAR_IDS.teatro;
+        const localNome = localKey === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
         const formatarData = (dataStr) => {
             const [year, month, day] = dataStr.split('-');
             return `${day}/${month}/${year}`;
@@ -466,14 +474,14 @@ app.post('/api/agendar', async (req, res) => {
             for (let i = 0; i < itens.length; i++) {
                 const item = itens[i];
                 const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
-                await createCalendarEvent(`${label}: ${evento}`, `Proponente: ${nome}\nE-mail: ${email}\nTelefone: ${telefone}`, item.data, item.horario);
+                await createCalendarEvent(`${label}: ${evento}`, `Proponente: ${nome}\nE-mail: ${email}\nTelefone: ${telefone}\nLocal: ${localNome}`, item.data, item.horario, calId);
             }
         }
         const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
-        await sendEmail(email, '✅ Confirmação de Inscrição de Projeto - DAC', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá ${nome}!</h2><p>Sua inscription para o evento <strong>${evento}</strong> foi recebida com sucesso.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Resumo do Cronograma:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><p>Caso precise realizar alterações, entre em contato respondendo a este e-mail.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`);
-        await sendEmail(adminEmail, `📅 NOVA INSCRIÇÃO: ${evento} (${nome})`, `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #333;">Nova Inscrição de Projeto</h2><p>Um novo projeto foi inscrito com o seguinte cronograma:</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Dados do Proponente:</strong></p><p>👤 <strong>Nome:</strong> ${nome}</p><p>📧 <strong>E-mail:</strong> ${email}</p><p>📞 <strong>Telefone:</strong> ${telefone}</p><p>🎭 <strong>Evento:</strong> ${evento}</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Cronograma do Projeto:</strong></p>${tabelaHtml}</div>`);
-        await saveAgendamento({ id: Date.now().toString(), nome, email, telefone, evento, etapas, calendarId: CALENDAR_ID, timestamp: new Date().toLocaleString('pt-BR') });
+        await sendEmail(email, '✅ Confirmação de Inscrição de Projeto - DAC', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá ${nome}!</h2><p>Sua inscrição para o evento <strong>${evento}</strong> no <strong>${localNome}</strong> foi recebida com sucesso.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Resumo do Cronograma:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><p>Caso precise realizar alterações, entre em contato respondendo a este e-mail.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`);
+        await sendEmail(adminEmail, `📅 NOVA INSCRIÇÃO: ${evento} (${nome}) — ${localNome}`, `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #333;">Nova Inscrição de Projeto</h2><p>Um novo projeto foi inscrito com o seguinte cronograma:</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Dados do Proponente:</strong></p><p>👤 <strong>Nome:</strong> ${nome}</p><p>📧 <strong>E-mail:</strong> ${email}</p><p>📞 <strong>Telefone:</strong> ${telefone}</p><p>🏛️ <strong>Local:</strong> ${localNome}</p><p>🎭 <strong>Evento:</strong> ${evento}</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Cronograma do Projeto:</strong></p>${tabelaHtml}</div>`);
+        await saveAgendamento({ id: Date.now().toString(), nome, email, telefone, evento, etapas, local: localKey, localNome, calendarId: calId, timestamp: new Date().toLocaleString('pt-BR') });
         res.json({ success: true });
     } catch (error) {
         res.status(500).json({ error: 'Erro interno ao processar agendamento.' });
@@ -539,7 +547,12 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             h.toLowerCase().includes('full name')
         );
 
-        const mapeamentoLocais = { 'oto.bezerra@ufsc.br': 'Teatro' };
+        const mapeamentoLocais = {
+            'oto.bezerra@ufsc.br': 'Teatro',
+            [CALENDAR_IDS.igrejinha]: 'Igrejinha',
+            'teatro': 'Teatro',
+            'igrejinha': 'Igrejinha'
+        };
         const agendamentosPrimeiraEtapa = await getAgendamentos();
         const unificados = [];
 
@@ -562,9 +575,10 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             // Verificar se os eventos ainda existem no Google Calendar
             const eventosExistem = await verificarEventosNoCalendario(p);
             
+            const localNomeResolvido = p.localNome || mapeamentoLocais[p.local] || mapeamentoLocais[p.calendarId] || 'Teatro';
             if (correspondencia) {
                 unificados.push({
-                    primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                    primeiraEtapa: { ...p, localNome: localNomeResolvido },
                     segundaEtapa: { headers, valores: correspondencia },
                     // Se houver correspondência na planilha, o status é Completo, 
                     // independente da verificação do calendário (que pode falhar por delay)
@@ -573,7 +587,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 });
             } else {
                 unificados.push({
-                    primeiraEtapa: { ...p, localNome: mapeamentoLocais[p.calendarId] || 'N/A' },
+                    primeiraEtapa: { ...p, localNome: localNomeResolvido },
                     segundaEtapa: null,
                     // Se não houver correspondência, mas os eventos existem, está Pendente.
                     // Se os eventos NÃO existem e NÃO há correspondência, aí sim é Cancelado.
@@ -747,6 +761,214 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
         console.error('❌ Erro ao iniciar exclusão geral:', error.message);
         res.status(500).json({ success: false, error: 'Erro ao iniciar exclusão geral' });
     }
+});
+
+// ============================================================
+// T001 — AUTENTICAÇÃO ADMIN E AVALIADORES
+// ============================================================
+
+app.post('/api/auth/admin', (req, res) => {
+    const { password } = req.body;
+    const adminPassword = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+    if (!password) return res.status(400).json({ error: 'Senha obrigatória.' });
+    if (password === adminPassword) {
+        res.json({ success: true, message: 'Acesso de administrador autorizado.' });
+    } else {
+        res.status(403).json({ success: false, message: 'Senha incorreta.' });
+    }
+});
+
+app.post('/api/auth/viewer', async (req, res) => {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'E-mail e senha obrigatórios.' });
+    try {
+        const raw = redis ? await redis.get('avaliadores') : null;
+        const avaliadores = raw ? JSON.parse(raw) : [];
+        const av = avaliadores.find(a => a.email.toLowerCase() === email.trim().toLowerCase());
+        if (!av) return res.status(403).json({ success: false, message: 'E-mail não encontrado na lista de avaliadores.' });
+        const senhaCorreta = 'avalia.dac.2026';
+        if (password === senhaCorreta) {
+            res.json({ success: true, email: av.email, nome: av.nome || av.email });
+        } else {
+            res.status(403).json({ success: false, message: 'Senha incorreta.' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: 'Erro interno.' });
+    }
+});
+
+// ============================================================
+// T003 — SISTEMA DE AVALIAÇÃO: AVALIADORES
+// ============================================================
+
+app.get('/api/evaluators', async (req, res) => {
+    try {
+        const raw = redis ? await redis.get('avaliadores') : null;
+        res.json(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao buscar avaliadores.' });
+    }
+});
+
+app.post('/api/evaluators', async (req, res) => {
+    const { evaluators } = req.body;
+    if (!Array.isArray(evaluators)) return res.status(400).json({ error: 'Lista de avaliadores inválida.' });
+    try {
+        const lista = evaluators.map(e => ({
+            id: e.id || `av_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            email: (e.email || '').trim().toLowerCase(),
+            nome: (e.nome || e.email || '').trim()
+        })).filter(e => e.email);
+        if (redis) await redis.set('avaliadores', JSON.stringify(lista));
+        res.json({ success: true, count: lista.length });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao salvar avaliadores.' });
+    }
+});
+
+app.delete('/api/evaluators/:id', async (req, res) => {
+    const { id } = req.params;
+    try {
+        const raw = redis ? await redis.get('avaliadores') : null;
+        const lista = raw ? JSON.parse(raw) : [];
+        const filtrada = lista.filter(a => a.id !== id);
+        if (redis) await redis.set('avaliadores', JSON.stringify(filtrada));
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao remover avaliador.' });
+    }
+});
+
+// ============================================================
+// T003 — SISTEMA DE AVALIAÇÃO: CRITÉRIOS
+// ============================================================
+
+const CRITERIOS_DEFAULT = [
+    { id: 'A', nome: 'Qualidade Artística', peso: 1 },
+    { id: 'B', nome: 'Relevância Cultural', peso: 1 },
+    { id: 'C', nome: 'Acessibilidade', peso: 1 },
+    { id: 'D', nome: 'Viabilidade Técnica', peso: 1 }
+];
+
+app.get('/api/criteria', async (req, res) => {
+    try {
+        const raw = redis ? await redis.get('criterios') : null;
+        res.json(raw ? JSON.parse(raw) : CRITERIOS_DEFAULT);
+    } catch (e) {
+        res.json(CRITERIOS_DEFAULT);
+    }
+});
+
+app.post('/api/criteria', async (req, res) => {
+    const { criteria } = req.body;
+    if (!Array.isArray(criteria)) return res.status(400).json({ error: 'Lista de critérios inválida.' });
+    try {
+        if (redis) await redis.set('criterios', JSON.stringify(criteria));
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao salvar critérios.' });
+    }
+});
+
+// ============================================================
+// T003 — SISTEMA DE AVALIAÇÃO: AVALIAÇÕES
+// ============================================================
+
+app.post('/api/save-assessment', async (req, res) => {
+    const { inscriptionId, evaluatorEmail, scoresJson } = req.body;
+    if (!inscriptionId || !evaluatorEmail || !scoresJson) {
+        return res.status(400).json({ error: 'Dados incompletos.' });
+    }
+    try {
+        const key = `avaliacoes_${inscriptionId}`;
+        const raw = redis ? await redis.get(key) : null;
+        const avaliacoes = raw ? JSON.parse(raw) : [];
+        const idx = avaliacoes.findIndex(a => a.evaluatorEmail === evaluatorEmail);
+        const entry = { inscriptionId, evaluatorEmail, scoresJson, updatedAt: new Date().toISOString() };
+        if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
+        if (redis) await redis.set(key, JSON.stringify(avaliacoes));
+        res.json({ success: true });
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao salvar avaliação.' });
+    }
+});
+
+app.get('/api/assessments/:inscriptionId', async (req, res) => {
+    const { inscriptionId } = req.params;
+    try {
+        const key = `avaliacoes_${inscriptionId}`;
+        const raw = redis ? await redis.get(key) : null;
+        res.json(raw ? JSON.parse(raw) : []);
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao buscar avaliações.' });
+    }
+});
+
+// ============================================================
+// T005 — ENVIO DE TERMOS DIGITAIS POR E-MAIL (BREVO)
+// ============================================================
+
+app.post('/api/enviar-termos-digitais', async (req, res) => {
+    const { inscricoes } = req.body;
+    if (!Array.isArray(inscricoes) || inscricoes.length === 0) {
+        return res.status(400).json({ error: 'Nenhuma inscrição selecionada.' });
+    }
+    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
+    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
+
+    const locaisNomes = { teatro: 'Teatro Carmen Fossari', igrejinha: 'Igrejinha da UFSC' };
+    let enviados = 0, erros = 0;
+
+    for (const insc of inscricoes) {
+        const { nome, email, evento, local } = insc;
+        if (!email) { erros++; continue; }
+        const localNome = locaisNomes[(local || 'teatro').toLowerCase()] || 'Teatro Carmen Fossari';
+
+        const htmlContent = `
+        <div style="font-family: sans-serif; max-width: 650px; margin: auto; border: 1px solid #ddd; padding: 30px; border-radius: 10px; color: #333;">
+            <div style="text-align: center; margin-bottom: 25px;">
+                <h2 style="color: #764ba2;">Termo de Autorização para Ocupação de Espaço</h2>
+                <p style="color: #666; font-size: 13px;">UFSC — Departamento Artístico Cultural (DAC)</p>
+            </div>
+            <p>Olá, <strong>${nome || 'Proponente'}</strong>,</p>
+            <p>Sua proposta <strong>"${evento || 'N/A'}"</strong> foi selecionada para o uso do espaço <strong>${localNome}</strong>.</p>
+            <p>Para formalizar a ocupação, é necessário que você assine digitalmente o <strong>Termo de Autorização de Ocupação dos Espaços do DAC</strong>.</p>
+            <div style="background: #f8f9fa; border: 1px solid #eee; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                <h3 style="margin-top: 0; font-size: 15px; color: #333;">Próximos passos:</h3>
+                <ol style="font-size: 14px; line-height: 2;">
+                    <li>Acesse o link de assinatura que será enviado em seguida pela equipe do DAC.</li>
+                    <li>Leia atentamente todas as cláusulas do termo.</li>
+                    <li>Assine digitalmente e envie de volta para confirmação.</li>
+                </ol>
+            </div>
+            <p>Em caso de dúvidas, responda a este e-mail ou entre em contato com a equipe do DAC.</p>
+            <hr style="border: 0; border-top: 1px solid #eee; margin: 25px 0;">
+            <p style="font-size: 12px; color: #888;">
+                UFSC — Secretaria de Cultura, Arte e Esporte<br>
+                Departamento Artístico Cultural (DAC)<br>
+                Praça Santos Dumont — Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+            </p>
+        </div>`;
+
+        try {
+            const resp = await axios.post('https://api.brevo.com/v3/smtp/email', {
+                sender: { name: 'DAC - UFSC', email: senderEmail },
+                to: [{ email: email, name: nome || email }],
+                subject: `📋 Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
+                htmlContent
+            }, {
+                headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }
+            });
+            enviados++;
+            console.log(`✅ Termo enviado para ${email}`);
+        } catch (e) {
+            erros++;
+            console.error(`❌ Erro ao enviar termo para ${email}:`, e.response?.data || e.message);
+        }
+    }
+
+    res.json({ success: true, enviados, erros, total: inscricoes.length });
 });
 
 const PORT = process.env.PORT || 5000;

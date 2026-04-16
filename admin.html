@@ -10,531 +10,1157 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #f8f9fa; color: #333; padding: 20px; }
-        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
-        header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid #eee; flex-wrap: wrap; gap: 15px; }
-        h1 { font-size: 22px; color: #444; }
-        .header-actions { display: flex; align-items: center; gap: 15px; }
-        .filter-select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; outline: none; background: white; cursor: pointer; }
-        .refresh-btn { padding: 8px 15px; background: #667eea; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; }
-        .delete-all-btn { padding: 8px 15px; background: #fff; color: #d9534f; border: 1px solid #d9534f; border-radius: 5px; cursor: pointer; font-weight: 600; display: flex; align-items: center; gap: 8px; transition: all 0.2s; }
-        .delete-all-btn:hover { background: #d9534f; color: white; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th { background: #f1f3f5; color: #666; text-transform: uppercase; font-size: 11px; font-weight: 700; padding: 12px 15px; text-align: left; border-bottom: 2px solid #dee2e6; }
-        td { padding: 15px; border-bottom: 1px solid #eee; vertical-align: middle; font-size: 13px; }
-        tr:hover { background: #fcfcfc; }
-        .col-id { color: #888; width: 50px; }
-        .col-evento { font-weight: 700; color: #333; min-width: 150px; }
-        .col-local { min-width: 120px; }
-        .local-badge { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; background: #f0f4ff; color: #5a6fd6; border-radius: 20px; font-size: 11px; font-weight: 600; }
-        .col-etapas { color: #555; line-height: 1.6; }
-        .etapa-item { display: block; margin-bottom: 2px; white-space: nowrap; }
-        .btn-action { background: none; border: none; cursor: pointer; font-size: 16px; padding: 5px; transition: transform 0.2s; }
-        .btn-action:hover { transform: scale(1.2); }
-        .btn-pdf { color: #d9534f; display: flex; align-items: center; gap: 5px; text-decoration: none; font-weight: 600; }
-        .btn-contact { color: #666; }
-        .btn-delete { color: #d9534f; }
-        .status-badge { font-weight: 700; font-size: 14px; }
-        .status-completo { color: #28a745; }
-        .status-pendente { color: #f0ad4e; }
-        .status-cancelado { color: #d9534f; font-size: 11px; font-style: italic; }
-        .row-cancelada { opacity: 0.6; background-color: #fff5f5 !important; }
-        .btn-disabled { color: #ccc !important; cursor: not-allowed !important; pointer-events: none; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 1000; }
-        .modal-content { background: white; padding: 25px; border-radius: 10px; width: 90%; max-width: 400px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); }
-        .modal-header { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .modal-body p { margin-bottom: 10px; font-size: 14px; }
-        .modal-footer { margin-top: 20px; text-align: right; }
-        .btn-close { padding: 8px 20px; background: #eee; border: none; border-radius: 5px; cursor: pointer; }
-        .loading { text-align: center; padding: 50px; color: #667eea; font-size: 18px; }
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;color:#333}
+
+        /* ── LOGIN ── */
+        #loginOverlay{position:fixed;inset:0;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;z-index:9999}
+        .login-box{background:#fff;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+        .login-box h1{font-size:22px;color:#444;text-align:center;margin-bottom:6px}
+        .login-box p{font-size:13px;color:#888;text-align:center;margin-bottom:28px}
+        .login-tabs{display:flex;gap:8px;margin-bottom:24px}
+        .login-tab{flex:1;padding:10px;border:2px solid #eee;border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:13px;color:#888;transition:.2s}
+        .login-tab.active{border-color:#764ba2;color:#764ba2;background:#f8f4ff}
+        .form-field{margin-bottom:16px}
+        .form-field label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px}
+        .form-field input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;transition:.2s}
+        .form-field input:focus{outline:none;border-color:#764ba2}
+        .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:.2s}
+        .btn-login:hover{opacity:.9}
+        .login-err{color:#d9534f;font-size:13px;text-align:center;margin-top:12px;display:none}
+
+        /* ── APP SHELL ── */
+        #appShell{display:none}
+        .topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+        .topbar-left{display:flex;align-items:center;gap:12px}
+        .topbar-left h1{font-size:18px;color:#444;font-weight:700}
+        .role-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700}
+        .role-admin{background:#ede9fe;color:#7c3aed}
+        .role-viewer{background:#dcfce7;color:#15803d}
+        .topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .btn-top{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s}
+        .btn-top:hover{opacity:.85}
+        .btn-refresh{background:#667eea;color:#fff}
+        .btn-danger{background:#fff;color:#d9534f;border:1px solid #d9534f}
+        .btn-danger:hover{background:#d9534f;color:#fff}
+        .btn-success{background:#28a745;color:#fff}
+        .btn-purple{background:#764ba2;color:#fff}
+        .btn-orange{background:#fd7e14;color:#fff}
+        .btn-logout{background:#eee;color:#555;border:1px solid #ddd}
+        .btn-logout:hover{background:#ddd}
+
+        /* ── TABS ── */
+        .tabs-bar{background:#fff;border-bottom:2px solid #eee;padding:0 24px;display:flex;gap:4px}
+        .tab-btn{padding:14px 20px;border:none;background:none;cursor:pointer;font-weight:600;font-size:14px;color:#888;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.2s}
+        .tab-btn.active{color:#764ba2;border-bottom-color:#764ba2}
+        .tab-btn:hover:not(.active){color:#555}
+        .tab-pane{display:none;padding:24px}
+        .tab-pane.active{display:block}
+
+        /* ── FILTERS BAR ── */
+        .filters-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+        .search-wrap{position:relative;flex:1;min-width:200px;max-width:360px}
+        .search-wrap input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none;transition:.2s}
+        .search-wrap input:focus{border-color:#764ba2}
+        .search-wrap i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#aaa;font-size:13px}
+        .filter-sel{padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff;outline:none;cursor:pointer}
+        .filter-sel:focus{border-color:#764ba2}
+
+        /* ── TABLE ── */
+        .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+        table{width:100%;border-collapse:collapse;background:#fff}
+        th{background:#f8f9fb;color:#666;text-transform:uppercase;font-size:11px;font-weight:700;padding:12px 15px;text-align:left;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+        td{padding:13px 15px;border-bottom:1px solid #f0f0f0;vertical-align:middle;font-size:13px}
+        tr:last-child td{border-bottom:none}
+        tr:hover td{background:#fcfaff}
+        .col-evento{font-weight:700;color:#333;min-width:160px}
+        .local-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+        .local-teatro{background:#ede9fe;color:#7c3aed}
+        .local-igrejinha{background:#dcfce7;color:#15803d}
+        .status-badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+        .st-completo{background:#d1fae5;color:#065f46}
+        .st-pendente{background:#fef3c7;color:#92400e}
+        .st-cancelado{background:#fee2e2;color:#991b1b}
+        .row-cancelada{opacity:.6;background:#fff8f8!important}
+        .btn-action{background:none;border:none;cursor:pointer;font-size:15px;padding:5px;transition:.2s}
+        .btn-action:hover{transform:scale(1.2)}
+        .check-col{width:36px;text-align:center}
+        .insc-checkbox{width:15px;height:15px;cursor:pointer;accent-color:#764ba2}
+
+        /* ── CARDS ── */
+        .card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:20px;margin-bottom:16px}
+        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+
+        /* ── MODAL ── */
+        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:2000}
+        .modal.open{display:flex}
+        .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+        .modal-box h3{font-size:18px;margin-bottom:16px;color:#444;border-bottom:1px solid #eee;padding-bottom:12px}
+        .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
+        .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+        .btn-save-modal{padding:9px 20px;background:#764ba2;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+
+        /* ── AVALIAÇÃO ── */
+        .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+        .av-info h4{font-size:14px;font-weight:700;margin-bottom:4px}
+        .av-info p{font-size:12px;color:#666}
+        .av-score{font-size:20px;font-weight:800;color:#764ba2}
+        .stars{display:flex;gap:4px;margin-top:6px}
+        .star{font-size:22px;cursor:pointer;color:#ddd;transition:.1s}
+        .star.on{color:#f59e0b}
+        .criteria-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0}
+        .criteria-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+        .criteria-label{flex:1;font-size:14px;font-weight:600;color:#333}
+        .criteria-weight{font-size:11px;color:#888;margin-top:2px}
+
+        /* ── AVALIADORES ── */
+        .av-list-item{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border:1px solid #eee;border-radius:8px;margin-bottom:8px}
+        .av-list-item .av-email{font-size:13px;font-weight:600;color:#333}
+        .av-list-item .av-nome{font-size:11px;color:#888;margin-top:2px}
+
+        /* ── CONFIG TABS ── */
+        .cfg-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #eee}
+        .cfg-tab{padding:10px 16px;border:none;background:none;cursor:pointer;font-weight:600;font-size:13px;color:#888;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.2s}
+        .cfg-tab.active{color:#764ba2;border-bottom-color:#764ba2}
+        .cfg-pane{display:none}
+        .cfg-pane.active{display:block}
+        .form-label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px;margin-top:14px}
+        .form-input{width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none;transition:.2s}
+        .form-input:focus{border-color:#764ba2}
+
+        /* ── EMPTY / LOADING ── */
+        .loading-msg{text-align:center;padding:60px;color:#667eea;font-size:16px}
+        .empty-msg{text-align:center;padding:60px;color:#aaa;font-size:15px}
+        .error-msg{text-align:center;padding:40px;color:#d9534f;background:#fff5f5;border-radius:10px;border:1px solid #fcc}
+        .results-count{font-size:12px;color:#888;margin-bottom:12px}
+
+        /* Responsivo */
+        @media(max-width:640px){
+            .topbar{padding:10px 14px}
+            .tab-btn{padding:10px 12px;font-size:12px}
+            .tab-pane{padding:14px}
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>📊 Painel Administrativo - DAC</h1>
-            <div class="header-actions">
-                <select id="localFilter" class="filter-select" onchange="renderizarTabela()">
-                    <option value="todos">Todos os Locais</option>
-                    <option value="Teatro">Teatro</option>
-                    <option value="Igrejinha">Igrejinha</option>
-                </select>
-                <button class="refresh-btn" onclick="loadData()">
-                    <i class="fas fa-sync-alt"></i> Atualizar Lista
-                </button>
-                <button class="delete-all-btn" onclick="deleteAllInscricoes()">
-                    <i class="fas fa-trash-sweep"></i> Excluir Tudo
-                </button>
-                <button class="refresh-btn" onclick="downloadAllPDFs()" style="background: #28a745;">
-                    <i class="fas fa-download"></i> Baixar Todos PDFs
-                </button>
-                <button class="refresh-btn" onclick="openConfigModal()" style="background: #764ba2;">
-                    <i class="fas fa-cog"></i> Configurações
-                </button>
+
+<!-- ═══════════════════════════════════════════════════════ LOGIN ═══ -->
+<div id="loginOverlay">
+    <div class="login-box">
+        <h1>🏛️ DAC — UFSC</h1>
+        <p>Painel de Administração e Avaliação</p>
+        <div class="login-tabs">
+            <button class="login-tab active" onclick="setLoginMode('admin')">Administrador</button>
+            <button class="login-tab" onclick="setLoginMode('avaliador')">Avaliador</button>
+        </div>
+        <div id="loginAdmin">
+            <div class="form-field">
+                <label>Senha de Administrador</label>
+                <input type="password" id="adminPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
             </div>
-        </header>
-        <div id="content">
-            <div class="loading">Carregando inscrições unificadas...</div>
+        </div>
+        <div id="loginViewer" style="display:none">
+            <div class="form-field">
+                <label>Seu E-mail</label>
+                <input type="email" id="viewerEmail" placeholder="avaliador@exemplo.com" onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+            <div class="form-field">
+                <label>Senha</label>
+                <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+            </div>
+        </div>
+        <button class="btn-login" onclick="doLogin()">Entrar</button>
+        <div class="login-err" id="loginErr"></div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ APP ═══ -->
+<div id="appShell">
+    <!-- Topbar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>📊 DAC — Painel</h1>
+            <span class="role-badge" id="roleBadge"></span>
+        </div>
+        <div class="topbar-right" id="topActions">
+            <!-- preenchido por JS conforme role -->
         </div>
     </div>
 
-    <div id="contactModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header"><h3>Dados do Proponente</h3></div>
-            <div class="modal-body" id="contactBody"></div>
-            <div class="modal-footer">
-                <button class="btn-close" onclick="closeModal()">Fechar</button>
+    <!-- Tabs -->
+    <div class="tabs-bar" id="tabsBar">
+        <!-- preenchido por JS conforme role -->
+    </div>
+
+    <!-- Tab: Inscrições -->
+    <div class="tab-pane active" id="pane-inscricoes">
+        <div class="filters-bar">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Buscar por evento ou proponente..." oninput="renderTabela()">
             </div>
+            <select id="filterLocal" class="filter-sel" onchange="renderTabela()">
+                <option value="">Todos os Locais</option>
+                <option value="Teatro">Teatro</option>
+                <option value="Igrejinha">Igrejinha</option>
+            </select>
+            <select id="filterStatus" class="filter-sel" onchange="renderTabela()">
+                <option value="">Todos os Status</option>
+                <option value="Completo">Completo</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Cancelado">Cancelado</option>
+            </select>
+            <button class="btn-top btn-orange" id="btnEnviarTermos" onclick="enviarTermosSelecionados()" style="display:none">
+                <i class="fas fa-paper-plane"></i> Enviar Termos (<span id="countSelecionados">0</span>)
+            </button>
+        </div>
+        <div class="results-count" id="resultsCount"></div>
+        <div class="table-wrap">
+            <div class="loading-msg" id="inscricoesLoading"><i class="fas fa-spinner fa-spin"></i> Carregando inscrições...</div>
+            <table id="inscricoesTable" style="display:none">
+                <thead>
+                    <tr>
+                        <th class="check-col"><input type="checkbox" id="checkAll" class="insc-checkbox" onchange="toggleCheckAll()"></th>
+                        <th>#</th>
+                        <th>Evento / Proponente</th>
+                        <th>Local</th>
+                        <th>Etapas</th>
+                        <th>Status</th>
+                        <th>Avaliação</th>
+                        <th style="text-align:center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="inscricoesBody"></tbody>
+            </table>
+            <div class="empty-msg" id="inscricoesEmpty" style="display:none">Nenhuma inscrição encontrada.</div>
+            <div class="error-msg" id="inscricoesError" style="display:none"></div>
         </div>
     </div>
 
-    <div id="configModal" class="modal">
-        <div class="modal-content" style="max-width: 600px;">
-            <div class="modal-header"><h3>⚙️ Configurações Gerais</h3></div>
-            <div class="modal-body">
-                <div style="display: flex; border-bottom: 1px solid #eee; margin-bottom: 20px;">
-                    <button onclick="switchTab('forms')" id="tab-forms" style="padding: 10px 20px; border: none; background: #764ba2; color: white; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Formulários</button>
-	                    <button onclick="switchTab('regras')" id="tab-regras" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Regras</button>
-	                    <button onclick="switchTab('horarios')" id="tab-horarios" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Horários</button>
-	                    <button onclick="switchTab('calendario')" id="tab-calendario" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold; margin-right: 5px;">Calendário</button>
-                    <button onclick="switchTab('bloqueio')" id="tab-bloqueio" style="padding: 10px 20px; border: none; background: #eee; color: #666; border-radius: 5px 5px 0 0; cursor: pointer; font-weight: bold;">Bloqueio</button>
-                </div>
-
-                <div id="content-forms">
-                    <p style="margin-bottom: 15px; font-size: 14px; color: #666;">Ajuste os links da segunda etapa da inscrição.</p>
-                    <div style="margin-bottom: 15px;">
-                        <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link do Google Forms (Segunda Etapa):</label>
-                        <input type="text" id="configFormsLink" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;">
-                    </div>
-                    <div style="margin-bottom: 15px;">
-                        <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:5px;">Link da Planilha do Google Sheets:</label>
-                        <input type="text" id="configSpreadsheetId" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:5px;" placeholder="Cole o link completo da planilha aqui">
-                    </div>
-                </div>
-
-                <div id="content-regras" style="display: none;">
-                    <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; border: 1px solid #eee;">
-                        <div style="display: flex; justify-content: space-between; align-items: center;">
-                            <div>
-                                <h4 style="font-size: 15px; color: #333; margin-bottom: 5px;">Permitir Disputa de Horários</h4>
-                                <p style="font-size: 12px; color: #666; line-height: 1.4;">Se ativado, permite que múltiplos proponentes solicitem o mesmo horário.</p>
-                            </div>
-                            <div style="position: relative; display: inline-block; width: 50px; height: 24px;">
-                                <input type="checkbox" id="configPermitirDisputa" style="opacity: 0; width: 0; height: 0;">
-                                <label for="configPermitirDisputa" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px;"></label>
-                                <style>
-                                    #configPermitirDisputa:checked + label { background-color: #764ba2; }
-                                    #configPermitirDisputa + label:before {
-                                        position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
-                                        background-color: white; transition: .4s; border-radius: 50%;
-                                    }
-                                    #configPermitirDisputa:checked + label:before { transform: translateX(26px); }
-                                </style>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-	                <div id="content-horarios" style="display: none;">
-	                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-	                        <i class="fas fa-clock" style="font-size: 20px; color: #444;"></i>
-	                        <h3 style="font-size: 18px; color: #333; font-weight: 600;">Controle de Horários e Datas</h3>
-	                    </div>
-	                    
-	                    <div style="background: white; padding: 25px; border-radius: 12px; border: 1px solid #eef0f2; box-shadow: 0 2px 15px rgba(0,0,0,0.02);">
-	                        <h4 style="font-size: 16px; color: #333; margin-bottom: 8px; font-weight: 700;">Horários Limite por Etapa</h4>
-	                        <p style="font-size: 13px; color: #777; margin-bottom: 25px; line-height: 1.5;">Defina o horário de início mais cedo e o horário de fim mais tarde permitidos para cada tipo de agendamento.</p>
-	                        
-	                        <style>
-	                            .horario-row { display: flex; align-items: center; gap: 20px; margin-bottom: 18px; }
-	                            .horario-label { width: 110px; font-size: 14px; font-weight: 500; color: #444; }
-	                            .horario-input-wrapper { display: flex; align-items: center; gap: 12px; }
-	                            .horario-input { 
-	                                width: 110px; 
-	                                padding: 10px 15px; 
-                                border: 1.5px solid #e0e6ed; 
-                                border-radius: 8px; 
-                                text-align: center; 
-                                font-size: 14px;
-                                color: #333;
-                                transition: all 0.2s;
-                                background: #fff;
-                            }
-                            .horario-input:focus { border-color: #3b82f6; outline: none; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
-                            .horario-sep { color: #94a3b8; font-weight: bold; }
-                            .btn-save-horarios {
-                                background: #2563eb;
-                                color: white;
-                                border: none;
-                                padding: 12px 24px;
-                                border-radius: 8px;
-                                font-weight: 600;
-                                font-size: 14px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                gap: 10px;
-                                margin-top: 15px;
-                                transition: background 0.2s;
-                            }
-                            .btn-save-horarios:hover { background: #1d4ed8; }
-                        </style>
-
-                        <div class="horario-row">
-                            <span class="horario-label">Ensaio:</span>
-                            <div class="horario-input-wrapper">
-                                <span style="font-size: 13px; color: #888;">Limite Final:</span>
-                                <input type="text" id="h-ensaio-fim" class="horario-input" placeholder="17:00" value="17:00">
-                            </div>
-                        </div>
-                        <div class="horario-row">
-                            <span class="horario-label">Montagem:</span>
-                            <div class="horario-input-wrapper">
-                                <span style="font-size: 13px; color: #888;">Limite Final:</span>
-                                <input type="text" id="h-montagem-fim" class="horario-input" placeholder="21:00" value="21:00">
-                            </div>
-                        </div>
-                        <div class="horario-row">
-                            <span class="horario-label">Desmontagem:</span>
-                            <div class="horario-input-wrapper">
-                                <span style="font-size: 13px; color: #888;">Limite Final:</span>
-                                <input type="text" id="h-desmontagem-fim" class="horario-input" placeholder="21:00" value="21:00">
-                            </div>
-                        </div>
-                        
-                        <button class="btn-save-horarios" onclick="saveConfigs()">
-                            <i class="far fa-save"></i> Salvar Horários
-                        </button>
-                    </div>
-                </div>
-
-                <div id="content-calendario" style="display: none;">
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
-                        <i class="fas fa-calendar-alt" style="font-size: 20px; color: #444;"></i>
-                        <h3 style="font-size: 18px; color: #333; font-weight: 600;">Calendário de Eventos</h3>
-                    </div>
-                    <div style="background: white; padding: 20px; border-radius: 12px; border: 1px solid #eef0f2; min-height: 400px;">
-                        <iframe id="calendar-iframe" src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="600" frameborder="0" scrolling="no"></iframe>
-                    </div>
-                </div>
-
-                <div id="content-bloqueio" style="display: none;">
-                    <div style="background: white; padding: 25px; border-radius: 12px; border: 1px solid #eef0f2; box-shadow: 0 2px 15px rgba(0,0,0,0.02);">
-                        <h4 style="font-size: 16px; color: #333; margin-bottom: 8px; font-weight: 700;">Bloqueio de Datas Específicas</h4>
-                        <p style="font-size: 13px; color: #777; margin-bottom: 20px; line-height: 1.5;">Selecione uma data para bloquear ou desbloquear no calendário de agendamento.</p>
-                        
-                        <div style="margin-bottom: 20px;">
-                            <label style="display:block; font-size:12px; font-weight:bold; margin-bottom:8px; color: #555;">Data a Bloquear/Desbloquear</label>
-                            <div style="display: flex; gap: 10px;">
-                                <input type="date" id="bloqueio-data" style="flex: 1; padding: 10px 15px; border: 1.5px solid #e0e6ed; border-radius: 8px; font-size: 14px; color: #333;">
-                                <button onclick="toggleBloqueioData()" style="background: #d9534f; color: white; border: none; padding: 10px 20px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 8px;">
-                                    <i class="far fa-save"></i> Salvar Datas
-                                </button>
-                            </div>
-                        </div>
-
-                        <div style="margin-top: 25px;">
-                            <h5 style="font-size: 14px; color: #333; margin-bottom: 12px; font-weight: 700;">Datas Bloqueadas Atualmente:</h5>
-                            <div id="lista-datas-bloqueadas" style="font-size: 13px; color: #666; background: #f8f9fa; padding: 15px; border-radius: 8px; border: 1px solid #eee; min-height: 50px;">
-                                Nenhuma data bloqueada.
-                            </div>
-                        </div>
-                    </div>
-                </div>
+    <!-- Tab: Avaliação -->
+    <div class="tab-pane" id="pane-avaliacao">
+        <div class="filters-bar">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchAvalia" placeholder="Buscar inscrição para avaliar..." oninput="renderAvaliacaoList()">
             </div>
-            <div class="modal-footer">
-                <button class="btn-close" onclick="closeConfigModal()">Cancelar</button>
-                <button class="refresh-btn" onclick="saveConfigs()" style="display:inline-block; margin-left:10px;">Salvar Alterações</button>
+            <select id="filterLocalAv" class="filter-sel" onchange="renderAvaliacaoList()">
+                <option value="">Todos os Locais</option>
+                <option value="Teatro">Teatro</option>
+                <option value="Igrejinha">Igrejinha</option>
+            </select>
+        </div>
+        <div id="avaliacaoList"><div class="loading-msg">Carregando...</div></div>
+    </div>
+
+    <!-- Tab: Avaliadores (admin only) -->
+    <div class="tab-pane" id="pane-avaliadores">
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444">Lista de Avaliadores</h3>
+                <button class="btn-top btn-purple" onclick="openAddAvaliadorModal()"><i class="fas fa-plus"></i> Adicionar</button>
             </div>
+            <p style="font-size:13px;color:#888;margin-bottom:16px">
+                A senha padrão de todos os avaliadores é: <strong style="font-family:monospace;background:#f0f0f0;padding:2px 8px;border-radius:4px">avalia.dac.2026</strong>
+            </p>
+            <div id="avaliadoresList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444">Critérios de Avaliação</h3>
+                <button class="btn-top btn-purple" onclick="saveCriteria()"><i class="fas fa-save"></i> Salvar Critérios</button>
+            </div>
+            <p style="font-size:13px;color:#888;margin-bottom:16px">Defina os critérios e seus pesos para o cálculo da pontuação final.</p>
+            <div id="criteriaList"></div>
+            <button class="btn-top" style="background:#eee;color:#666;margin-top:12px" onclick="addCriterion()"><i class="fas fa-plus"></i> Novo Critério</button>
         </div>
     </div>
 
-    <script>
-        let allUnificados = [];
+    <!-- Tab: Configurações (admin only) -->
+    <div class="tab-pane" id="pane-config">
+        <div class="card">
+            <div class="cfg-tabs" id="cfgTabsBar">
+                <button class="cfg-tab active" onclick="switchCfgTab('forms')">Formulários</button>
+                <button class="cfg-tab" onclick="switchCfgTab('regras')">Regras</button>
+                <button class="cfg-tab" onclick="switchCfgTab('horarios')">Horários</button>
+                <button class="cfg-tab" onclick="switchCfgTab('calendario')">Calendário</button>
+                <button class="cfg-tab" onclick="switchCfgTab('bloqueio')">Bloqueio de Datas</button>
+            </div>
 
-        async function loadData() {
-            const content = document.getElementById('content');
-            content.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Carregando dados unificados...</div>';
-            try {
-                const response = await fetch('/api/admin/dados-unificados');
-                const data = await response.json();
-                if (data.error) throw new Error(data.error);
-                allUnificados = Array.isArray(data) ? data : [];
-                renderizarTabela();
-            } catch (error) {
-                console.error('Erro ao carregar dados:', error);
-                content.innerHTML = `<div style="color:#d9534f; text-align:center; padding:40px; background:#fff5f5; border-radius:8px; border:1px solid #fabebc;">
-                    <i class="fas fa-exclamation-triangle" style="font-size:30px; margin-bottom:15px;"></i>
-                    <p><strong>Erro ao carregar dados unificados</strong></p>
-                    <p style="font-size:13px; margin-top:10px;">${error.message}</p>
-                    <button onclick="loadData()" class="refresh-btn" style="margin:20px auto 0; background:#d9534f;">Tentar Novamente</button>
-                </div>`;
-            }
-        }
+            <!-- Forms -->
+            <div class="cfg-pane active" id="cfg-forms">
+                <label class="form-label">Link do Google Forms (2ª Etapa)</label>
+                <input type="text" id="cfgFormsLink" class="form-input" placeholder="https://docs.google.com/forms/...">
+                <label class="form-label">Link / ID da Planilha Google Sheets</label>
+                <input type="text" id="cfgSheetId" class="form-input" placeholder="Cole o link completo ou o ID da planilha">
+                <button class="btn-top btn-purple" style="margin-top:16px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar</button>
+            </div>
 
-        function renderizarTabela() {
-            const content = document.getElementById('content');
-            const filterValue = document.getElementById('localFilter').value;
-            let filteredData = allUnificados;
-            if (filterValue !== 'todos') {
-                filteredData = allUnificados.filter(item => (item.primeiraEtapa.localNome || '').toLowerCase().includes(filterValue.toLowerCase()));
-            }
+            <!-- Regras -->
+            <div class="cfg-pane" id="cfg-regras">
+                <div style="background:#f8f9fa;padding:20px;border-radius:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                    <div>
+                        <h4 style="font-size:15px;color:#333;margin-bottom:4px">Permitir Disputa de Horários</h4>
+                        <p style="font-size:12px;color:#666">Se ativo, múltiplos proponentes podem solicitar o mesmo horário.</p>
+                    </div>
+                    <label style="position:relative;display:inline-block;width:50px;height:24px">
+                        <input type="checkbox" id="cfgDisputa" style="opacity:0;width:0;height:0">
+                        <span id="cfgDisputaSlider" onclick="document.getElementById('cfgDisputa').click()" style="position:absolute;cursor:pointer;inset:0;background:#ccc;transition:.3s;border-radius:24px"></span>
+                        <style>#cfgDisputa:checked~#cfgDisputaSlider{background:#764ba2}#cfgDisputaSlider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}#cfgDisputa:checked~#cfgDisputaSlider:before{transform:translateX(26px)}</style>
+                    </label>
+                </div>
+                <button class="btn-top btn-purple" style="margin-top:16px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar</button>
+            </div>
 
-            if (filteredData.length === 0) {
-                content.innerHTML = '<p style="text-align: center; padding: 40px;">Nenhuma inscrição encontrada.</p>';
-                return;
-            }
+            <!-- Horários -->
+            <div class="cfg-pane" id="cfg-horarios">
+                <p style="font-size:13px;color:#777;margin-top:8px;margin-bottom:16px">Defina o horário limite final de cada etapa.</p>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><span style="width:110px;font-size:14px;font-weight:600">Ensaio:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-ensaio-fim" class="form-input" style="width:110px" placeholder="17:00"></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><span style="width:110px;font-size:14px;font-weight:600">Montagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-montagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><span style="width:110px;font-size:14px;font-weight:600">Desmontagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-desmontagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
+                <button class="btn-top btn-purple" style="margin-top:8px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Horários</button>
+            </div>
 
-            let html = `<table><thead><tr><th class="col-id">#</th><th>Evento</th><th>Local</th><th>Etapas Agendadas</th><th>Status</th><th>Arquivos</th><th style="text-align: center;">Ações</th></tr></thead><tbody>`;
+            <!-- Calendário -->
+            <div class="cfg-pane" id="cfg-calendario">
+                <p style="font-size:13px;color:#777;margin:8px 0 16px">Visualize o calendário do Teatro Carmen Fossari.</p>
+                <iframe src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border:0;border-radius:8px" width="100%" height="500" frameborder="0" scrolling="no"></iframe>
+            </div>
 
-            filteredData.forEach((item, index) => {
-                const p = item.primeiraEtapa;
-                const s = item.segundaEtapa;
-                const id = (index + 1).toString().padStart(2, '0');
-                let nomeEvento = p.evento || 'SEM EVENTO';
-                let local = p.localNome || 'N/A';
-                let etapasHtml = '';
-                const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+            <!-- Bloqueio -->
+            <div class="cfg-pane" id="cfg-bloqueio">
+                <p style="font-size:13px;color:#777;margin:8px 0 16px">Bloqueie datas específicas para impedir novos agendamentos.</p>
+                <div style="display:flex;gap:10px;margin-bottom:20px">
+                    <input type="date" id="bloqueioData" class="form-input" style="flex:1">
+                    <button class="btn-top btn-danger" onclick="toggleBloqueioData()"><i class="fas fa-ban"></i> Bloquear/Desbloquear</button>
+                </div>
+                <h5 style="font-size:13px;font-weight:700;margin-bottom:10px">Datas bloqueadas atualmente:</h5>
+                <div id="listaDatasBloqueadas" style="background:#f8f9fa;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data bloqueada.</div>
+                <button class="btn-top btn-purple" style="margin-top:16px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Bloqueios</button>
+            </div>
+        </div>
+    </div>
+</div>
 
-                if (p.etapas) {
-                    for (const key in p.etapas) {
-                        const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
-                        itens.forEach((it, i) => {
-                            if (it && it.data && it.horario) {
-                                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                                etapasHtml += `<span class="etapa-item"><strong>${label}:</strong> ${it.data.split('-').reverse().join('/')}, ${it.horario}</span>`;
-                            }
-                        });
-                    }
-                }
+<!-- ═══════════════ MODAL CONTATO ═══ -->
+<div class="modal" id="modalContato">
+    <div class="modal-box">
+        <h3><i class="fas fa-address-card"></i> Dados do Proponente</h3>
+        <div id="contatoBody"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalContato')">Fechar</button>
+        </div>
+    </div>
+</div>
 
-                let statusClass = (item.status === 'Completo') ? 'status-completo' : 'status-pendente';
-                let statusText = (item.status === 'Completo') ? '1/1' : '0/1';
-                let rowClass = (item.status === 'Cancelado (Eventos Removidos)') ? 'row-cancelada' : '';
-                if (rowClass) { statusClass = 'status-cancelado'; statusText = 'CANCELADO'; }
+<!-- ═══════════════ MODAL AVALIAÇÃO ═══ -->
+<div class="modal" id="modalAvaliacao">
+    <div class="modal-box" style="max-width:640px">
+        <h3 id="modalAvaliacaoTitle"><i class="fas fa-star"></i> Avaliar Inscrição</h3>
+        <div id="modalAvaliacaoBody"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalAvaliacao')">Cancelar</button>
+            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
+        </div>
+    </div>
+</div>
 
-                const originalIndex = allUnificados.indexOf(item);
-                html += `<tr class="${rowClass}">
-                    <td class="col-id">${id}</td>
-                    <td class="col-evento">${nomeEvento.toUpperCase()}</td>
-                    <td class="col-local"><span class="local-badge"><i class="fas fa-theater-masks"></i> ${local}</span></td>
-                    <td class="col-etapas">${etapasHtml || 'Não agendado via site'}</td>
-                    <td class="status-badge ${statusClass}">${statusText}</td>
-                    <td><a href="#" class="btn-action btn-pdf" onclick="generatePDF(${originalIndex})"><i class="far fa-file-pdf"></i> Ficha (PDF)</a></td>
-                    <td style="text-align: center;">
-                        <button class="btn-action btn-contact" onclick="showContact(${originalIndex})" title="Ver Contato"><i class="far fa-address-card"></i></button>
-                        <button class="btn-action btn-delete" onclick="deleteInscricao('${p.id || p.email}')" title="Excluir"><i class="far fa-trash-alt"></i></button>
-                    </td>
-                </tr>`;
-            });
-            html += '</tbody></table>';
-            content.innerHTML = html;
-        }
+<!-- ═══════════════ MODAL ADD AVALIADOR ═══ -->
+<div class="modal" id="modalAddAvaliador">
+    <div class="modal-box" style="max-width:480px">
+        <h3><i class="fas fa-user-plus"></i> Adicionar Avaliador</h3>
+        <div class="form-field">
+            <label>Nome</label>
+            <input type="text" id="newAvNome" class="form-input" placeholder="Nome do avaliador">
+        </div>
+        <div class="form-field">
+            <label>E-mail</label>
+            <input type="email" id="newAvEmail" class="form-input" placeholder="avaliador@exemplo.com">
+        </div>
+        <p style="font-size:12px;color:#888;margin-top:8px">A senha padrão será <strong>avalia.dac.2026</strong></p>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalAddAvaliador')">Cancelar</button>
+            <button class="btn-save-modal" onclick="addAvaliador()"><i class="fas fa-save"></i> Adicionar</button>
+        </div>
+    </div>
+</div>
 
-        function showContact(index) {
-            const item = allUnificados[index];
-            const p = item.primeiraEtapa;
-            const body = document.getElementById('contactBody');
-            body.innerHTML = `<p><strong>Proponente:</strong> ${p.nome}</p><p><strong>E-mail:</strong> ${p.email}</p><p><strong>Telefone:</strong> ${p.telefone}</p>`;
-            document.getElementById('contactModal').style.display = 'flex';
-        }
-
-        function closeModal() { document.getElementById('contactModal').style.display = 'none'; }
-
+<script>
+// ══════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ══════════════════════════════════════════════════
+let allUnificados = [];
+let criterios = [];
+let avaliadores = [];
 let datasBloqueadas = [];
+let userRole = null; // 'admin' | 'viewer'
+let viewerEmail = null;
+let currentAvaliacaoIndex = null;
+let currentAvaliacaoScores = {};
 
-        function switchTab(tab) {
-            const tabs = ['forms', 'regras', 'horarios', 'calendario', 'bloqueio'];
-            tabs.forEach(t => {
-                const btn = document.getElementById(`tab-${t}`);
-                const content = document.getElementById(`content-${t}`);
-                if (t === tab) {
-                    btn.style.background = '#764ba2';
-                    btn.style.color = 'white';
-                    content.style.display = 'block';
-                } else {
-                    btn.style.background = '#eee';
-                    btn.style.color = '#666';
-                    content.style.display = 'none';
-                }
-            });
+// ══════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════
+let loginMode = 'admin';
+
+function setLoginMode(mode) {
+    loginMode = mode;
+    document.getElementById('loginAdmin').style.display = mode === 'admin' ? 'block' : 'none';
+    document.getElementById('loginViewer').style.display = mode === 'viewer' ? 'block' : 'none';
+    document.querySelectorAll('.login-tab').forEach((t, i) => {
+        t.classList.toggle('active', (i === 0 && mode === 'admin') || (i === 1 && mode === 'avaliador'));
+    });
+    document.getElementById('loginErr').style.display = 'none';
+}
+
+async function doLogin() {
+    const errEl = document.getElementById('loginErr');
+    errEl.style.display = 'none';
+    try {
+        if (loginMode === 'admin') {
+            const pass = document.getElementById('adminPass').value;
+            const r = await fetch('/api/auth/admin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: pass }) });
+            const d = await r.json();
+            if (d.success) {
+                userRole = 'admin';
+                localStorage.setItem('dac_role', 'admin');
+                localStorage.setItem('dac_ts', Date.now());
+                initApp();
+            } else {
+                errEl.textContent = d.message || 'Senha incorreta.';
+                errEl.style.display = 'block';
+            }
+        } else {
+            const email = document.getElementById('viewerEmail').value;
+            const pass = document.getElementById('viewerPass').value;
+            const r = await fetch('/api/auth/viewer', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ email, password: pass }) });
+            const d = await r.json();
+            if (d.success) {
+                userRole = 'viewer';
+                viewerEmail = d.email;
+                localStorage.setItem('dac_role', 'viewer');
+                localStorage.setItem('dac_viewer_email', d.email);
+                localStorage.setItem('dac_ts', Date.now());
+                initApp();
+            } else {
+                errEl.textContent = d.message || 'Acesso negado.';
+                errEl.style.display = 'block';
+            }
         }
+    } catch (e) {
+        errEl.textContent = 'Erro de conexão. Tente novamente.';
+        errEl.style.display = 'block';
+    }
+}
 
-        async function openConfigModal() {
-            try {
-                const response = await fetch('/api/config');
-                const config = await response.json();
-	                document.getElementById('configFormsLink').value = config.formsLink || '';
-	                document.getElementById('configSpreadsheetId').value = config.spreadsheetId || '';
-	                document.getElementById('configPermitirDisputa').checked = config.permitirDisputa !== false;
-	                
-		                if (config.horariosLimites) {
-		                    const hl = config.horariosLimites;
-		                    document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
-		                    document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
-document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
-			                }
-                            
-                            datasBloqueadas = config.datasBloqueadas || [];
-                            renderizarDatasBloqueadas();
+function logout() {
+    localStorage.removeItem('dac_role');
+    localStorage.removeItem('dac_viewer_email');
+    localStorage.removeItem('dac_ts');
+    location.reload();
+}
 
-		                switchTab('forms');
-                document.getElementById('configModal').style.display = 'flex';
-            } catch (e) { alert('Erro ao carregar configurações'); }
-        }
+// ══════════════════════════════════════════════════
+// INIT APP
+// ══════════════════════════════════════════════════
+function initApp() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('appShell').style.display = 'block';
 
-        function closeConfigModal() { document.getElementById('configModal').style.display = 'none'; }
+    const badge = document.getElementById('roleBadge');
+    badge.textContent = userRole === 'admin' ? 'Administrador' : `Avaliador: ${viewerEmail}`;
+    badge.className = 'role-badge ' + (userRole === 'admin' ? 'role-admin' : 'role-viewer');
 
-async function saveConfigs() {
-            const body = {
-                formsLink: document.getElementById('configFormsLink').value,
-                spreadsheetId: document.getElementById('configSpreadsheetId').value,
-                permitirDisputa: document.getElementById('configPermitirDisputa').checked,
-                horariosLimites: {
-                    ensaio: { fim: document.getElementById('h-ensaio-fim').value },
-                    montagem: { fim: document.getElementById('h-montagem-fim').value },
-                    desmontagem: { fim: document.getElementById('h-desmontagem-fim').value }
-                },
-                datasBloqueadas: datasBloqueadas
-            };
-            try {
-                const res = await fetch('/api/admin/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-                if (res.ok) { alert('Configurações salvas!'); closeConfigModal(); }
-                else alert('Erro ao salvar');
-            } catch (e) { alert('Erro de conexão'); }
-        }
+    buildTopActions();
+    buildTabs();
+    loadData();
+    loadCriteria();
+    if (userRole === 'admin') loadAvaliadores();
+}
 
-        async function deleteInscricao(id) {
-            if (!confirm('Excluir esta inscrição?')) return;
-            try {
-                const res = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
-                if (res.ok) loadData();
-                else alert('Erro ao excluir');
-            } catch (e) { alert('Erro de conexão'); }
-        }
+function buildTopActions() {
+    const el = document.getElementById('topActions');
+    if (userRole === 'admin') {
+        el.innerHTML = `
+            <button class="btn-top btn-refresh" onclick="loadData()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button class="btn-top btn-success" onclick="downloadAllPDFs()"><i class="fas fa-download"></i> Baixar PDFs</button>
+            <button class="btn-top btn-danger" onclick="deleteAllInscricoes()"><i class="fas fa-trash"></i> Excluir Tudo</button>
+            <button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
+        `;
+    } else {
+        el.innerHTML = `<button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>`;
+    }
+}
 
-        async function deleteAllInscricoes() {
-            if (!confirm('⚠️ EXCLUIR TUDO?')) return;
-            try {
-                await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
-                alert('Limpeza iniciada! Atualize em alguns segundos.');
-                loadData();
-            } catch (e) { alert('Erro ao limpar'); }
-        }
+function buildTabs() {
+    const bar = document.getElementById('tabsBar');
+    if (userRole === 'admin') {
+        bar.innerHTML = `
+            <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
+            <button class="tab-btn" onclick="switchTab('avaliacao')">Avaliação</button>
+            <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
+            <button class="tab-btn" onclick="switchTab('config')">Configurações</button>
+        `;
+    } else {
+        bar.innerHTML = `
+            <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
+            <button class="tab-btn" onclick="switchTab('avaliacao')">Minhas Avaliações</button>
+        `;
+    }
+}
 
-        async function generatePDF(index) {
-            const { jsPDF } = window.jspdf;
-            const item = allUnificados[index];
-            const p = item.primeiraEtapa;
-            const s = item.segundaEtapa;
-            const doc = new jsPDF();
-            doc.setFontSize(18); doc.text('Ficha de Inscrição - DAC', 105, 20, { align: 'center' });
-            doc.setFontSize(12); doc.text(`Evento: ${p.evento}`, 20, 40);
-            doc.text(`Proponente: ${p.nome}`, 20, 50);
-            doc.text(`E-mail: ${p.email}`, 20, 60);
-            doc.text(`Telefone: ${p.telefone}`, 20, 70);
-            let y = 90; doc.setFontSize(14); doc.text('Cronograma Agendado:', 20, y); y += 10; doc.setFontSize(10);
-            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+function switchTab(name) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const pane = document.getElementById(`pane-${name}`);
+    if (pane) pane.classList.add('active');
+    const keyMap = { inscricoes: 'inscri', avaliacao: 'avalia', avaliadores: 'avaliadores', config: 'config' };
+    const kw = keyMap[name] || name;
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
+    });
+    if (name === 'avaliacao') renderAvaliacaoList();
+    if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
+    if (name === 'config') loadConfigs();
+}
+
+// ══════════════════════════════════════════════════
+// INSCRIÇÕES
+// ══════════════════════════════════════════════════
+async function loadData() {
+    showInscricoesState('loading');
+    try {
+        const r = await fetch('/api/admin/dados-unificados');
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        allUnificados = Array.isArray(data) ? data : [];
+        renderTabela();
+    } catch (err) {
+        document.getElementById('inscricoesError').textContent = 'Erro ao carregar dados: ' + err.message;
+        showInscricoesState('error');
+    }
+}
+
+function showInscricoesState(state) {
+    document.getElementById('inscricoesLoading').style.display = state === 'loading' ? 'block' : 'none';
+    document.getElementById('inscricoesTable').style.display = state === 'data' ? 'table' : 'none';
+    document.getElementById('inscricoesEmpty').style.display = state === 'empty' ? 'block' : 'none';
+    document.getElementById('inscricoesError').style.display = state === 'error' ? 'block' : 'none';
+}
+
+function renderTabela() {
+    const q = (document.getElementById('searchInput').value || '').toLowerCase();
+    const filterLocal = document.getElementById('filterLocal').value;
+    const filterStatus = document.getElementById('filterStatus').value;
+    const nomesEtapas = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
+
+    let filtered = allUnificados.filter(item => {
+        const p = item.primeiraEtapa;
+        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q);
+        const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
+        const matchStatus = !filterStatus || (item.status||'').toLowerCase().includes(filterStatus.toLowerCase());
+        return matchQ && matchLocal && matchStatus;
+    });
+
+    document.getElementById('resultsCount').textContent = `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
+
+    if (filtered.length === 0) { showInscricoesState('empty'); return; }
+    showInscricoesState('data');
+
+    const tbody = document.getElementById('inscricoesBody');
+    tbody.innerHTML = '';
+    filtered.forEach((item, fi) => {
+        const p = item.primeiraEtapa;
+        const originalIndex = allUnificados.indexOf(item);
+
+        let etapasHtml = '';
+        if (p.etapas) {
             for (const key in p.etapas) {
                 const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
                 itens.forEach((it, i) => {
-                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                    doc.text(`${label}: ${it.data.split('-').reverse().join('/')}, ${it.horario}`, 25, y); y += 7;
-                });
-            }
-            if (s && s.headers && s.valores) {
-                y += 10; doc.setFontSize(14); doc.text('Dados Complementares (Forms):', 20, y); y += 10; doc.setFontSize(9);
-                s.headers.forEach((h, i) => {
-                    if (y > 270) { doc.addPage(); y = 20; }
-                    const val = s.valores[i] || 'N/A';
-                    const lines = doc.splitTextToSize(`${h}: ${val}`, 170);
-                    doc.text(lines, 20, y); y += (lines.length * 5) + 2;
-                });
-            }
-            doc.save(`inscricao_${p.evento.replace(/\s+/g, '_')}.pdf`);
-        }
-
-        async function downloadAllPDFs() {
-            const zip = new JSZip();
-            const { jsPDF } = window.jspdf;
-            for (let i = 0; i < allUnificados.length; i++) {
-                const item = allUnificados[i];
-                const p = item.primeiraEtapa;
-                const s = item.segundaEtapa;
-                const doc = new jsPDF();
-                doc.setFontSize(18); doc.text('Ficha de Inscrição - DAC', 105, 20, { align: 'center' });
-                doc.setFontSize(12); doc.text(`Evento: ${p.evento}`, 20, 40);
-                doc.text(`Proponente: ${p.nome}`, 20, 50);
-                doc.text(`E-mail: ${p.email}`, 20, 60);
-                doc.text(`Telefone: ${p.telefone}`, 20, 70);
-                let y = 90; doc.setFontSize(14); doc.text('Cronograma Agendado:', 20, y); y += 10; doc.setFontSize(10);
-                const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-                for (const key in p.etapas) {
-                    const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
-                    itens.forEach((it, i) => {
+                    if (it && it.data && it.horario) {
                         const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
-                        doc.text(`${label}: ${it.data.split('-').reverse().join('/')}, ${it.horario}`, 25, y); y += 7;
-                    });
-                }
-                if (s && s.headers && s.valores) {
-                    y += 10; doc.setFontSize(14); doc.text('Dados Complementares (Forms):', 20, y); y += 10; doc.setFontSize(9);
-                    s.headers.forEach((h, j) => {
-                        if (y > 270) { doc.addPage(); y = 20; }
-                        const val = s.valores[j] || 'N/A';
-                        const lines = doc.splitTextToSize(`${h}: ${val}`, 170);
-                        doc.text(lines, 20, y); y += (lines.length * 5) + 2;
-                    });
-                }
-                const pdfBlob = doc.output('blob');
-                zip.file(`inscricao_${p.evento.replace(/\s+/g, '_')}_${i}.pdf`, pdfBlob);
+                        etapasHtml += `<span style="display:block;white-space:nowrap;margin-bottom:2px"><strong>${label}:</strong> ${it.data.split('-').reverse().join('/')}, ${it.horario}</span>`;
+                    }
+                });
             }
-            const content = await zip.generateAsync({ type: 'blob' });
-            saveAs(content, 'todas_inscricoes.zip');
         }
 
-        function toggleBloqueioData() {
-            const dataInput = document.getElementById('bloqueio-data');
-            const data = dataInput.value;
-            if (!data) return alert('Selecione uma data');
-            
-            const index = datasBloqueadas.indexOf(data);
-            if (index > -1) {
-                datasBloqueadas.splice(index, 1);
-            } else {
-                datasBloqueadas.push(data);
-                datasBloqueadas.sort();
-            }
-            
-            renderizarDatasBloqueadas();
-            dataInput.value = '';
-        }
+        const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
+        const localBadge = `<span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}"><i class="fas fa-${isIgrejinha?'church':'theater-masks'}"></i> ${p.localNome||'Teatro'}</span>`;
 
-        function renderizarDatasBloqueadas() {
-            const lista = document.getElementById('lista-datas-bloqueadas');
-            if (datasBloqueadas.length === 0) {
-                lista.innerHTML = 'Nenhuma data bloqueada.';
-                return;
-            }
-            
-            let html = '<div style="display: flex; flex-wrap: wrap; gap: 8px;">';
-            datasBloqueadas.forEach(data => {
-                const dataFormatada = data.split('-').reverse().join('/');
-                html += `<span style="background: #fff; border: 1px solid #d9534f; color: #d9534f; padding: 4px 10px; border-radius: 20px; display: flex; align-items: center; gap: 5px; font-weight: 600;">
-                    ${dataFormatada} 
-                    <i class="fas fa-times" style="cursor: pointer;" onclick="removerData('${data}')"></i>
-                </span>`;
+        let stClass = 'st-pendente', stText = 'Pendente';
+        if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
+        if ((item.status||'').includes('Cancelado')) { stClass='st-cancelado'; stText='Cancelado'; }
+        const rowClass = stText==='Cancelado' ? 'row-cancelada' : '';
+
+        const scoreHtml = `<span style="font-size:11px;color:#888" id="score-row-${originalIndex}">—</span>`;
+
+        const acoes = userRole === 'admin' ? `
+            <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
+            <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
+            <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
+        ` : `
+            <button class="btn-action" title="Avaliar" onclick="openAvaliacao(${originalIndex})" style="color:#764ba2"><i class="fas fa-star"></i></button>
+        `;
+
+        const row = document.createElement('tr');
+        row.className = rowClass;
+        row.innerHTML = `
+            <td class="check-col"><input type="checkbox" class="insc-checkbox insc-check" data-index="${originalIndex}" onchange="updateSelCount()"></td>
+            <td style="color:#888;font-size:12px">${(fi+1).toString().padStart(2,'0')}</td>
+            <td>
+                <div style="font-weight:700;color:#333">${(p.evento||'SEM EVENTO').toUpperCase()}</div>
+                <div style="font-size:11px;color:#888;margin-top:2px">${p.nome||''} &middot; ${p.email||''}</div>
+            </td>
+            <td>${localBadge}</td>
+            <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}</td>
+            <td><span class="status-badge ${stClass}">${stText}</span></td>
+            <td>${scoreHtml}</td>
+            <td style="text-align:center;white-space:nowrap">${acoes}</td>
+        `;
+        tbody.appendChild(row);
+        loadScoreForRow(originalIndex);
+    });
+}
+
+async function loadScoreForRow(idx) {
+    const item = allUnificados[idx];
+    if (!item) return;
+    const id = item.primeiraEtapa.id || item.primeiraEtapa.email;
+    if (!id) return;
+    try {
+        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+        const avs = await r.json();
+        const el = document.getElementById(`score-row-${idx}`);
+        if (!el) return;
+        if (avs.length === 0) { el.textContent = '—'; return; }
+        const crit = criterios.length ? criterios : [{ id:'A',peso:1 },{ id:'B',peso:1 },{ id:'C',peso:1 },{ id:'D',peso:1 }];
+        let totalPontos = 0, totalPeso = 0;
+        avs.forEach(av => {
+            const sc = av.scoresJson || {};
+            crit.forEach(c => {
+                const nota = parseFloat(sc[c.id]||0);
+                totalPontos += nota * (c.peso||1);
+                totalPeso += (c.peso||1);
             });
-            html += '</div>';
-            lista.innerHTML = html;
-        }
+        });
+        const media = totalPeso > 0 ? (totalPontos / avs.length / totalPeso * 10).toFixed(1) : '—';
+        el.innerHTML = `<strong style="color:#764ba2">${media}</strong><span style="color:#aaa"> / 10 (${avs.length} av.)</span>`;
+    } catch(e){}
+}
 
-        function removerData(data) {
-            datasBloqueadas = datasBloqueadas.filter(d => d !== data);
-            renderizarDatasBloqueadas();
-        }
+function updateSelCount() {
+    const checked = document.querySelectorAll('.insc-check:checked').length;
+    document.getElementById('countSelecionados').textContent = checked;
+    document.getElementById('btnEnviarTermos').style.display = checked > 0 && userRole === 'admin' ? 'flex' : 'none';
+}
 
-        loadData();
-    </script>
+function toggleCheckAll() {
+    const all = document.getElementById('checkAll').checked;
+    document.querySelectorAll('.insc-check').forEach(c => c.checked = all);
+    updateSelCount();
+}
+
+function showContact(idx) {
+    const p = allUnificados[idx].primeiraEtapa;
+    document.getElementById('contatoBody').innerHTML = `
+        <p><strong>Proponente:</strong> ${p.nome||'—'}</p>
+        <p style="margin-top:8px"><strong>E-mail:</strong> <a href="mailto:${p.email}">${p.email||'—'}</a></p>
+        <p style="margin-top:8px"><strong>Telefone:</strong> ${p.telefone||'—'}</p>
+        <p style="margin-top:8px"><strong>Local:</strong> ${p.localNome||'—'}</p>
+        <p style="margin-top:8px"><strong>Inscrito em:</strong> ${p.timestamp||'—'}</p>
+    `;
+    openModal('modalContato');
+}
+
+async function deleteInscricao(id) {
+    if (!confirm('Excluir esta inscrição?')) return;
+    const r = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
+    if (r.ok) loadData(); else alert('Erro ao excluir.');
+}
+
+async function deleteAllInscricoes() {
+    if (!confirm('⚠️ ATENÇÃO: Excluir TODAS as inscrições e eventos do calendário? Esta ação não pode ser desfeita!')) return;
+    await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
+    alert('Limpeza iniciada. Atualize em alguns segundos.');
+    loadData();
+}
+
+// ══════════════════════════════════════════════════
+// ENVIO DE TERMOS
+// ══════════════════════════════════════════════════
+async function enviarTermosSelecionados() {
+    const checks = document.querySelectorAll('.insc-check:checked');
+    if (checks.length === 0) { alert('Selecione ao menos uma inscrição.'); return; }
+    if (!confirm(`Enviar termos para ${checks.length} proponente(s)?`)) return;
+
+    const inscricoes = [];
+    checks.forEach(c => {
+        const idx = parseInt(c.dataset.index);
+        const p = allUnificados[idx]?.primeiraEtapa;
+        if (p) inscricoes.push({ nome: p.nome, email: p.email, evento: p.evento, local: p.local||'teatro' });
+    });
+
+    try {
+        const r = await fetch('/api/enviar-termos-digitais', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ inscricoes })
+        });
+        const d = await r.json();
+        alert(`✅ Termos enviados!\n\nEnviados: ${d.enviados}\nErros: ${d.erros}\nTotal: ${d.total}`);
+        document.getElementById('checkAll').checked = false;
+        toggleCheckAll();
+    } catch(e) {
+        alert('Erro ao enviar termos: ' + e.message);
+    }
+}
+
+// ══════════════════════════════════════════════════
+// PDF
+// ══════════════════════════════════════════════════
+function generatePDF(idx) {
+    const { jsPDF } = window.jspdf;
+    const item = allUnificados[idx];
+    const p = item.primeiraEtapa;
+    const s = item.segundaEtapa;
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const W = 210, margin = 18;
+    let y = 18;
+
+    const addText = (text, x, yy, opts={}) => { doc.text(text, x, yy, opts); };
+    const addLine = (y1) => { doc.setDrawColor(220); doc.line(margin, y1, W-margin, y1); };
+
+    // Cabeçalho
+    doc.setFillColor(118, 75, 162);
+    doc.rect(0, 0, W, 28, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    addText('FICHA DE INSCRIÇÃO — DAC/UFSC', W/2, 12, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    addText('Sistema de Agendamento de Espaços — Departamento Artístico Cultural', W/2, 20, {align:'center'});
+    y = 38;
+
+    // Dados do proponente
+    doc.setTextColor(0);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.setFillColor(240,235,255); doc.roundedRect(margin, y, W-2*margin, 8, 2, 2, 'F');
+    addText('DADOS DO PROPONENTE', margin+4, y+5.5);
+    y += 13;
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    const info = [
+        ['Proponente', p.nome||'—'], ['E-mail', p.email||'—'],
+        ['Telefone', p.telefone||'—'], ['Local', p.localNome||'Teatro Carmen Fossari'],
+        ['Evento', p.evento||'—'], ['Inscrição', p.timestamp||'—']
+    ];
+    info.forEach(([k,v]) => {
+        doc.setFont('helvetica','bold'); addText(`${k}: `, margin, y);
+        doc.setFont('helvetica','normal');
+        const xOff = margin + doc.getTextWidth(`${k}: `);
+        const lines = doc.splitTextToSize(String(v), W-xOff-margin);
+        addText(lines, xOff, y);
+        y += (lines.length * 5) + 2;
+    });
+    y += 4; addLine(y); y += 6;
+
+    // Cronograma
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.setFillColor(240,235,255); doc.roundedRect(margin, y, W-2*margin, 8, 2, 2, 'F');
+    addText('CRONOGRAMA AGENDADO', margin+4, y+5.5);
+    y += 13;
+
+    const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
+    if (p.etapas && Object.keys(p.etapas).length > 0) {
+        doc.setFont('helvetica','normal'); doc.setFontSize(10);
+        for (const key in p.etapas) {
+            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+            itens.forEach((it, i) => {
+                if (it && it.data && it.horario) {
+                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                    doc.setFont('helvetica','bold'); addText(`${label}: `, margin+4, y);
+                    const xo = margin+4+doc.getTextWidth(`${label}: `);
+                    doc.setFont('helvetica','normal');
+                    addText(`${it.data.split('-').reverse().join('/')}, ${it.horario}`, xo, y);
+                    y += 7;
+                }
+            });
+        }
+    } else {
+        doc.setFont('helvetica','italic'); doc.setFontSize(10); doc.setTextColor(150);
+        addText('Sem etapas agendadas via site.', margin+4, y); doc.setTextColor(0); y += 7;
+    }
+    y += 4; addLine(y); y += 6;
+
+    // Dados do forms
+    if (s && s.headers && s.valores) {
+        doc.setFont('helvetica','bold'); doc.setFontSize(11);
+        doc.setFillColor(240,235,255); doc.roundedRect(margin, y, W-2*margin, 8, 2, 2, 'F');
+        addText('DADOS COMPLEMENTARES (FORMULÁRIO)', margin+4, y+5.5);
+        y += 13;
+        doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        s.headers.forEach((h, i) => {
+            if (y > 270) { doc.addPage(); y = 18; }
+            const val = s.valores[i] || '—';
+            doc.setFont('helvetica','bold'); addText(`${h}: `, margin, y);
+            const xo = margin + doc.getTextWidth(`${h}: `);
+            doc.setFont('helvetica','normal');
+            const lines = doc.splitTextToSize(String(val), W-xo-margin);
+            addText(lines, xo, y);
+            y += (lines.length*4.5)+2;
+        });
+    }
+
+    // Rodapé
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+        addText(`DAC/UFSC — Sistema de Agendamento — Página ${i} de ${pageCount}`, W/2, 290, {align:'center'});
+    }
+
+    const safe = (p.evento||'evento').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_');
+    doc.save(`inscricao_${safe}.pdf`);
+}
+
+async function downloadAllPDFs() {
+    const zip = new JSZip();
+    for (let i = 0; i < allUnificados.length; i++) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const p = allUnificados[i].primeiraEtapa;
+        doc.setFontSize(18); doc.text('Ficha - DAC', 105, 20, {align:'center'});
+        doc.setFontSize(12); doc.text(`Evento: ${p.evento||'—'}`, 20, 40);
+        doc.text(`Proponente: ${p.nome||'—'}`, 20, 50);
+        doc.text(`E-mail: ${p.email||'—'}`, 20, 60);
+        doc.text(`Local: ${p.localNome||'—'}`, 20, 70);
+        const safe = (p.evento||'evento').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_');
+        zip.file(`${String(i+1).padStart(2,'0')}_${safe}.pdf`, doc.output('arraybuffer'));
+    }
+    const blob = await zip.generateAsync({type:'blob'});
+    saveAs(blob, 'inscricoes_dac.zip');
+}
+
+// ══════════════════════════════════════════════════
+// AVALIAÇÃO
+// ══════════════════════════════════════════════════
+function renderAvaliacaoList() {
+    const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
+    const filterLocal = document.getElementById('filterLocalAv').value;
+    const container = document.getElementById('avaliacaoList');
+    const filtered = allUnificados.filter(item => {
+        const p = item.primeiraEtapa;
+        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
+        const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
+        return matchQ && matchLocal;
+    });
+    if (filtered.length === 0) { container.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada.</div>'; return; }
+
+    let html = '';
+    filtered.forEach(item => {
+        const p = item.primeiraEtapa;
+        const idx = allUnificados.indexOf(item);
+        const id = p.id || p.email;
+        const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
+        html += `
+        <div class="av-card">
+            <div class="av-info">
+                <h4>${(p.evento||'SEM EVENTO').toUpperCase()}</h4>
+                <p>${p.nome||''} &middot; <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}" style="padding:2px 8px">${p.localNome||'Teatro'}</span></p>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+                <span class="av-score" id="av-score-${idx}">—</span>
+                <button class="btn-top btn-purple" onclick="openAvaliacao(${idx})"><i class="fas fa-star"></i> Avaliar</button>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+    filtered.forEach(item => {
+        const idx = allUnificados.indexOf(item);
+        loadScoreCard(idx);
+    });
+}
+
+async function loadScoreCard(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p) return;
+    const id = p.id || p.email;
+    try {
+        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+        const avs = await r.json();
+        const el = document.getElementById(`av-score-${idx}`);
+        if (!el) return;
+        if (avs.length === 0) { el.textContent = '—'; return; }
+        const crit = criterios.length ? criterios : [{id:'A',peso:1},{id:'B',peso:1},{id:'C',peso:1},{id:'D',peso:1}];
+        let totalPontos = 0, totalPeso = 0;
+        avs.forEach(av => {
+            crit.forEach(c => {
+                totalPontos += parseFloat(av.scoresJson?.[c.id]||0) * (c.peso||1);
+                totalPeso += (c.peso||1);
+            });
+        });
+        const media = totalPeso > 0 ? (totalPontos/avs.length/totalPeso*10).toFixed(1) : '—';
+        el.textContent = `${media}/10`;
+    } catch(e) {}
+}
+
+async function openAvaliacao(idx) {
+    currentAvaliacaoIndex = idx;
+    currentAvaliacaoScores = {};
+    const p = allUnificados[idx].primeiraEtapa;
+    const id = p.id || p.email;
+    document.getElementById('modalAvaliacaoTitle').innerHTML = `<i class="fas fa-star"></i> Avaliação: ${p.evento||'—'}`;
+
+    let existingScores = {};
+    if (viewerEmail) {
+        try {
+            const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+            const avs = await r.json();
+            const myAv = avs.find(a => a.evaluatorEmail === viewerEmail);
+            if (myAv) existingScores = myAv.scoresJson || {};
+        } catch(e) {}
+    }
+
+    const crit = criterios.length ? criterios : [{id:'A',nome:'Qualidade Artística',peso:1},{id:'B',nome:'Relevância Cultural',peso:1},{id:'C',nome:'Acessibilidade',peso:1},{id:'D',nome:'Viabilidade Técnica',peso:1}];
+    currentAvaliacaoScores = {...existingScores};
+
+    let html = `<p style="font-size:13px;color:#666;margin-bottom:16px"><strong>Proponente:</strong> ${p.nome||'—'} &middot; <strong>Local:</strong> ${p.localNome||'—'}</p>`;
+    html += `<p style="font-size:12px;color:#888;margin-bottom:20px">Dê uma nota de 1 a 10 para cada critério.</p>`;
+
+    crit.forEach(c => {
+        const nota = parseInt(existingScores[c.id] || 0);
+        html += `<div class="criteria-row">
+            <div class="criteria-label">${c.nome}<div class="criteria-weight">Peso: ${c.peso||1}</div></div>
+            <div>
+                <div class="stars" id="stars-${c.id}">`;
+        for (let s = 1; s <= 10; s++) {
+            html += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
+        }
+        html += `</div><div style="text-align:center;font-size:12px;color:#764ba2;margin-top:4px" id="starLabel-${c.id}">${nota>0?nota+'/10':'—'}</div>
+            </div>
+        </div>`;
+    });
+
+    document.getElementById('modalAvaliacaoBody').innerHTML = html;
+    openModal('modalAvaliacao');
+}
+
+function setStar(criterioId, valor) {
+    currentAvaliacaoScores[criterioId] = valor;
+    const stars = document.querySelectorAll(`#stars-${criterioId} .star`);
+    stars.forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= valor));
+    const label = document.getElementById(`starLabel-${criterioId}`);
+    if (label) label.textContent = `${valor}/10`;
+}
+
+async function salvarAvaliacao() {
+    if (currentAvaliacaoIndex === null) return;
+    const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
+    const id = p.id || p.email;
+    const evalEmail = viewerEmail || (userRole === 'admin' ? 'admin' : null);
+    if (!evalEmail) { alert('Faça login como avaliador.'); return; }
+
+    try {
+        const r = await fetch('/api/save-assessment', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: evalEmail, scoresJson: currentAvaliacaoScores })
+        });
+        const d = await r.json();
+        if (d.success) {
+            alert('Avaliação salva!');
+            closeModal('modalAvaliacao');
+            renderAvaliacaoList();
+            loadScoreForRow(currentAvaliacaoIndex);
+        } else {
+            alert('Erro ao salvar: ' + (d.error||''));
+        }
+    } catch(e) {
+        alert('Erro de conexão: ' + e.message);
+    }
+}
+
+// ══════════════════════════════════════════════════
+// AVALIADORES
+// ══════════════════════════════════════════════════
+async function loadAvaliadores() {
+    try {
+        const r = await fetch('/api/evaluators');
+        avaliadores = await r.json();
+        renderAvaliadores();
+    } catch(e) { document.getElementById('avaliadoresList').innerHTML = '<div class="error-msg">Erro ao carregar avaliadores.</div>'; }
+}
+
+function renderAvaliadores() {
+    const el = document.getElementById('avaliadoresList');
+    if (!avaliadores.length) { el.innerHTML = '<p style="color:#aaa;font-size:13px">Nenhum avaliador cadastrado.</p>'; return; }
+    el.innerHTML = avaliadores.map(a => `
+        <div class="av-list-item">
+            <div><div class="av-email">${a.email}</div><div class="av-nome">${a.nome||'—'}</div></div>
+            <button class="btn-top btn-danger" style="padding:6px 12px" onclick="removeAvaliador('${a.id}')"><i class="fas fa-trash"></i></button>
+        </div>`).join('');
+}
+
+function openAddAvaliadorModal() { openModal('modalAddAvaliador'); }
+
+async function addAvaliador() {
+    const nome = document.getElementById('newAvNome').value.trim();
+    const email = document.getElementById('newAvEmail').value.trim();
+    if (!email) { alert('E-mail obrigatório.'); return; }
+    avaliadores.push({ id: `av_${Date.now()}`, email, nome });
+    await fetch('/api/evaluators', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ evaluators: avaliadores }) });
+    document.getElementById('newAvNome').value = '';
+    document.getElementById('newAvEmail').value = '';
+    closeModal('modalAddAvaliador');
+    renderAvaliadores();
+}
+
+async function removeAvaliador(id) {
+    if (!confirm('Remover este avaliador?')) return;
+    await fetch(`/api/evaluators/${id}`, { method: 'DELETE' });
+    await loadAvaliadores();
+}
+
+// ══════════════════════════════════════════════════
+// CRITÉRIOS
+// ══════════════════════════════════════════════════
+async function loadCriteria() {
+    try {
+        const r = await fetch('/api/criteria');
+        criterios = await r.json();
+        renderCriteria();
+    } catch(e) {}
+}
+
+function renderCriteria() {
+    const el = document.getElementById('criteriaList');
+    if (!el) return;
+    el.innerHTML = criterios.map((c, i) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <input type="text" value="${c.nome}" class="form-input" style="flex:2" onchange="criterios[${i}].nome=this.value" placeholder="Nome do critério">
+            <input type="number" value="${c.peso||1}" class="form-input" style="width:80px" min="1" max="10" onchange="criterios[${i}].peso=parseFloat(this.value)" placeholder="Peso">
+            <button class="btn-top btn-danger" style="padding:8px 12px" onclick="removeCriterion(${i})"><i class="fas fa-trash"></i></button>
+        </div>`).join('');
+}
+
+function addCriterion() {
+    criterios.push({ id: `C${Date.now()}`, nome: 'Novo Critério', peso: 1 });
+    renderCriteria();
+}
+
+function removeCriterion(i) {
+    criterios.splice(i, 1);
+    renderCriteria();
+}
+
+async function saveCriteria() {
+    try {
+        await fetch('/api/criteria', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ criteria: criterios }) });
+        alert('Critérios salvos!');
+    } catch(e) { alert('Erro ao salvar critérios.'); }
+}
+
+// ══════════════════════════════════════════════════
+// CONFIGURAÇÕES
+// ══════════════════════════════════════════════════
+async function loadConfigs() {
+    try {
+        const r = await fetch('/api/config');
+        const c = await r.json();
+        document.getElementById('cfgFormsLink').value = c.formsLink || '';
+        document.getElementById('cfgSheetId').value = c.spreadsheetId || '';
+        const disp = document.getElementById('cfgDisputa');
+        if (disp) disp.checked = c.permitirDisputa !== false;
+        const hl = c.horariosLimites || {};
+        document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
+        document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
+        document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
+        datasBloqueadas = c.datasBloqueadas || [];
+        renderDatasBloqueadas();
+    } catch(e) {}
+}
+
+function switchCfgTab(name) {
+    document.querySelectorAll('.cfg-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById(`cfg-${name}`).classList.add('active');
+    document.querySelectorAll('.cfg-tab').forEach(t => {
+        const map = {forms:'Formulários',regras:'Regras',horarios:'Horários',calendario:'Calendário',bloqueio:'Bloqueio'};
+        if (t.textContent.trim() === map[name]) t.classList.add('active');
+    });
+    if (name === 'config') loadConfigs();
+}
+
+async function saveConfigs() {
+    const body = {
+        formsLink: document.getElementById('cfgFormsLink').value,
+        spreadsheetId: document.getElementById('cfgSheetId').value,
+        permitirDisputa: document.getElementById('cfgDisputa').checked,
+        horariosLimites: {
+            ensaio:     { fim: document.getElementById('h-ensaio-fim').value },
+            montagem:   { fim: document.getElementById('h-montagem-fim').value },
+            desmontagem:{ fim: document.getElementById('h-desmontagem-fim').value }
+        },
+        datasBloqueadas
+    };
+    try {
+        const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        if (r.ok) alert('Configurações salvas!'); else alert('Erro ao salvar.');
+    } catch(e) { alert('Erro de conexão.'); }
+}
+
+function toggleBloqueioData() {
+    const data = document.getElementById('bloqueioData').value;
+    if (!data) { alert('Selecione uma data.'); return; }
+    const idx = datasBloqueadas.indexOf(data);
+    if (idx >= 0) datasBloqueadas.splice(idx, 1); else datasBloqueadas.push(data);
+    datasBloqueadas.sort();
+    renderDatasBloqueadas();
+}
+
+function renderDatasBloqueadas() {
+    const el = document.getElementById('listaDatasBloqueadas');
+    if (!el) return;
+    if (!datasBloqueadas.length) { el.textContent = 'Nenhuma data bloqueada.'; return; }
+    el.innerHTML = datasBloqueadas.map(d => {
+        const [y,m,dia] = d.split('-');
+        return `<span style="display:inline-flex;align-items:center;gap:6px;background:#fee2e2;color:#991b1b;border-radius:6px;padding:3px 10px;margin:3px;font-size:12px;font-weight:600">
+            📅 ${dia}/${m}/${y}
+            <button onclick="desbloquearData('${d}')" style="background:none;border:none;cursor:pointer;color:#991b1b;padding:0;font-size:14px;line-height:1">×</button>
+        </span>`;
+    }).join('');
+}
+
+function desbloquearData(d) {
+    datasBloqueadas = datasBloqueadas.filter(x => x !== d);
+    renderDatasBloqueadas();
+}
+
+// ══════════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+// ══════════════════════════════════════════════════
+// AUTO-LOGIN (sessão salva)
+// ══════════════════════════════════════════════════
+(function checkSavedSession() {
+    const role = localStorage.getItem('dac_role');
+    const ts = parseInt(localStorage.getItem('dac_ts') || '0');
+    const TTL = 8 * 60 * 60 * 1000; // 8 horas
+    if (role && (Date.now() - ts) < TTL) {
+        userRole = role;
+        if (role === 'viewer') viewerEmail = localStorage.getItem('dac_viewer_email');
+        initApp();
+    }
+})();
+
+// Carregar configs quando aba de config for aberta
+document.addEventListener('DOMContentLoaded', () => {
+    // Nada adicional necessário, tudo controlado por eventos
+});
+
+</script>
 </body>
 </html>
