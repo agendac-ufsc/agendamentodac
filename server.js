@@ -40,11 +40,21 @@ try {
     console.error('❌ [Redis] Erro ao inicializar cliente:', e.message);
 }
 
+const parseRedisValue = (data) => {
+    if (!data) return null;
+    if (Array.isArray(data) || (typeof data === 'object' && data !== null)) return data;
+    if (typeof data === 'string') {
+        try { return JSON.parse(data); } catch { return null; }
+    }
+    return null;
+};
+
 const getAgendamentos = async () => {
     try {
         if (redis) {
             const data = await redis.get(AGENDAMENTOS_KEY);
-            return data ? JSON.parse(data) : [];
+            const parsed = parseRedisValue(data);
+            return Array.isArray(parsed) ? parsed : [];
         }
     } catch (error) {
         console.error('❌ [Redis] Erro ao buscar agendamentos:', error.message);
@@ -56,12 +66,12 @@ const saveAgendamento = async (novoAgendamento) => {
     try {
         if (redis) {
             const agendamentos = await getAgendamentos();
-            // Garantir que o agendamento tenha um ID único
             if (!novoAgendamento.id) {
                 novoAgendamento.id = `site_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             }
             agendamentos.push(novoAgendamento);
-            await redis.set(AGENDAMENTOS_KEY, JSON.stringify(agendamentos));
+            // Upstash REST serializa automaticamente — não usar JSON.stringify extra
+            await redis.set(AGENDAMENTOS_KEY, agendamentos);
             console.log("✅ [Redis] Agendamento salvo com sucesso. Dados:", JSON.stringify(novoAgendamento));
             return true;
         }
@@ -170,7 +180,7 @@ const deleteAgendamentoByEmail = async (email) => {
             }
             
             const filtrados = agendamentos.filter(a => a.email !== email);
-            await redis.set(AGENDAMENTOS_KEY, JSON.stringify(filtrados));
+            await redis.set(AGENDAMENTOS_KEY, filtrados);
             console.log(`✅ [Redis] Agendamento de ${email} removido.`);
             return true;
         }
@@ -224,7 +234,7 @@ const getConfigs = async () => {
         if (redis) {
             const data = await redis.get(CONFIG_KEY);
             if (data) {
-                const configs = JSON.parse(data);
+                const configs = parseRedisValue(data);
                 // Garantir que o ID em memória esteja sempre limpo
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
@@ -297,7 +307,7 @@ const saveConfigs = async (configs) => {
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS
             };
-            await redis.set(CONFIG_KEY, JSON.stringify(configToSave));
+            await redis.set(CONFIG_KEY, configToSave);
             console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
         } else {
             console.warn('⚠️ [Config] Salvo apenas em memória (Redis indisponível).');
@@ -384,7 +394,7 @@ const getBlacklist = async () => {
     if (!redis) return [];
     try {
         const blacklist = await redis.get('agendamentos_blacklist');
-        return blacklist ? JSON.parse(blacklist) : [];
+        return parseRedisValue(blacklist) || [];
     } catch (error) {
         console.warn('⚠️ Erro ao obter Blacklist:', error.message);
         return [];
@@ -398,7 +408,7 @@ const addToBlacklist = async (id) => {
         const blacklist = await getBlacklist();
         if (!blacklist.includes(id)) {
             blacklist.push(id);
-            await redis.set('agendamentos_blacklist', JSON.stringify(blacklist));
+            await redis.set('agendamentos_blacklist', blacklist);
             console.log(`✅ [Blacklist] ID ${id} adicionado à lista de exclusão`);
         }
         return true;
@@ -788,7 +798,7 @@ app.post('/api/auth/viewer', async (req, res) => {
     if (!email || !password) return res.status(400).json({ error: 'E-mail e senha obrigatórios.' });
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
-        const avaliadores = raw ? JSON.parse(raw) : [];
+        const avaliadores = parseRedisValue(raw) || [];
         const av = avaliadores.find(a => a.email.toLowerCase() === email.trim().toLowerCase());
         if (!av) return res.status(403).json({ success: false, message: 'E-mail não encontrado na lista de avaliadores.' });
         const senhaCorreta = 'avalia.dac.2026';
@@ -809,7 +819,7 @@ app.post('/api/auth/viewer', async (req, res) => {
 app.get('/api/evaluators', async (req, res) => {
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
-        res.json(raw ? JSON.parse(raw) : []);
+        res.json(parseRedisValue(raw) || []);
     } catch (e) {
         res.status(500).json({ error: 'Erro ao buscar avaliadores.' });
     }
@@ -824,7 +834,7 @@ app.post('/api/evaluators', async (req, res) => {
             email: (e.email || '').trim().toLowerCase(),
             nome: (e.nome || e.email || '').trim()
         })).filter(e => e.email);
-        if (redis) await redis.set('avaliadores', JSON.stringify(lista));
+        if (redis) await redis.set('avaliadores', lista);
         res.json({ success: true, count: lista.length });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar avaliadores.' });
@@ -835,9 +845,9 @@ app.delete('/api/evaluators/:id', async (req, res) => {
     const { id } = req.params;
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
-        const lista = raw ? JSON.parse(raw) : [];
+        const lista = parseRedisValue(raw) || [];
         const filtrada = lista.filter(a => a.id !== id);
-        if (redis) await redis.set('avaliadores', JSON.stringify(filtrada));
+        if (redis) await redis.set('avaliadores', filtrada);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao remover avaliador.' });
@@ -858,7 +868,7 @@ const CRITERIOS_DEFAULT = [
 app.get('/api/criteria', async (req, res) => {
     try {
         const raw = redis ? await redis.get('criterios') : null;
-        res.json(raw ? JSON.parse(raw) : CRITERIOS_DEFAULT);
+        res.json(parseRedisValue(raw) || CRITERIOS_DEFAULT);
     } catch (e) {
         res.json(CRITERIOS_DEFAULT);
     }
@@ -868,7 +878,7 @@ app.post('/api/criteria', async (req, res) => {
     const { criteria } = req.body;
     if (!Array.isArray(criteria)) return res.status(400).json({ error: 'Lista de critérios inválida.' });
     try {
-        if (redis) await redis.set('criterios', JSON.stringify(criteria));
+        if (redis) await redis.set('criterios', criteria);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar critérios.' });
@@ -887,11 +897,11 @@ app.post('/api/save-assessment', async (req, res) => {
     try {
         const key = `avaliacoes_${inscriptionId}`;
         const raw = redis ? await redis.get(key) : null;
-        const avaliacoes = raw ? JSON.parse(raw) : [];
+        const avaliacoes = parseRedisValue(raw) || [];
         const idx = avaliacoes.findIndex(a => a.evaluatorEmail === evaluatorEmail);
         const entry = { inscriptionId, evaluatorEmail, scoresJson, updatedAt: new Date().toISOString() };
         if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
-        if (redis) await redis.set(key, JSON.stringify(avaliacoes));
+        if (redis) await redis.set(key, avaliacoes);
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar avaliação.' });
@@ -903,7 +913,7 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
     try {
         const key = `avaliacoes_${inscriptionId}`;
         const raw = redis ? await redis.get(key) : null;
-        res.json(raw ? JSON.parse(raw) : []);
+        res.json(parseRedisValue(raw) || []);
     } catch (e) {
         res.status(500).json({ error: 'Erro ao buscar avaliações.' });
     }
