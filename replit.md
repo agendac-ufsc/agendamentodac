@@ -1,5 +1,42 @@
 # Sistema de Agendamento DAC/UFSC
 
+## 🚀 Setup Rápido (para novo agente / novo ambiente Replit)
+
+Este projeto compartilha o **mesmo backend** que a versão de produção no Vercel (mesmo Redis, mesmo Calendar, mesmo Brevo). Para rodar localmente conectado a esses serviços:
+
+### Passo 1 — Instalar dependências
+```bash
+npm install
+```
+
+### Passo 2 — Configurar Secrets no Replit
+Abra a aba **🔒 Secrets** (lateral esquerda) e adicione **6 secrets**. Os valores são os mesmos que estão no Vercel (Settings → Environment Variables). Veja `.env.example` para o formato de cada um:
+
+| Secret | Onde obter |
+|---|---|
+| `UPSTASH_REDIS_REST_URL` | Vercel ou console.upstash.com |
+| `UPSTASH_REDIS_REST_TOKEN` | Vercel ou console.upstash.com |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` | Vercel (JSON completo em uma linha) |
+| `BREVO_API_KEY` | Vercel ou app.brevo.com |
+| `SENDER_EMAIL` | Vercel |
+| `ADMIN_EMAIL` | Vercel |
+
+⚠️ **Cuidado**: como o Redis é o mesmo da produção, qualquer inscrição feita aqui vai aparecer no Vercel também. Use prefixo "TESTE" em testes.
+
+### Passo 3 — Rodar
+O workflow `Start application` (`npm run dev`) já está configurado e roda na porta 5000. Basta clicar em Run.
+
+### Passo 4 — Compartilhar planilhas novas (se aplicável)
+Qualquer planilha nova do Google Sheets configurada no painel admin precisa ser **compartilhada** (acesso de Leitor) com o e-mail da service account:
+```
+agendamento-dac-service@agendamento-dac.iam.gserviceaccount.com
+```
+
+### Deploy no Vercel
+O Vercel faz deploy automático a cada `git push` na main. Se uma nova feature exigir uma nova variável de ambiente, **adicione no Vercel antes do push**.
+
+---
+
 ## Visão Geral
 Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da UFSC. Permite que proponentes inscrevam projetos para uso do Teatro Carmen Fossari ou da Igrejinha da UFSC, e que administradores gerenciem e avaliem as inscrições.
 
