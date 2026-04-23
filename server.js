@@ -505,6 +505,51 @@ app.post('/api/agendar', async (req, res) => {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
+app.get('/termo', (req, res) => res.sendFile(path.join(__dirname, 'termo.html')));
+
+// Buscar uma única inscrição pelo ID (usado pela página do termo digital)
+app.get('/api/agendamento/:id', async (req, res) => {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ error: 'ID não fornecido' });
+    try {
+        const agendamentos = await getAgendamentos();
+        const ag = agendamentos.find(a => a.id === id);
+        if (!ag) return res.status(404).json({ error: 'Inscrição não encontrada' });
+
+        // Montar string descritiva de data/horário a partir das etapas (se existirem)
+        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const partes = [];
+        if (ag.etapas) {
+            for (const key of Object.keys(ag.etapas)) {
+                const itens = Array.isArray(ag.etapas[key]) ? ag.etapas[key] : [ag.etapas[key]];
+                itens.forEach((it, i) => {
+                    if (it && it.data && it.horario) {
+                        const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                        const dataBr = it.data.split('-').reverse().join('/');
+                        partes.push(`${label}: ${dataBr}, ${it.horario}`);
+                    }
+                });
+            }
+        }
+        const dataHorarioEvento = partes.join(' | ');
+
+        res.json({
+            id: ag.id,
+            nome: ag.nome || '',
+            email: ag.email || '',
+            telefone: ag.telefone || '',
+            evento: ag.evento || '',
+            localNome: ag.localNome || '',
+            local: ag.local || '',
+            calendarId: ag.calendarId || '',
+            dataHorarioEvento,
+            etapas: ag.etapas || {}
+        });
+    } catch (e) {
+        console.error('[/api/agendamento/:id] erro:', e);
+        res.status(500).json({ error: 'Erro ao buscar inscrição' });
+    }
+});
 
 app.get('/api/admin/dados-unificados', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();

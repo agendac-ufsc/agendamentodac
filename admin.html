@@ -599,6 +599,8 @@ function renderTabela() {
         const acoes = userRole === 'admin' ? `
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
+            <button class="btn-action" title="Abrir Termo Digital" onclick="abrirTermoDigital(${originalIndex})" style="color:#16a34a"><i class="fas fa-file-signature"></i></button>
+            <button class="btn-action" title="Copiar link do Termo" onclick="copiarLinkTermo(${originalIndex})" style="color:#2563eb"><i class="fas fa-link"></i></button>
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : `
             <button class="btn-action" title="Avaliar" onclick="openAvaliacao(${originalIndex})" style="color:#764ba2"><i class="fas fa-star"></i></button>
@@ -660,6 +662,36 @@ function toggleCheckAll() {
     const all = document.getElementById('checkAll').checked;
     document.querySelectorAll('.insc-check').forEach(c => c.checked = all);
     updateSelCount();
+}
+
+function abrirTermoDigital(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p || !p.id) { alert('Inscrição sem identificador — não é possível gerar o link.'); return; }
+    if (String(p.id).startsWith('forms_')) {
+        alert('Esta inscrição é apenas do Forms (sem registro da primeira etapa). O termo digital usa os dados da inscrição feita no site.');
+        return;
+    }
+    window.open(`/termo?id=${encodeURIComponent(p.id)}`, '_blank');
+}
+
+async function copiarLinkTermo(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p || !p.id) { alert('Inscrição sem identificador.'); return; }
+    if (String(p.id).startsWith('forms_')) {
+        alert('Esta inscrição é apenas do Forms — sem dados completos pra gerar termo digital.');
+        return;
+    }
+    const url = `${window.location.origin}/termo?id=${encodeURIComponent(p.id)}`;
+    try {
+        await navigator.clipboard.writeText(url);
+        const btn = event.currentTarget;
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        btn.style.color = '#16a34a';
+        setTimeout(() => { btn.innerHTML = originalHTML; btn.style.color = '#2563eb'; }, 1500);
+    } catch (e) {
+        prompt('Copie o link manualmente:', url);
+    }
 }
 
 function showContact(idx) {
