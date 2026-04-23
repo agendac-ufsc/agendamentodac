@@ -666,6 +666,9 @@
                     secondStepBtn.style.marginTop = '20px';
                     secondStepBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
                     secondStepBtn.textContent = 'Ir para Segunda Etapa (Google Forms)';
+                    secondStepBtn.onclick = () => {
+                        setTimeout(() => location.reload(), 800);
+                    };
                     
                     msg.after(secondStepBtn);
 
