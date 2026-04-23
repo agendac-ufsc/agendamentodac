@@ -2,38 +2,46 @@
 
 ## 🚀 Setup Rápido (para novo agente / novo ambiente Replit)
 
-Este projeto compartilha o **mesmo backend** que a versão de produção no Vercel (mesmo Redis, mesmo Calendar, mesmo Brevo). Para rodar localmente conectado a esses serviços:
+Este projeto compartilha o **mesmo backend** que a versão de produção no Vercel (mesmo Redis Upstash, mesmo Google Calendar, mesmo Brevo). Existem **duas formas** de abrir este projeto em um novo ambiente Replit. **Use sempre a Forma 1.**
 
-### Passo 1 — Instalar dependências
-```bash
-npm install
-```
+---
 
-### Passo 2 — Configurar Secrets no Replit
-Abra a aba **🔒 Secrets** (lateral esquerda) e adicione **6 secrets**. Os valores são os mesmos que estão no Vercel (Settings → Environment Variables). Veja `.env.example` para o formato de cada um:
+### ✅ Forma 1 (RECOMENDADA): Fork do Replit existente
 
-| Secret | Onde obter |
-|---|---|
-| `UPSTASH_REDIS_REST_URL` | Vercel ou console.upstash.com |
-| `UPSTASH_REDIS_REST_TOKEN` | Vercel ou console.upstash.com |
-| `GOOGLE_SERVICE_ACCOUNT_KEY` | Vercel (JSON completo em uma linha) |
-| `BREVO_API_KEY` | Vercel ou app.brevo.com |
-| `SENDER_EMAIL` | Vercel |
-| `ADMIN_EMAIL` | Vercel |
+> Esta é a forma correta. **Não clone do GitHub** — porque ao clonar do Git, os Secrets (chaves de API) **não vêm junto** e o usuário teria que copiar 6 chaves manualmente do Vercel.
+>
+> Ao **forkar o Replit**, os Secrets são copiados automaticamente.
 
-⚠️ **Cuidado**: como o Redis é o mesmo da produção, qualquer inscrição feita aqui vai aparecer no Vercel também. Use prefixo "TESTE" em testes.
+**Instruções para o agente:**
+1. Peça ao usuário para abrir o Replit original e clicar em **⋮ (três pontos no topo) → Fork Repl**. Os 6 Secrets serão copiados automaticamente para o novo Repl.
+2. Confirme com o usuário, na aba **🔒 Secrets**, que estes 6 estão presentes:
+   - `UPSTASH_REDIS_REST_URL`
+   - `UPSTASH_REDIS_REST_TOKEN`
+   - `GOOGLE_SERVICE_ACCOUNT_KEY`
+   - `BREVO_API_KEY`
+   - `SENDER_EMAIL`
+   - `ADMIN_EMAIL`
+3. Rode `npm install` (se ainda não foi rodado pelo Replit).
+4. Clique em **Run** — o workflow `Start application` (`npm run dev`) já está configurado e roda na porta 5000.
 
-### Passo 3 — Rodar
-O workflow `Start application` (`npm run dev`) já está configurado e roda na porta 5000. Basta clicar em Run.
+⚠️ **Cuidado**: como o Redis é o mesmo da produção, **qualquer inscrição feita aqui aparece no Vercel também**. Use prefixo "TESTE" em nomes de eventos/proponentes durante testes, ou exclua depois pelo painel admin.
 
-### Passo 4 — Compartilhar planilhas novas (se aplicável)
+---
+
+### ❌ Forma 2 (último recurso): Clone do GitHub
+
+Use **somente** se o Replit original foi perdido. O usuário vai precisar copiar manualmente os 6 Secrets do **Vercel → Settings → Environment Variables** e colar na aba 🔒 Secrets do Replit. Veja `.env.example` para o formato de cada um.
+
+---
+
+### Compartilhar planilhas novas (quando aplicável)
 Qualquer planilha nova do Google Sheets configurada no painel admin precisa ser **compartilhada** (acesso de Leitor) com o e-mail da service account:
 ```
 agendamento-dac-service@agendamento-dac.iam.gserviceaccount.com
 ```
 
 ### Deploy no Vercel
-O Vercel faz deploy automático a cada `git push` na main. Se uma nova feature exigir uma nova variável de ambiente, **adicione no Vercel antes do push**.
+O Vercel faz deploy automático a cada `git push` na branch main. Se uma nova feature exigir uma nova variável de ambiente, **adicione no Vercel antes do push** (Settings → Environment Variables).
 
 ---
 
