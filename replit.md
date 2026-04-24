@@ -69,7 +69,7 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 
 ### Autenticação
 - `POST /api/auth/admin` → Login admin (senha via env `ADMIN_PASSWORD`, padrão: `admin.dac.ufsc`)
-- `POST /api/auth/viewer` → Login avaliador (senha fixa: `avalia.dac.2026`)
+- `POST /api/auth/viewer` → Login avaliador (senha padrão: `dac.ufsc.2026`, configurável via env `EVALUATOR_PASSWORD`)
 
 ### Admin
 - `GET /api/admin/dados-unificados` → Lista unificada (Redis + Google Sheets)

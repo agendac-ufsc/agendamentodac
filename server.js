@@ -969,7 +969,7 @@ app.post('/api/auth/viewer', async (req, res) => {
         const avaliadores = parseRedisValue(raw) || [];
         const av = avaliadores.find(a => a.email.toLowerCase() === email.trim().toLowerCase());
         if (!av) return res.status(403).json({ success: false, message: 'E-mail não encontrado na lista de avaliadores.' });
-        const senhaCorreta = (process.env.EVALUATOR_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+        const senhaCorreta = (process.env.EVALUATOR_PASSWORD || 'dac.ufsc.2026').replace(/^["']|["']$/g, '');
         if (password === senhaCorreta) {
             res.json({ success: true, email: av.email, nome: av.nome || av.email });
         } else {
