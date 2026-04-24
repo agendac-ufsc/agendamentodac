@@ -365,6 +365,33 @@
     </div>
 </div>
 
+<!-- ═══════════════ MODAL EXCLUIR TUDO (confirmação dupla) ═══ -->
+<div class="modal" id="modalExcluirTudo">
+    <div class="modal-box" style="max-width:520px;border-top:4px solid #dc2626">
+        <h3 style="color:#dc2626"><i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições</h3>
+        <p style="font-size:14px;color:#444;line-height:1.5">
+            Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os
+            <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.
+        </p>
+        <p style="font-size:13px;color:#666;margin-top:12px">
+            Para confirmar, digite a palavra <strong style="color:#dc2626;letter-spacing:1px">EXCLUIR</strong> no campo abaixo (maiúsculas, sem aspas):
+        </p>
+        <div class="form-field" style="margin-top:10px">
+            <input type="text" id="excluirTudoConfirmInput" class="form-input"
+                   placeholder='Digite EXCLUIR' autocomplete="off" spellcheck="false"
+                   oninput="onExcluirTudoInputChange()">
+        </div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeExcluirTudoModal()">Cancelar</button>
+            <button id="btnConfirmExcluirTudo" class="btn-save-modal"
+                    style="background:#dc2626;opacity:0.5;cursor:not-allowed" disabled
+                    onclick="confirmDeleteAllInscricoes()">
+                <i class="fas fa-trash"></i> Confirmar exclusão
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════════════ MODAL ADD AVALIADOR ═══ -->
 <div class="modal" id="modalAddAvaliador">
     <div class="modal-box" style="max-width:480px">
@@ -712,11 +739,58 @@ async function deleteInscricao(id) {
     if (r.ok) loadData(); else alert('Erro ao excluir.');
 }
 
-async function deleteAllInscricoes() {
-    if (!confirm('⚠️ ATENÇÃO: Excluir TODAS as inscrições e eventos do calendário? Esta ação não pode ser desfeita!')) return;
-    await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
-    alert('Limpeza iniciada. Atualize em alguns segundos.');
-    loadData();
+function deleteAllInscricoes() {
+    const input = document.getElementById('excluirTudoConfirmInput');
+    if (input) input.value = '';
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (btn) btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
+    onExcluirTudoInputChange();
+    openModal('modalExcluirTudo');
+    setTimeout(() => { input && input.focus(); }, 50);
+}
+
+function closeExcluirTudoModal() {
+    closeModal('modalExcluirTudo');
+    const input = document.getElementById('excluirTudoConfirmInput');
+    if (input) input.value = '';
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
+    }
+    onExcluirTudoInputChange();
+}
+
+function onExcluirTudoInputChange() {
+    const input = document.getElementById('excluirTudoConfirmInput');
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (!input || !btn) return;
+    const ok = input.value === 'EXCLUIR';
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '1' : '0.5';
+    btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+
+async function confirmDeleteAllInscricoes() {
+    const input = document.getElementById('excluirTudoConfirmInput');
+    if (!input || input.value !== 'EXCLUIR') return;
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+    }
+    try {
+        const r = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        closeExcluirTudoModal();
+        alert('Limpeza iniciada. Atualize em alguns segundos.');
+        loadData();
+    } catch (e) {
+        alert('Erro ao iniciar exclusão: ' + e.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
+        }
+    }
 }
 
 // ══════════════════════════════════════════════════

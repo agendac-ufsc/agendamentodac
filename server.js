@@ -758,7 +758,20 @@ app.delete('/api/agendamentos/:id', async (req, res) => {
 app.delete('/api/admin/excluir-tudo', async (req, res) => {
     try {
         if (!googleAuthClient) await initGoogleAuth();
-        
+
+        // === AUDITORIA: registrar quem disparou a exclusão geral ===
+        const auditTimestamp = new Date().toISOString();
+        const auditIp = (req.headers['x-forwarded-for']
+            || req.connection?.remoteAddress
+            || req.socket?.remoteAddress
+            || req.ip
+            || 'unknown').toString().split(',')[0].trim();
+        const auditUserAgent = req.headers['user-agent'] || 'unknown';
+        console.log('🚨 [AUDITORIA] [Exclusão Geral] DISPARADA');
+        console.log(`   ↳ Timestamp: ${auditTimestamp}`);
+        console.log(`   ↳ IP: ${auditIp}`);
+        console.log(`   ↳ User-Agent: ${auditUserAgent}`);
+
         // Obter todos os agendamentos
         const agendamentos = await getAgendamentos();
         console.log(`🗑️ [Exclusão Geral] Iniciando limpeza de ${agendamentos.length} agendamentos...`);
@@ -875,6 +888,7 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
                 await clearBlacklist();
 
                 console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos dos calendários, ${agendamentos.length} registros removidos do banco de dados`);
+                console.log(`🚨 [AUDITORIA] [Exclusão Geral] FINALIZADA com sucesso (disparo: ${auditTimestamp}, IP: ${auditIp}, eventos: ${eventosDeletedos}, falhas: ${eventosFalhos}, inscrições: ${agendamentos.length})`);
             } catch (error) {
                 console.error('❌ Erro na exclusão geral em segundo plano:', error.message);
             }
