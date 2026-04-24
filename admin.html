@@ -184,7 +184,7 @@
         <div class="filters-bar">
             <div class="search-wrap">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Buscar por evento ou proponente..." oninput="renderTabela()">
+                <input type="text" id="searchInput" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
             </div>
             <select id="filterLocal" class="filter-sel" onchange="renderTabela()">
                 <option value="">Todos os Locais</option>
@@ -632,9 +632,17 @@ function renderTabela() {
     const filterStatus = document.getElementById('filterStatus').value;
     const nomesEtapas = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
 
+    const qDigits = q.replace(/\D/g, '');
     let filtered = allUnificados.filter(item => {
         const p = item.primeiraEtapa;
-        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q);
+        const telDigits = (p.telefone || '').replace(/\D/g, '');
+        const matchTel = qDigits.length >= 3 && telDigits && telDigits.includes(qDigits);
+        const matchQ = !q
+            || (p.evento || '').toLowerCase().includes(q)
+            || (p.nome || '').toLowerCase().includes(q)
+            || (p.email || '').toLowerCase().includes(q)
+            || (p.telefone || '').toLowerCase().includes(q)
+            || matchTel;
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
         const matchStatus = !filterStatus || (item.status||'').toLowerCase().includes(filterStatus.toLowerCase());
         return matchQ && matchLocal && matchStatus;
