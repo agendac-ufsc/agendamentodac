@@ -11,16 +11,17 @@ Este projeto compartilha o **mesmo backend** que a versão de produção no Verc
 A forma correta é **fazer Fork do Replit original**, não clonar do GitHub. Ao forkar, os 6 Secrets são copiados automaticamente. Se clonar do GitHub, o agente precisa solicitar os Secrets ao usuário via formulário seguro (`requestSecrets`).
 
 **Instruções para o agente:**
-1. Se o usuário forkou: confirme na aba **🔒 Secrets** que estes 6 estão presentes:
+1. Rode `npm install` (se ainda não foi rodado pelo Replit) e garanta que o workflow `Start application` (`npm run dev`, porta 5000) esteja configurado.
+2. **SEMPRE, logo após configurar o ambiente (instalar dependências e iniciar o workflow), o agente DEVE enviar o painel/formulário seguro de Secrets para o usuário preencher**, mesmo que o servidor já esteja rodando. Use a função de solicitação de secrets (`requestEnvVar` / `requestSecrets`) listando exatamente estas 6 chaves:
    - `UPSTASH_REDIS_REST_URL`
    - `UPSTASH_REDIS_REST_TOKEN`
    - `GOOGLE_SERVICE_ACCOUNT_KEY`
    - `BREVO_API_KEY`
    - `SENDER_EMAIL`
    - `ADMIN_EMAIL`
-2. Se o usuário clonou do GitHub: use `requestSecrets` para pedir as 6 chaves pelo formulário seguro. **Não aceite** chaves coladas no chat ou em arquivos anexados — isso cria risco de vazamento no histórico.
-3. Rode `npm install` (se ainda não foi rodado pelo Replit).
-4. Clique em **Run** — o workflow `Start application` (`npm run dev`) já está configurado e roda na porta 5000.
+3. Antes de enviar o painel, verifique quais já existem em Secrets e solicite **apenas as que estão faltando**. Se todas as 6 já existirem, apenas confirme com o usuário e pule esta etapa.
+4. **NUNCA** aceite chaves coladas no chat ou em arquivos anexados — exija o preenchimento via painel seguro de Secrets. Isso evita vazamento no histórico da conversa.
+5. Após o usuário preencher, reinicie o workflow `Start application` para carregar os Secrets.
 
 ⚠️ **Cuidado**: como o Redis é o mesmo da produção, **qualquer inscrição feita aqui aparece no Vercel também**. Use prefixo "TESTE" em nomes de eventos/proponentes durante testes, ou exclua depois pelo painel admin.
 
