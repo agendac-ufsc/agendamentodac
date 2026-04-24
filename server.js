@@ -227,6 +227,11 @@ let HORARIOS_LIMITES = {
 };
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
+let BOTOES_HOME = {
+    interno: { ativo: false, texto: 'Edital Interno' },
+    externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
+    ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
+};
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -243,13 +248,21 @@ const getConfigs = async () => {
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
+                if (configs.botoesHome && typeof configs.botoesHome === 'object') {
+                    BOTOES_HOME = {
+                        interno: { ...BOTOES_HOME.interno, ...(configs.botoesHome.interno || {}) },
+                        externo: { ...BOTOES_HOME.externo, ...(configs.botoesHome.externo || {}) },
+                        ensaio:  { ...BOTOES_HOME.ensaio,  ...(configs.botoesHome.ensaio  || {}) }
+                    };
+                }
                 return { 
                     spreadsheetId: SPREADSHEET_ID, 
                     formsLink: FORMS_LINK,
                     permitirDisputa: PERMITIR_DISPUTA,
                     horariosLimites: HORARIOS_LIMITES,
                     datasBloqueadas: DATAS_BLOQUEADAS,
-                    tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO
+                    tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                    botoesHome: BOTOES_HOME
                 };
             }
         }
@@ -262,7 +275,8 @@ const getConfigs = async () => {
         permitirDisputa: PERMITIR_DISPUTA,
         horariosLimites: HORARIOS_LIMITES,
         datasBloqueadas: DATAS_BLOQUEADAS,
-        tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO
+        tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+        botoesHome: BOTOES_HOME
     };
 };
 
@@ -304,6 +318,17 @@ const saveConfigs = async (configs) => {
         if (configs.tituloPaginaAgendamento !== undefined) {
             TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
         }
+        if (configs.botoesHome && typeof configs.botoesHome === 'object') {
+            const norm = (b, padraoTexto) => ({
+                ativo: !!(b && b.ativo),
+                texto: ((b && typeof b.texto === 'string' ? b.texto : '') || '').trim() || padraoTexto
+            });
+            BOTOES_HOME = {
+                interno: norm(configs.botoesHome.interno, 'Edital Interno'),
+                externo: norm(configs.botoesHome.externo, 'Edital de Ocupação dos Espaços do DAC 2026'),
+                ensaio:  norm(configs.botoesHome.ensaio,  'Agendar Apenas Ensaio')
+            };
+        }
 
         if (redis) {
             // Persistir as configurações
@@ -313,7 +338,8 @@ const saveConfigs = async (configs) => {
                 permitirDisputa: PERMITIR_DISPUTA,
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS,
-                tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO
+                tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                botoesHome: BOTOES_HOME
             };
             await redis.set(CONFIG_KEY, configToSave);
             console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
@@ -362,12 +388,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome });
     res.json({ success });
 });
 

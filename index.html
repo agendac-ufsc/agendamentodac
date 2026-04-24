@@ -161,11 +161,11 @@
             <p style="color: #555; font-size: 15px;">O que você gostaria de fazer?</p>
         </div>
         <div style="display: flex; flex-direction: column; gap: 14px; max-width: 380px; margin: 0 auto;">
-            <button type="button" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;" data-acao="edital-interno">Edital Interno</button>
+            <button type="button" id="btnHomeInterno" data-acao="edital-interno" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Edital Interno</button>
 
-            <button type="button" onclick="abrirSelecaoLocal()" style="background: #2563eb; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(37,99,235,0.3); transition: background 0.15s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'" data-acao="edital-ocupacao">Edital de Ocupação dos Espaços do DAC 2026</button>
+            <button type="button" id="btnHomeExterno" data-acao="edital-ocupacao" onclick="abrirSelecaoLocal()" style="background: #2563eb; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(37,99,235,0.3); transition: background 0.15s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">Edital de Ocupação dos Espaços do DAC 2026</button>
 
-            <button type="button" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;" data-acao="apenas-ensaio">Agendar Apenas Ensaio</button>
+            <button type="button" id="btnHomeEnsaio" data-acao="apenas-ensaio" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Agendar Apenas Ensaio</button>
         </div>
     </div>
 
@@ -297,7 +297,51 @@
                 const elTopo = document.getElementById('tituloPaginaAgendamento');
                 if (elTopo) elTopo.textContent = titulo;
                 document.querySelectorAll('.tituloPaginaAgendamentoEl').forEach(el => el.textContent = titulo);
+                aplicarBotoesHome(c.botoesHome);
             } catch (e) {}
+        }
+
+        function aplicarBotoesHome(bh) {
+            const padrao = {
+                interno: { ativo: false, texto: 'Edital Interno' },
+                externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
+                ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
+            };
+            const cfg = {
+                interno: { ...padrao.interno, ...((bh && bh.interno) || {}) },
+                externo: { ...padrao.externo, ...((bh && bh.externo) || {}) },
+                ensaio:  { ...padrao.ensaio,  ...((bh && bh.ensaio)  || {}) }
+            };
+            const aplicar = (el, def, onClickAtivo) => {
+                if (!el) return;
+                el.textContent = def.texto;
+                if (def.ativo) {
+                    el.disabled = false;
+                    el.removeAttribute('title');
+                    el.style.background = '#2563eb';
+                    el.style.color = '#fff';
+                    el.style.cursor = 'pointer';
+                    el.style.opacity = '1';
+                    el.style.boxShadow = '0 4px 10px rgba(37,99,235,0.3)';
+                    el.onmouseover = () => { el.style.background = '#1d4ed8'; };
+                    el.onmouseout  = () => { el.style.background = '#2563eb'; };
+                    el.onclick = onClickAtivo;
+                } else {
+                    el.disabled = true;
+                    el.title = 'Em breve';
+                    el.style.background = '#b0b0b0';
+                    el.style.color = '#fff';
+                    el.style.cursor = 'not-allowed';
+                    el.style.opacity = '0.85';
+                    el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
+                    el.onmouseover = null;
+                    el.onmouseout = null;
+                    el.onclick = null;
+                }
+            };
+            aplicar(document.getElementById('btnHomeInterno'), cfg.interno, abrirSelecaoLocal);
+            aplicar(document.getElementById('btnHomeExterno'), cfg.externo, abrirSelecaoLocal);
+            aplicar(document.getElementById('btnHomeEnsaio'),  cfg.ensaio,  abrirSelecaoLocal);
         }
         carregarTituloPagina();
 
