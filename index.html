@@ -172,7 +172,7 @@
     <!-- Seleção de local -->
     <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
-            <h1 style="margin-bottom: 8px;">📅 Inscrição de Projeto</h1>
+            <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
             <p style="color: #666; font-size: 15px;">Selecione o espaço que deseja utilizar:</p>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 560px; margin: 0 auto;">
@@ -193,7 +193,7 @@
     <div class="container" id="mainFormContainer" style="display: none;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
             <div>
-                <h1 style="margin-bottom: 4px;">📅 Inscrição de Projeto</h1>
+                <h1 style="margin-bottom: 4px;">📅 <span class="tituloPaginaAgendamentoEl">Inscrição de Projeto</span></h1>
                 <div id="localSelectedBadge" style="display: inline-flex; align-items: center; gap: 8px; background: #ede9fe; color: #7c3aed; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 700;"></div>
             </div>
             <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -288,6 +288,18 @@
 
         fetchAvailability();
         setInterval(fetchAvailability, 120000);
+
+        async function carregarTituloPagina() {
+            try {
+                const r = await fetch('/api/config');
+                const c = await r.json();
+                const titulo = (c.tituloPaginaAgendamento || 'Inscrição de Projeto').trim();
+                const elTopo = document.getElementById('tituloPaginaAgendamento');
+                if (elTopo) elTopo.textContent = titulo;
+                document.querySelectorAll('.tituloPaginaAgendamentoEl').forEach(el => el.textContent = titulo);
+            } catch (e) {}
+        }
+        carregarTituloPagina();
 
         function initAccordion() {
             const accordion = document.getElementById('stepsAccordion');

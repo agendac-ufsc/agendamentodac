@@ -226,6 +226,7 @@ let HORARIOS_LIMITES = {
     desmontagem: { inicio: '08:00', fim: '21:00' }
 };
 let DATAS_BLOQUEADAS = [];
+let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -241,12 +242,14 @@ const getConfigs = async () => {
                 PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
+                TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
                 return { 
                     spreadsheetId: SPREADSHEET_ID, 
                     formsLink: FORMS_LINK,
                     permitirDisputa: PERMITIR_DISPUTA,
                     horariosLimites: HORARIOS_LIMITES,
-                    datasBloqueadas: DATAS_BLOQUEADAS
+                    datasBloqueadas: DATAS_BLOQUEADAS,
+                    tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO
                 };
             }
         }
@@ -258,7 +261,8 @@ const getConfigs = async () => {
         formsLink: FORMS_LINK,
         permitirDisputa: PERMITIR_DISPUTA,
         horariosLimites: HORARIOS_LIMITES,
-        datasBloqueadas: DATAS_BLOQUEADAS
+        datasBloqueadas: DATAS_BLOQUEADAS,
+        tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO
     };
 };
 
@@ -297,6 +301,9 @@ const saveConfigs = async (configs) => {
         if (configs.datasBloqueadas) {
             DATAS_BLOQUEADAS = configs.datasBloqueadas;
         }
+        if (configs.tituloPaginaAgendamento !== undefined) {
+            TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
+        }
 
         if (redis) {
             // Persistir as configurações
@@ -305,7 +312,8 @@ const saveConfigs = async (configs) => {
                 formsLink: FORMS_LINK,
                 permitirDisputa: PERMITIR_DISPUTA,
                 horariosLimites: HORARIOS_LIMITES,
-                datasBloqueadas: DATAS_BLOQUEADAS
+                datasBloqueadas: DATAS_BLOQUEADAS,
+                tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO
             };
             await redis.set(CONFIG_KEY, configToSave);
             console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
@@ -354,12 +362,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento });
     res.json({ success });
 });
 
