@@ -772,47 +772,109 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
         // Processar a exclusão em segundo plano
         (async () => {
             try {
-                // Deletar eventos do Google Calendar em paralelo (máximo 5 simultâneos)
-                const allEvents = await calendar.events.list({
-                    auth: googleAuthClient,
-                    calendarId: CALENDAR_ID,
-                    maxResults: 2500,
-                    singleEvents: true
-                });
-                
-                const events = allEvents.data.items || [];
-                console.log(`🗑️ [Exclusão Geral] Deletando ${events.length} eventos do calendário...`);
-                
                 let eventosDeletedos = 0;
-                const batchSize = 5;
-                
-                for (let i = 0; i < events.length; i += batchSize) {
-                    const batch = events.slice(i, i + batchSize);
-                    await Promise.all(
-                        batch.map(event => 
-                            calendar.events.delete({
-                                auth: googleAuthClient,
-                                calendarId: CALENDAR_ID,
-                                eventId: event.id
-                            }).then(() => {
-                                eventosDeletedos++;
-                            }).catch(error => {
-                                console.warn(`⚠️ Erro ao deletar evento ${event.id}:`, error.message);
-                            })
-                        )
-                    );
+                let eventosFalhos = 0;
+                const batchSize = 3;            // 3 deletes em paralelo
+                const delayEntreBatches = 400;  // 400ms entre batches (evita rate limit)
+                const maxRetries = 5;
+                const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+
+                const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+                const deleteComRetry = async (calId, eventId, nomeCal) => {
+                    let tentativa = 0;
+                    while (tentativa < maxRetries) {
+                        try {
+                            await calendar.events.delete({ auth: googleAuthClient, calendarId: calId, eventId });
+                            return true;
+                        } catch (error) {
+                            const msg = error.message || '';
+                            const code = error.code || error.response?.status;
+                            const isRateLimit = code === 403 || code === 429 || /rate limit|quota/i.test(msg);
+                            if (isRateLimit && tentativa < maxRetries - 1) {
+                                const backoff = 1000 * Math.pow(2, tentativa);
+                                await sleep(backoff);
+                                tentativa++;
+                                continue;
+                            }
+                            console.warn(`⚠️ [${nomeCal}] Falha ao deletar ${eventId}:`, msg);
+                            return false;
+                        }
+                    }
+                    return false;
+                };
+
+                // Agrupar agendamentos pelo calendário e listar eventos de cada calendário UMA vez.
+                // Evita chamar events.list repetidamente.
+                const agendamentosPorCal = {};
+                for (const ag of agendamentos) {
+                    const calId = ag.calendarId || CALENDAR_IDS[ag.local] || CALENDAR_IDS.teatro;
+                    if (!agendamentosPorCal[calId]) agendamentosPorCal[calId] = [];
+                    agendamentosPorCal[calId].push(ag);
                 }
-                
+
+                for (const [calId, ags] of Object.entries(agendamentosPorCal)) {
+                    const nomeCal = Object.entries(CALENDAR_IDS).find(([, v]) => v === calId)?.[0] || calId;
+                    try {
+                        const listResp = await calendar.events.list({
+                            auth: googleAuthClient,
+                            calendarId: calId,
+                            maxResults: 2500,
+                            singleEvents: true
+                        });
+                        const allEvents = listResp.data.items || [];
+
+                        // Coletar APENAS os eventos que pertencem às inscrições do sistema.
+                        // Critério: summary começa com "Ensaio/Montagem/Evento/Desmontagem: <nome_do_evento>"
+                        //           E description contém o e-mail do proponente.
+                        const eventosADeletar = [];
+                        for (const ag of ags) {
+                            if (!ag.etapas || !ag.email) continue;
+                            for (const key of Object.keys(ag.etapas)) {
+                                const itens = Array.isArray(ag.etapas[key]) ? ag.etapas[key] : [ag.etapas[key]];
+                                itens.forEach((_, i) => {
+                                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                                    const eventSummary = `${label}: ${ag.evento}`;
+                                    const matches = allEvents.filter(e =>
+                                        e.summary === eventSummary &&
+                                        e.description && e.description.includes(ag.email)
+                                    );
+                                    eventosADeletar.push(...matches);
+                                });
+                            }
+                        }
+
+                        // Dedup por id (pode ter batido em mais de uma etapa)
+                        const unicos = Array.from(new Map(eventosADeletar.map(e => [e.id, e])).values());
+                        console.log(`🗑️ [Exclusão Geral] [${nomeCal}] Deletando ${unicos.length} eventos (de ${ags.length} inscrições, total de ${allEvents.length} eventos no calendário)...`);
+
+                        for (let i = 0; i < unicos.length; i += batchSize) {
+                            const batch = unicos.slice(i, i + batchSize);
+                            const results = await Promise.all(
+                                batch.map(event => deleteComRetry(calId, event.id, nomeCal))
+                            );
+                            results.forEach(ok => ok ? eventosDeletedos++ : eventosFalhos++);
+                            await sleep(delayEntreBatches);
+                        }
+                    } catch (calErr) {
+                        console.warn(`⚠️ [Exclusão Geral] Falha no calendário ${nomeCal}:`, calErr.message);
+                    }
+                }
+
+                if (eventosFalhos > 0) {
+                    console.warn(`⚠️ [Exclusão Geral] ${eventosFalhos} eventos NÃO puderam ser deletados (ver erros acima).`);
+                }
+
                 // Limpar o Redis
                 if (redis) {
                     await redis.del(AGENDAMENTOS_KEY);
                     console.log(`✅ [Exclusão Geral] Redis limpo com sucesso`);
                 }
-                
+
                 // Limpar a Blacklist tambem
                 await clearBlacklist();
-                
-                console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos do calendário, ${agendamentos.length} registros removidos do banco de dados`);
+
+                console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos dos calendários, ${agendamentos.length} registros removidos do banco de dados`);
             } catch (error) {
                 console.error('❌ Erro na exclusão geral em segundo plano:', error.message);
             }
