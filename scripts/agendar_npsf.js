@@ -3,7 +3,6 @@ const { google } = require('googleapis');
 
 const CALENDAR_ID = 'oto.bezerra@ufsc.br';
 const SUMMARY = 'ensaio do grupo Não Precisa Ser Forte';
-const DESCRIPTION = 'Ensaio do grupo #NPSF: Entre a Terra e o Céu, No Meio do Caminho.\nProjeto de Extensão "Diálogos Artísticos em Cena" — DAC/UFSC.\nResponsável: THUANNY (producao.thuanny@gmail.com / 48 99609-7663).\nAgendado automaticamente a partir do Termo de Participação.';
 
 const datas = [
   '2026-02-06', '2026-02-11', '2026-02-27',
@@ -26,6 +25,27 @@ const HORARIO_FIM = '12:30';
   const authClient = await auth.getClient();
   const calendar = google.calendar({ version: 'v3', auth: authClient });
 
+  console.log('Etapa 1: removendo eventos antigos com o mesmo título...');
+  const list = await calendar.events.list({
+    calendarId: CALENDAR_ID,
+    timeMin: '2026-01-01T00:00:00-03:00',
+    timeMax: '2026-12-31T23:59:59-03:00',
+    singleEvents: true,
+    maxResults: 2500,
+    q: 'Não Precisa Ser Forte',
+  });
+  const antigos = (list.data.items || []).filter(e => (e.summary || '').trim() === SUMMARY);
+  console.log(`Encontrados ${antigos.length} eventos antigos para remover.`);
+  for (const e of antigos) {
+    try {
+      await calendar.events.delete({ calendarId: CALENDAR_ID, eventId: e.id });
+      console.log(`🗑️  removido ${e.start.dateTime || e.start.date}`);
+    } catch (err) {
+      console.error(`❌ falha ao remover ${e.id}: ${err.message}`);
+    }
+  }
+
+  console.log('\nEtapa 2: recriando eventos sem dados pessoais...');
   const resultados = [];
   for (const data of datas) {
     try {
@@ -33,13 +53,12 @@ const HORARIO_FIM = '12:30';
         calendarId: CALENDAR_ID,
         resource: {
           summary: SUMMARY,
-          description: DESCRIPTION,
           start: { dateTime: `${data}T${HORARIO_INICIO}:00-03:00`, timeZone: 'America/Sao_Paulo' },
           end:   { dateTime: `${data}T${HORARIO_FIM}:00-03:00`,   timeZone: 'America/Sao_Paulo' },
         },
       });
       console.log(`✅ ${data} ${HORARIO_INICIO}-${HORARIO_FIM} → id=${resp.data.id}`);
-      resultados.push({ data, ok: true, id: resp.data.id });
+      resultados.push({ data, ok: true });
     } catch (e) {
       console.error(`❌ ${data} → ${e.message}`);
       resultados.push({ data, ok: false, erro: e.message });
