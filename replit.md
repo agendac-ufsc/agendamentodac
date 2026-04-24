@@ -2,35 +2,36 @@
 
 ## 🚀 Setup Rápido (para novo agente / novo ambiente Replit)
 
-Este projeto compartilha o **mesmo backend** que a versão de produção no Vercel (mesmo Redis Upstash, mesmo Google Calendar, mesmo Brevo). Existem **duas formas** de abrir este projeto em um novo ambiente Replit. **Use sempre a Forma 1.**
+Este projeto compartilha o **mesmo backend** que a versão de produção no Vercel (mesmo Redis Upstash, mesmo Google Calendar, mesmo Brevo).
 
----
+> **⚠️ IMPORTANTE — Política de credenciais:** as 6 chaves de API **NUNCA** devem ser gravadas em arquivos do repositório (`.env`, `.replit`, `attached_assets/`, etc). Elas ficam APENAS em **Replit Secrets** (aba 🔒 Secrets) e nas **Environment Variables do Vercel**. O `.gitignore` já bloqueia `.env`. Qualquer agente ou colaborador que precisar operar neste projeto deve usar o fluxo abaixo — jamais commitar chaves.
 
-### ✅ Forma 1 (RECOMENDADA): Fork do Replit existente
+### ✅ Abrir o projeto em um novo ambiente Replit: Fork
 
-> Esta é a forma correta. **Não clone do GitHub** — porque ao clonar do Git, os Secrets (chaves de API) **não vêm junto** e o usuário teria que copiar 6 chaves manualmente do Vercel.
->
-> Ao **forkar o Replit**, os Secrets são copiados automaticamente.
+A forma correta é **fazer Fork do Replit original**, não clonar do GitHub. Ao forkar, os 6 Secrets são copiados automaticamente. Se clonar do GitHub, o agente precisa solicitar os Secrets ao usuário via formulário seguro (`requestSecrets`).
 
 **Instruções para o agente:**
-1. Peça ao usuário para abrir o Replit original e clicar em **⋮ (três pontos no topo) → Fork Repl**. Os 6 Secrets serão copiados automaticamente para o novo Repl.
-2. Confirme com o usuário, na aba **🔒 Secrets**, que estes 6 estão presentes:
+1. Se o usuário forkou: confirme na aba **🔒 Secrets** que estes 6 estão presentes:
    - `UPSTASH_REDIS_REST_URL`
    - `UPSTASH_REDIS_REST_TOKEN`
    - `GOOGLE_SERVICE_ACCOUNT_KEY`
    - `BREVO_API_KEY`
    - `SENDER_EMAIL`
    - `ADMIN_EMAIL`
+2. Se o usuário clonou do GitHub: use `requestSecrets` para pedir as 6 chaves pelo formulário seguro. **Não aceite** chaves coladas no chat ou em arquivos anexados — isso cria risco de vazamento no histórico.
 3. Rode `npm install` (se ainda não foi rodado pelo Replit).
 4. Clique em **Run** — o workflow `Start application` (`npm run dev`) já está configurado e roda na porta 5000.
 
 ⚠️ **Cuidado**: como o Redis é o mesmo da produção, **qualquer inscrição feita aqui aparece no Vercel também**. Use prefixo "TESTE" em nomes de eventos/proponentes durante testes, ou exclua depois pelo painel admin.
 
----
+### 🔁 Rotação de chaves
 
-### ❌ Forma 2 (último recurso): Clone do GitHub
+Se alguma chave vazar (commit acidental, upload público, etc), rotacione imediatamente:
+- Upstash → regerar token REST no painel
+- Google → criar nova chave da service account e invalidar a antiga
+- Brevo → regerar API key
 
-Use **somente** se o Replit original foi perdido. O usuário vai precisar copiar manualmente os 6 Secrets do **Vercel → Settings → Environment Variables** e colar na aba 🔒 Secrets do Replit. Veja `.env.example` para o formato de cada um.
+Após rotacionar, atualize os valores em: Replit Secrets **+** Vercel Environment Variables.
 
 ---
 
