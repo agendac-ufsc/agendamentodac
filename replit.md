@@ -121,8 +121,8 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 ## Funcionalidades
 1. **Seleção de Local** — Tela inicial com dois botões (Teatro / Igrejinha)
 2. **Autenticação Admin** — Login com senha (sessão salva em localStorage por 8h)
-3. **Login de Avaliador** — E-mail + senha `avalia.dac.2026`
-4. **Sistema de Avaliação** — Estrelas (1-10) por critério, com pesos configuráveis
+3. **Login de Avaliador** — Acesso exclusivo via `/avaliador.html` (e-mail + senha `dac.ufsc.2026`). A aba "Avaliação" foi removida de `admin.html` — o painel admin agora cobre apenas Inscrições, Avaliadores e Configurações.
+4. **Sistema de Avaliação** — Estrelas (1-10) por critério, com pesos configuráveis (em `/avaliador.html`)
 5. **Gerenciamento de Avaliadores** — Adicionar/remover via painel admin
 6. **Envio de Termos** — Seleção múltipla de inscrições + envio em massa via Brevo
 7. **PDF da Ficha** — Geração client-side com jsPDF, com cabeçalho colorido

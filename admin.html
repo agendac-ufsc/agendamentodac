@@ -213,7 +213,6 @@
                         <th>Local</th>
                         <th>Etapas</th>
                         <th>Status</th>
-                        <th>Avaliação</th>
                         <th style="text-align:center">Ações</th>
                     </tr>
                 </thead>
@@ -222,22 +221,6 @@
             <div class="empty-msg" id="inscricoesEmpty" style="display:none">Nenhuma inscrição encontrada.</div>
             <div class="error-msg" id="inscricoesError" style="display:none"></div>
         </div>
-    </div>
-
-    <!-- Tab: Avaliação -->
-    <div class="tab-pane" id="pane-avaliacao">
-        <div class="filters-bar">
-            <div class="search-wrap">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchAvalia" placeholder="Buscar inscrição para avaliar..." oninput="renderAvaliacaoList()">
-            </div>
-            <select id="filterLocalAv" class="filter-sel" onchange="renderAvaliacaoList()">
-                <option value="">Todos os Locais</option>
-                <option value="Teatro">Teatro</option>
-                <option value="Igrejinha">Igrejinha</option>
-            </select>
-        </div>
-        <div id="avaliacaoList"><div class="loading-msg">Carregando...</div></div>
     </div>
 
     <!-- Tab: Avaliadores (admin only) -->
@@ -410,17 +393,6 @@
     </div>
 </div>
 
-<!-- ═══════════════ MODAL AVALIAÇÃO ═══ -->
-<div class="modal" id="modalAvaliacao">
-    <div class="modal-box" style="max-width:640px">
-        <h3 id="modalAvaliacaoTitle"><i class="fas fa-star"></i> Avaliar Inscrição</h3>
-        <div id="modalAvaliacaoBody"></div>
-        <div class="modal-footer">
-            <button class="btn-close-modal" onclick="closeModal('modalAvaliacao')">Cancelar</button>
-            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
-        </div>
-    </div>
-</div>
 
 <!-- ═══════════════ MODAL EXCLUIR TUDO (confirmação dupla) ═══ -->
 <div class="modal" id="modalExcluirTudo">
@@ -479,8 +451,6 @@ let avaliadores = [];
 let datasBloqueadas = [];
 let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
-let currentAvaliacaoIndex = null;
-let currentAvaliacaoScores = {};
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -581,14 +551,12 @@ function buildTabs() {
     if (userRole === 'admin') {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
-            <button class="tab-btn" onclick="switchTab('avaliacao')">Avaliação</button>
             <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
             <button class="tab-btn" onclick="switchTab('config')">Configurações</button>
         `;
     } else {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
-            <button class="tab-btn" onclick="switchTab('avaliacao')">Minhas Avaliações</button>
         `;
     }
 }
@@ -598,12 +566,11 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const pane = document.getElementById(`pane-${name}`);
     if (pane) pane.classList.add('active');
-    const keyMap = { inscricoes: 'inscri', avaliacao: 'avalia', avaliadores: 'avaliadores', config: 'config' };
+    const keyMap = { inscricoes: 'inscri', avaliadores: 'avaliadores', config: 'config' };
     const kw = keyMap[name] || name;
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
     });
-    if (name === 'avaliacao') renderAvaliacaoList();
     if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
     if (name === 'config') loadConfigs();
 }
@@ -678,17 +645,13 @@ function renderTabela() {
         if ((item.status||'').includes('Cancelado')) { stClass='st-cancelado'; stText='Cancelado'; }
         const rowClass = stText==='Cancelado' ? 'row-cancelada' : '';
 
-        const scoreHtml = `<span style="font-size:11px;color:#888" id="score-row-${originalIndex}">—</span>`;
-
         const acoes = userRole === 'admin' ? `
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="Abrir Termo Digital" onclick="abrirTermoDigital(${originalIndex})" style="color:#16a34a"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="Copiar link do Termo" onclick="copiarLinkTermo(${originalIndex})" style="color:#2563eb"><i class="fas fa-link"></i></button>
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
-        ` : `
-            <button class="btn-action" title="Avaliar" onclick="openAvaliacao(${originalIndex})" style="color:#764ba2"><i class="fas fa-star"></i></button>
-        `;
+        ` : '';
 
         const row = document.createElement('tr');
         row.className = rowClass;
@@ -702,38 +665,10 @@ function renderTabela() {
             <td>${localBadge}</td>
             <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}</td>
             <td><span class="status-badge ${stClass}">${stText}</span></td>
-            <td>${scoreHtml}</td>
             <td style="text-align:center;white-space:nowrap">${acoes}</td>
         `;
         tbody.appendChild(row);
-        loadScoreForRow(originalIndex);
     });
-}
-
-async function loadScoreForRow(idx) {
-    const item = allUnificados[idx];
-    if (!item) return;
-    const id = item.primeiraEtapa.id || item.primeiraEtapa.email;
-    if (!id) return;
-    try {
-        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-        const avs = await r.json();
-        const el = document.getElementById(`score-row-${idx}`);
-        if (!el) return;
-        if (avs.length === 0) { el.textContent = '—'; return; }
-        const crit = criterios.length ? criterios : [{ id:'A',peso:1 },{ id:'B',peso:1 },{ id:'C',peso:1 },{ id:'D',peso:1 }];
-        let totalPontos = 0, totalPeso = 0;
-        avs.forEach(av => {
-            const sc = av.scoresJson || {};
-            crit.forEach(c => {
-                const nota = parseFloat(sc[c.id]||0);
-                totalPontos += nota * (c.peso||1);
-                totalPeso += (c.peso||1);
-            });
-        });
-        const media = totalPeso > 0 ? (totalPontos / avs.length / totalPeso * 10).toFixed(1) : '—';
-        el.innerHTML = `<strong style="color:#764ba2">${media}</strong><span style="color:#aaa"> / 10 (${avs.length} av.)</span>`;
-    } catch(e){}
 }
 
 function updateSelCount() {
@@ -1007,144 +942,6 @@ async function downloadAllPDFs() {
     }
     const blob = await zip.generateAsync({type:'blob'});
     saveAs(blob, 'inscricoes_dac.zip');
-}
-
-// ══════════════════════════════════════════════════
-// AVALIAÇÃO
-// ══════════════════════════════════════════════════
-function renderAvaliacaoList() {
-    const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
-    const filterLocal = document.getElementById('filterLocalAv').value;
-    const container = document.getElementById('avaliacaoList');
-    const filtered = allUnificados.filter(item => {
-        const p = item.primeiraEtapa;
-        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
-        const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
-        return matchQ && matchLocal;
-    });
-    if (filtered.length === 0) { container.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada.</div>'; return; }
-
-    let html = '';
-    filtered.forEach(item => {
-        const p = item.primeiraEtapa;
-        const idx = allUnificados.indexOf(item);
-        const id = p.id || p.email;
-        const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
-        html += `
-        <div class="av-card">
-            <div class="av-info">
-                <h4>${(p.evento||'SEM EVENTO').toUpperCase()}</h4>
-                <p>${p.nome||''} &middot; <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}" style="padding:2px 8px">${p.localNome||'Teatro'}</span></p>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px">
-                <span class="av-score" id="av-score-${idx}">—</span>
-                <button class="btn-top btn-purple" onclick="openAvaliacao(${idx})"><i class="fas fa-star"></i> Avaliar</button>
-            </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-    filtered.forEach(item => {
-        const idx = allUnificados.indexOf(item);
-        loadScoreCard(idx);
-    });
-}
-
-async function loadScoreCard(idx) {
-    const p = allUnificados[idx]?.primeiraEtapa;
-    if (!p) return;
-    const id = p.id || p.email;
-    try {
-        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-        const avs = await r.json();
-        const el = document.getElementById(`av-score-${idx}`);
-        if (!el) return;
-        if (avs.length === 0) { el.textContent = '—'; return; }
-        const crit = criterios.length ? criterios : [{id:'A',peso:1},{id:'B',peso:1},{id:'C',peso:1},{id:'D',peso:1}];
-        let totalPontos = 0, totalPeso = 0;
-        avs.forEach(av => {
-            crit.forEach(c => {
-                totalPontos += parseFloat(av.scoresJson?.[c.id]||0) * (c.peso||1);
-                totalPeso += (c.peso||1);
-            });
-        });
-        const media = totalPeso > 0 ? (totalPontos/avs.length/totalPeso*10).toFixed(1) : '—';
-        el.textContent = `${media}/10`;
-    } catch(e) {}
-}
-
-async function openAvaliacao(idx) {
-    currentAvaliacaoIndex = idx;
-    currentAvaliacaoScores = {};
-    const p = allUnificados[idx].primeiraEtapa;
-    const id = p.id || p.email;
-    document.getElementById('modalAvaliacaoTitle').innerHTML = `<i class="fas fa-star"></i> Avaliação: ${p.evento||'—'}`;
-
-    let existingScores = {};
-    if (viewerEmail) {
-        try {
-            const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-            const avs = await r.json();
-            const myAv = avs.find(a => a.evaluatorEmail === viewerEmail);
-            if (myAv) existingScores = myAv.scoresJson || {};
-        } catch(e) {}
-    }
-
-    const crit = criterios.length ? criterios : [{id:'A',nome:'Qualidade Artística',peso:1},{id:'B',nome:'Relevância Cultural',peso:1},{id:'C',nome:'Acessibilidade',peso:1},{id:'D',nome:'Viabilidade Técnica',peso:1}];
-    currentAvaliacaoScores = {...existingScores};
-
-    let html = `<p style="font-size:13px;color:#666;margin-bottom:16px"><strong>Proponente:</strong> ${p.nome||'—'} &middot; <strong>Local:</strong> ${p.localNome||'—'}</p>`;
-    html += `<p style="font-size:12px;color:#888;margin-bottom:20px">Dê uma nota de 1 a 10 para cada critério.</p>`;
-
-    crit.forEach(c => {
-        const nota = parseInt(existingScores[c.id] || 0);
-        html += `<div class="criteria-row">
-            <div class="criteria-label">${c.nome}<div class="criteria-weight">Peso: ${c.peso||1}</div></div>
-            <div>
-                <div class="stars" id="stars-${c.id}">`;
-        for (let s = 1; s <= 10; s++) {
-            html += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
-        }
-        html += `</div><div style="text-align:center;font-size:12px;color:#764ba2;margin-top:4px" id="starLabel-${c.id}">${nota>0?nota+'/10':'—'}</div>
-            </div>
-        </div>`;
-    });
-
-    document.getElementById('modalAvaliacaoBody').innerHTML = html;
-    openModal('modalAvaliacao');
-}
-
-function setStar(criterioId, valor) {
-    currentAvaliacaoScores[criterioId] = valor;
-    const stars = document.querySelectorAll(`#stars-${criterioId} .star`);
-    stars.forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= valor));
-    const label = document.getElementById(`starLabel-${criterioId}`);
-    if (label) label.textContent = `${valor}/10`;
-}
-
-async function salvarAvaliacao() {
-    if (currentAvaliacaoIndex === null) return;
-    const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
-    const id = p.id || p.email;
-    const evalEmail = viewerEmail || (userRole === 'admin' ? 'admin' : null);
-    if (!evalEmail) { alert('Faça login como avaliador.'); return; }
-
-    try {
-        const r = await fetch('/api/save-assessment', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: evalEmail, scoresJson: currentAvaliacaoScores })
-        });
-        const d = await r.json();
-        if (d.success) {
-            alert('Avaliação salva!');
-            closeModal('modalAvaliacao');
-            renderAvaliacaoList();
-            loadScoreForRow(currentAvaliacaoIndex);
-        } else {
-            alert('Erro ao salvar: ' + (d.error||''));
-        }
-    } catch(e) {
-        alert('Erro de conexão: ' + e.message);
-    }
 }
 
 // ══════════════════════════════════════════════════
