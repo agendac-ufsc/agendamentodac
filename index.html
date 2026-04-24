@@ -151,8 +151,26 @@
         </div>
     </div>
 
+    <!-- Botão fixo Área Administrativa (canto superior direito) -->
+    <a href="/admin" id="btnAreaAdmin" style="position: fixed; top: 16px; right: 16px; background: #fff; color: #2563eb; border: 1.5px solid #2563eb; padding: 8px 16px; border-radius: 8px; font-weight: 600; font-size: 14px; text-decoration: none; z-index: 1000; box-shadow: 0 2px 6px rgba(0,0,0,0.08);">Área Administrativa</a>
+
+    <!-- Tela inicial: o que você gostaria de fazer? -->
+    <div class="container" id="homeContainer" style="background: transparent; box-shadow: none;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="margin-bottom: 8px; color: #222; font-weight: 600;">Sistema de Agendamento DAC</h1>
+            <p style="color: #555; font-size: 15px;">O que você gostaria de fazer?</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; max-width: 380px; margin: 0 auto;">
+            <button type="button" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;" data-acao="edital-interno">Edital Interno</button>
+
+            <button type="button" onclick="abrirSelecaoLocal()" style="background: #2563eb; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(37,99,235,0.3); transition: background 0.15s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'" data-acao="edital-ocupacao">Edital de Ocupação dos Espaços do DAC 2026</button>
+
+            <button type="button" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;" data-acao="apenas-ensaio">Agendar Apenas Ensaio</button>
+        </div>
+    </div>
+
     <!-- Seleção de local -->
-    <div class="container" id="localSelectionContainer">
+    <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="margin-bottom: 8px;">📅 Inscrição de Projeto</h1>
             <p style="color: #666; font-size: 15px;">Selecione o espaço que deseja utilizar:</p>
@@ -169,7 +187,7 @@
                 <span style="font-size: 12px; color: #888;">Espaço alternativo do DAC</span>
             </button>
         </div>
-        <p style="text-align: center; margin-top: 24px; font-size: 12px; color: #aaa;">Acesse o <a href="/admin" style="color: #764ba2">painel administrativo</a> se você for da equipe DAC.</p>
+        <p style="text-align: center; margin-top: 16px;"><button type="button" onclick="voltarTelaInicial()" style="background: transparent; border: none; color: #2563eb; cursor: pointer; font-weight: 600; font-size: 14px;">← Voltar</button></p>
     </div>
 
     <div class="container" id="mainFormContainer" style="display: none;">
@@ -723,6 +741,17 @@
         function voltarSelecaoLocal() {
             document.getElementById('mainFormContainer').style.display = 'none';
             document.getElementById('localSelectionContainer').style.display = 'block';
+        }
+
+        function abrirSelecaoLocal() {
+            document.getElementById('homeContainer').style.display = 'none';
+            document.getElementById('localSelectionContainer').style.display = 'block';
+        }
+
+        function voltarTelaInicial() {
+            document.getElementById('localSelectionContainer').style.display = 'none';
+            document.getElementById('mainFormContainer').style.display = 'none';
+            document.getElementById('homeContainer').style.display = 'block';
         }
 
         initAccordion();
