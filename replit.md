@@ -87,6 +87,7 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 - `POST /api/criteria` → Salvar critérios
 - `POST /api/save-assessment` → Salvar avaliação de uma inscrição
 - `GET /api/assessments/:inscriptionId` → Buscar avaliações de uma inscrição
+- `GET /api/admin/relatorio-avaliacoes` → Ranking consolidado: média ponderada, médias por critério, status (Sem avaliações / Em andamento / Concluída) e lista de avaliadores por inscrição
 
 ### E-mail
 - `POST /api/enviar-termos-digitais` → Enviar termos por e-mail em massa via Brevo
@@ -124,6 +125,7 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 3. **Login de Avaliador** — Acesso exclusivo via `/avaliador.html` (e-mail + senha `dac.ufsc.2026`). A aba "Avaliação" foi removida de `admin.html` — o painel admin agora cobre apenas Inscrições, Avaliadores e Configurações.
 4. **Sistema de Avaliação** — Estrelas (1-10) por critério, com pesos configuráveis (em `/avaliador.html`)
 5. **Gerenciamento de Avaliadores** — Adicionar/remover via painel admin
+5b. **Relatório de Avaliações** — Aba "Relatório" no admin com ranking ordenado por média final, cards de resumo (total, avaliadas, concluídas, sem avaliações, mínimo necessárias), filtros por local/status e exportação em CSV (UTF-8 BOM, separador `;`, decimal `,`)
 6. **Envio de Termos** — Seleção múltipla de inscrições + envio em massa via Brevo
 7. **PDF da Ficha** — Geração client-side com jsPDF, com cabeçalho colorido
 8. **Download em ZIP** — Todos os PDFs em um arquivo .zip

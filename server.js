@@ -1076,6 +1076,97 @@ app.post('/api/save-assessment', async (req, res) => {
     }
 });
 
+app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
+    try {
+        const inscricoes = await getAgendamentos();
+        const criteriosRaw = redis ? await redis.get('criterios') : null;
+        const criterios = parseRedisValue(criteriosRaw) || [
+            { id: 'A', nome: 'Qualidade Artística', peso: 1 },
+            { id: 'B', nome: 'Relevância Cultural', peso: 1 },
+            { id: 'C', nome: 'Acessibilidade', peso: 1 },
+            { id: 'D', nome: 'Viabilidade Técnica', peso: 1 }
+        ];
+        const cfgRaw = redis ? await redis.get('agendamentos_config') : null;
+        const cfg = parseRedisValue(cfgRaw) || {};
+        const necessarias = parseInt(cfg.avaliacoesNecessarias || 3);
+        const pesoTotal = criterios.reduce((s, c) => s + (parseFloat(c.peso) || 1), 0) || 1;
+
+        const linhas = [];
+        for (const p of inscricoes) {
+            const id = p.id || p.email;
+            if (!id) continue;
+            const avRaw = redis ? await redis.get(`avaliacoes_${id}`) : null;
+            const avaliacoes = parseRedisValue(avRaw) || [];
+
+            const detalhesPorCriterio = {};
+            criterios.forEach(c => { detalhesPorCriterio[c.id] = { nome: c.nome, peso: parseFloat(c.peso) || 1, soma: 0, n: 0 }; });
+
+            let totalPontos = 0;
+            avaliacoes.forEach(av => {
+                const sc = av.scoresJson || {};
+                criterios.forEach(c => {
+                    const nota = parseFloat(sc[c.id] || 0);
+                    totalPontos += nota * (parseFloat(c.peso) || 1);
+                    if (nota > 0) {
+                        detalhesPorCriterio[c.id].soma += nota;
+                        detalhesPorCriterio[c.id].n += 1;
+                    }
+                });
+            });
+
+            const mediaFinal = avaliacoes.length > 0
+                ? +(totalPontos / avaliacoes.length / pesoTotal).toFixed(2)
+                : null;
+
+            const mediasPorCriterio = {};
+            Object.entries(detalhesPorCriterio).forEach(([cid, d]) => {
+                mediasPorCriterio[cid] = {
+                    nome: d.nome,
+                    peso: d.peso,
+                    media: d.n > 0 ? +(d.soma / d.n).toFixed(2) : null
+                };
+            });
+
+            const avaliadoresList = avaliacoes.map(a => a.evaluatorEmail).filter(Boolean);
+            const statusAvaliacao = avaliacoes.length === 0
+                ? 'Sem avaliações'
+                : (avaliacoes.length >= necessarias ? 'Concluída' : 'Em andamento');
+
+            linhas.push({
+                id,
+                evento: p.evento || '',
+                proponente: p.nome || '',
+                email: p.email || '',
+                local: p.localNome || p.local || '',
+                qtdAvaliacoes: avaliacoes.length,
+                necessarias,
+                statusAvaliacao,
+                mediaFinal,
+                mediasPorCriterio,
+                avaliadores: avaliadoresList
+            });
+        }
+
+        linhas.sort((a, b) => {
+            if (a.mediaFinal === null && b.mediaFinal === null) return 0;
+            if (a.mediaFinal === null) return 1;
+            if (b.mediaFinal === null) return -1;
+            return b.mediaFinal - a.mediaFinal;
+        });
+
+        res.json({
+            criterios: criterios.map(c => ({ id: c.id, nome: c.nome, peso: parseFloat(c.peso) || 1 })),
+            necessarias,
+            total: linhas.length,
+            avaliadas: linhas.filter(l => l.qtdAvaliacoes > 0).length,
+            ranking: linhas
+        });
+    } catch (e) {
+        console.error('[/api/admin/relatorio-avaliacoes] erro:', e);
+        res.status(500).json({ error: 'Erro ao gerar relatório de avaliações.' });
+    }
+});
+
 app.get('/api/assessments/:inscriptionId', async (req, res) => {
     const { inscriptionId } = req.params;
     try {

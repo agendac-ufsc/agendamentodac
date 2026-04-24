@@ -223,6 +223,31 @@
         </div>
     </div>
 
+    <!-- Tab: Relatório (admin only) -->
+    <div class="tab-pane" id="pane-relatorio">
+        <div class="card">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px">
+                <h3 style="font-size:16px;color:#444"><i class="fas fa-trophy" style="color:#d97706"></i> Ranking de Avaliações</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <select id="filterLocalRel" class="filter-sel" onchange="renderRelatorio()">
+                        <option value="">Todos os Locais</option>
+                        <option value="Teatro">Teatro</option>
+                        <option value="Igrejinha">Igrejinha</option>
+                    </select>
+                    <select id="filterStatusRel" class="filter-sel" onchange="renderRelatorio()">
+                        <option value="">Todos os Status</option>
+                        <option value="Concluída">Concluídas</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Sem avaliações">Sem avaliações</option>
+                    </select>
+                    <button class="btn-top" style="background:#16a34a;color:#fff;border-color:#16a34a" onclick="exportRelatorioCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                </div>
+            </div>
+            <div id="relatorioResumo" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px"></div>
+            <div id="relatorioContent"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div></div>
+        </div>
+    </div>
+
     <!-- Tab: Avaliadores (admin only) -->
     <div class="tab-pane" id="pane-avaliadores">
         <div class="card">
@@ -551,6 +576,7 @@ function buildTabs() {
     if (userRole === 'admin') {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
+            <button class="tab-btn" onclick="switchTab('relatorio')">Relatório</button>
             <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
             <button class="tab-btn" onclick="switchTab('config')">Configurações</button>
         `;
@@ -566,13 +592,14 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const pane = document.getElementById(`pane-${name}`);
     if (pane) pane.classList.add('active');
-    const keyMap = { inscricoes: 'inscri', avaliadores: 'avaliadores', config: 'config' };
+    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', avaliadores: 'avaliadores', config: 'config' };
     const kw = keyMap[name] || name;
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
     });
     if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
     if (name === 'config') loadConfigs();
+    if (name === 'relatorio') loadRelatorio();
 }
 
 // ══════════════════════════════════════════════════
@@ -942,6 +969,129 @@ async function downloadAllPDFs() {
     }
     const blob = await zip.generateAsync({type:'blob'});
     saveAs(blob, 'inscricoes_dac.zip');
+}
+
+// ══════════════════════════════════════════════════
+// RELATÓRIO DE AVALIAÇÕES
+// ══════════════════════════════════════════════════
+let relatorioData = null;
+
+async function loadRelatorio() {
+    const content = document.getElementById('relatorioContent');
+    content.innerHTML = '<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div>';
+    try {
+        const r = await fetch('/api/admin/relatorio-avaliacoes');
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erro ao carregar');
+        relatorioData = d;
+        renderRelatorio();
+    } catch(e) {
+        content.innerHTML = `<div class="error-msg">Erro ao carregar relatório: ${e.message}</div>`;
+    }
+}
+
+function getRelatorioFiltrado() {
+    if (!relatorioData) return [];
+    const fLocal = document.getElementById('filterLocalRel').value;
+    const fStatus = document.getElementById('filterStatusRel').value;
+    return relatorioData.ranking.filter(r => {
+        const matchLocal = !fLocal || (r.local || '').toLowerCase().includes(fLocal.toLowerCase());
+        const matchStatus = !fStatus || r.statusAvaliacao === fStatus;
+        return matchLocal && matchStatus;
+    });
+}
+
+function renderRelatorio() {
+    if (!relatorioData) return;
+    const lista = getRelatorioFiltrado();
+    const resumo = document.getElementById('relatorioResumo');
+    const concluidas = relatorioData.ranking.filter(r => r.statusAvaliacao === 'Concluída').length;
+    const semAv = relatorioData.ranking.filter(r => r.qtdAvaliacoes === 0).length;
+    const card = (label, val, cor) => `<div style="flex:1;min-width:140px;background:#fff;border:1px solid #eef0f3;border-left:4px solid ${cor};border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">${label}</div><div style="font-size:22px;font-weight:700;color:#222;margin-top:2px">${val}</div></div>`;
+    resumo.innerHTML =
+        card('Total de Inscrições', relatorioData.total, '#2563eb') +
+        card('Avaliadas', relatorioData.avaliadas, '#764ba2') +
+        card('Concluídas', concluidas, '#16a34a') +
+        card('Sem Avaliações', semAv, '#9ca3af') +
+        card('Mín. Necessárias', relatorioData.necessarias, '#d97706');
+
+    const content = document.getElementById('relatorioContent');
+    if (lista.length === 0) {
+        content.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada com esses filtros.</div>';
+        return;
+    }
+    const crit = relatorioData.criterios;
+    let html = `<div class="table-wrap"><table><thead><tr>
+        <th style="width:40px">#</th>
+        <th>Evento / Proponente</th>
+        <th>Local</th>
+        <th style="text-align:center">Avaliações</th>
+        <th style="text-align:center">Status</th>
+        ${crit.map(c => `<th style="text-align:center" title="Peso: ${c.peso}">${escapeHtml(c.nome)}<div style="font-size:10px;color:#888;font-weight:400">peso ${c.peso}</div></th>`).join('')}
+        <th style="text-align:center">Média Final</th>
+    </tr></thead><tbody>`;
+    lista.forEach((r, i) => {
+        const isIgrejinha = (r.local || '').toLowerCase().includes('igrej');
+        const localBadge = `<span class="local-badge ${isIgrejinha ? 'local-igrejinha' : 'local-teatro'}" style="padding:2px 8px;font-size:11px">${escapeHtml(r.local || '—')}</span>`;
+        let stClass = 'st-pendente', stTxt = r.statusAvaliacao;
+        if (r.statusAvaliacao === 'Concluída') stClass = 'st-completo';
+        if (r.statusAvaliacao === 'Sem avaliações') stClass = 'st-cancelado';
+        const mediaCell = r.mediaFinal !== null
+            ? `<strong style="color:#764ba2;font-size:16px">${r.mediaFinal.toFixed(2)}</strong><span style="color:#aaa;font-size:11px"> /10</span>`
+            : '<span style="color:#aaa">—</span>';
+        const critCells = crit.map(c => {
+            const m = r.mediasPorCriterio[c.id];
+            return `<td style="text-align:center;font-size:12px">${m && m.media !== null ? m.media.toFixed(1) : '<span style="color:#ccc">—</span>'}</td>`;
+        }).join('');
+        const avTitle = r.avaliadores.length ? `Avaliadores: ${r.avaliadores.join(', ')}` : 'Sem avaliações';
+        html += `<tr>
+            <td style="color:#888;font-size:12px">${i + 1}</td>
+            <td><strong style="color:#222">${escapeHtml(r.evento || 'SEM EVENTO').toUpperCase()}</strong>
+                <div style="font-size:11px;color:#888;margin-top:2px">${escapeHtml(r.proponente || '')} &middot; ${escapeHtml(r.email || '')}</div></td>
+            <td>${localBadge}</td>
+            <td style="text-align:center" title="${escapeHtml(avTitle)}"><strong>${r.qtdAvaliacoes}</strong><span style="color:#aaa;font-size:11px"> /${r.necessarias}</span></td>
+            <td style="text-align:center"><span class="status-badge ${stClass}">${stTxt}</span></td>
+            ${critCells}
+            <td style="text-align:center">${mediaCell}</td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function exportRelatorioCSV() {
+    if (!relatorioData) { alert('Carregue o relatório primeiro.'); return; }
+    const lista = getRelatorioFiltrado();
+    if (lista.length === 0) { alert('Nada para exportar.'); return; }
+    const crit = relatorioData.criterios;
+    const header = ['Posicao','Evento','Proponente','Email','Local','Avaliacoes','Necessarias','Status', ...crit.map(c => `${c.nome} (peso ${c.peso})`), 'Media Final', 'Avaliadores'];
+    const csvCell = v => {
+        const s = String(v == null ? '' : v).replace(/"/g, '""');
+        return /[",;\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const rows = lista.map((r, i) => [
+        i + 1,
+        r.evento, r.proponente, r.email, r.local,
+        r.qtdAvaliacoes, r.necessarias, r.statusAvaliacao,
+        ...crit.map(c => {
+            const m = r.mediasPorCriterio[c.id];
+            return m && m.media !== null ? m.media.toFixed(2).replace('.', ',') : '';
+        }),
+        r.mediaFinal !== null ? r.mediaFinal.toFixed(2).replace('.', ',') : '',
+        r.avaliadores.join(' | ')
+    ]);
+    const csv = '\uFEFF' + [header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = `relatorio_avaliacoes_dac_${ts}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════════════
