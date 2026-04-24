@@ -227,6 +227,7 @@ let HORARIOS_LIMITES = {
 };
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
+let AVALIACOES_NECESSARIAS = 3;
 let BOTOES_HOME = {
     interno: { ativo: false, texto: 'Edital Interno' },
     externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
@@ -248,6 +249,10 @@ const getConfigs = async () => {
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
+                if (configs.avaliacoesNecessarias !== undefined) {
+                    const n = parseInt(configs.avaliacoesNecessarias, 10);
+                    if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
+                }
                 if (configs.botoesHome && typeof configs.botoesHome === 'object') {
                     BOTOES_HOME = {
                         interno: { ...BOTOES_HOME.interno, ...(configs.botoesHome.interno || {}) },
@@ -262,6 +267,7 @@ const getConfigs = async () => {
                     horariosLimites: HORARIOS_LIMITES,
                     datasBloqueadas: DATAS_BLOQUEADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                    avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                     botoesHome: BOTOES_HOME
                 };
             }
@@ -276,6 +282,7 @@ const getConfigs = async () => {
         horariosLimites: HORARIOS_LIMITES,
         datasBloqueadas: DATAS_BLOQUEADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+        avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
         botoesHome: BOTOES_HOME
     };
 };
@@ -318,6 +325,10 @@ const saveConfigs = async (configs) => {
         if (configs.tituloPaginaAgendamento !== undefined) {
             TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
         }
+        if (configs.avaliacoesNecessarias !== undefined) {
+            const n = parseInt(configs.avaliacoesNecessarias, 10);
+            if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
+        }
         if (configs.botoesHome && typeof configs.botoesHome === 'object') {
             const norm = (b, padraoTexto) => ({
                 ativo: !!(b && b.ativo),
@@ -339,6 +350,7 @@ const saveConfigs = async (configs) => {
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                 botoesHome: BOTOES_HOME
             };
             await redis.set(CONFIG_KEY, configToSave);
@@ -388,12 +400,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias });
     res.json({ success });
 });
 
@@ -539,6 +551,7 @@ app.post('/api/agendar', async (req, res) => {
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
+app.get('/avaliador', (req, res) => res.sendFile(path.join(__dirname, 'avaliador.html')));
 app.get('/termo', (req, res) => res.sendFile(path.join(__dirname, 'termo.html')));
 
 // Buscar uma única inscrição pelo ID (usado pela página do termo digital)

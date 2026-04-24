@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Avaliador - DAC</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;color:#333}
+
+        #loginOverlay{position:fixed;inset:0;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;z-index:9999}
+        .login-box{background:#fff;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+        .login-box h1{font-size:22px;color:#444;text-align:center;margin-bottom:6px}
+        .login-box p{font-size:13px;color:#888;text-align:center;margin-bottom:28px}
+        .form-field{margin-bottom:16px}
+        .form-field label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px}
+        .form-field input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;transition:.2s}
+        .form-field input:focus{outline:none;border-color:#2563eb}
+        .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:.2s}
+        .btn-login:hover{opacity:.9}
+        .login-err{color:#d9534f;font-size:13px;text-align:center;margin-top:12px;display:none}
+
+        #appShell{display:none}
+        .topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+        .topbar-left{display:flex;align-items:center;gap:12px}
+        .topbar-left h1{font-size:18px;color:#444;font-weight:700}
+        .role-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;background:#dbeafe;color:#1d4ed8}
+        .topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .btn-top{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s}
+        .btn-top:hover{opacity:.85}
+        .btn-refresh{background:#2563eb;color:#fff}
+        .btn-logout{background:#eee;color:#555;border:1px solid #ddd}
+
+        .content-wrap{padding:24px;max-width:1100px;margin:0 auto}
+        .filters-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+        .search-wrap{position:relative;flex:1;min-width:200px;max-width:360px}
+        .search-wrap input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none}
+        .search-wrap input:focus{border-color:#2563eb}
+        .search-wrap i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#aaa;font-size:13px}
+        .filter-sel{padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff;outline:none;cursor:pointer}
+        .filter-sel:focus{border-color:#2563eb}
+
+        .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+        .av-info h4{font-size:14px;font-weight:700;margin-bottom:4px}
+        .av-info p{font-size:12px;color:#666}
+        .av-score{font-size:18px;font-weight:800;color:#2563eb}
+        .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
+        .av-status.done{background:#d1fae5;color:#065f46}
+        .local-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+        .local-teatro{background:#ede9fe;color:#7c3aed}
+        .local-igrejinha{background:#dcfce7;color:#15803d}
+
+        .stars{display:flex;gap:4px;margin-top:6px}
+        .star{font-size:22px;cursor:pointer;color:#ddd;transition:.1s}
+        .star.on{color:#f59e0b}
+        .criteria-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0}
+        .criteria-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+        .criteria-label{flex:1;font-size:14px;font-weight:600;color:#333}
+        .criteria-weight{font-size:11px;color:#888;margin-top:2px}
+
+        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:2000}
+        .modal.open{display:flex}
+        .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+        .modal-box h3{font-size:18px;margin-bottom:16px;color:#444;border-bottom:1px solid #eee;padding-bottom:12px}
+        .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
+        .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+        .btn-save-modal{padding:9px 20px;background:#2563eb;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+
+        .loading-msg{text-align:center;padding:60px;color:#2563eb;font-size:16px}
+        .empty-msg{text-align:center;padding:60px;color:#aaa;font-size:15px}
+        .error-msg{text-align:center;padding:40px;color:#d9534f;background:#fff5f5;border-radius:10px;border:1px solid #fcc}
+        .results-count{font-size:12px;color:#888;margin-bottom:12px}
+        .info-banner{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:18px}
+    </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginOverlay">
+    <div class="login-box">
+        <h1>🎭 Painel do Avaliador</h1>
+        <p>DAC — UFSC</p>
+        <div class="form-field">
+            <label>Seu E-mail</label>
+            <input type="email" id="viewerEmail" placeholder="avaliador@exemplo.com" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <div class="form-field">
+            <label>Senha</label>
+            <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+        </div>
+        <button class="btn-login" onclick="doLogin()">Entrar</button>
+        <div class="login-err" id="loginErr"></div>
+        <p style="text-align:center;margin-top:18px;font-size:13px;color:#666">É administrador? <a href="/admin" style="color:#2563eb;font-weight:600;text-decoration:none">Acessar Painel Administrativo</a></p>
+    </div>
+</div>
+
+<!-- APP -->
+<div id="appShell">
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>🎭 Painel do Avaliador</h1>
+            <span class="role-badge" id="roleBadge">Avaliador</span>
+        </div>
+        <div class="topbar-right">
+            <button class="btn-top btn-refresh" onclick="loadData()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
+        </div>
+    </div>
+
+    <div class="content-wrap">
+        <div class="info-banner" id="infoBanner">
+            <i class="fas fa-info-circle"></i>
+            <span id="infoBannerText">Carregando regras de avaliação...</span>
+        </div>
+
+        <div class="filters-bar">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchAvalia" placeholder="Buscar inscrição para avaliar..." oninput="renderAvaliacaoList()">
+            </div>
+            <select id="filterLocalAv" class="filter-sel" onchange="renderAvaliacaoList()">
+                <option value="">Todos os Locais</option>
+                <option value="Teatro">Teatro</option>
+                <option value="Igrejinha">Igrejinha</option>
+            </select>
+            <select id="filterStatusAv" class="filter-sel" onchange="renderAvaliacaoList()">
+                <option value="">Todos os Status</option>
+                <option value="pendente">Pendentes p/ mim</option>
+                <option value="avaliado">Já avaliei</option>
+            </select>
+        </div>
+        <div class="results-count" id="resultsCount"></div>
+        <div id="avaliacaoList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+    </div>
+</div>
+
+<!-- Modal Avaliação -->
+<div class="modal" id="modalAvaliacao">
+    <div class="modal-box">
+        <h3 id="modalAvaliacaoTitle"><i class="fas fa-star"></i> Avaliar Inscrição</h3>
+        <div id="modalAvaliacaoBody"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalAvaliacao')">Cancelar</button>
+            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let viewerEmail = '';
+let viewerNome = '';
+let allUnificados = [];
+let criterios = [];
+let avaliacoesNecessarias = 3;
+let currentAvaliacaoIndex = null;
+let currentAvaliacaoScores = {};
+let scoresCache = {}; // {inscricaoId: [avaliacoes]}
+
+// Restaurar sessão
+(function restore(){
+    const role = localStorage.getItem('dac_role');
+    const email = localStorage.getItem('dac_viewer_email');
+    const ts = parseInt(localStorage.getItem('dac_ts')||'0', 10);
+    const SESSION_MS = 8 * 3600 * 1000;
+    if (role === 'viewer' && email && (Date.now() - ts) < SESSION_MS) {
+        viewerEmail = email;
+        viewerNome = localStorage.getItem('dac_viewer_nome') || email;
+        initApp();
+    }
+})();
+
+async function doLogin() {
+    const errEl = document.getElementById('loginErr');
+    errEl.style.display = 'none';
+    const email = document.getElementById('viewerEmail').value.trim();
+    const pass = document.getElementById('viewerPass').value;
+    if (!email || !pass) { errEl.textContent = 'Preencha email e senha.'; errEl.style.display = 'block'; return; }
+    try {
+        const r = await fetch('/api/auth/viewer', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ email, password: pass }) });
+        const d = await r.json();
+        if (d.success) {
+            viewerEmail = d.email;
+            viewerNome = d.nome || d.email;
+            localStorage.setItem('dac_role', 'viewer');
+            localStorage.setItem('dac_viewer_email', d.email);
+            localStorage.setItem('dac_viewer_nome', viewerNome);
+            localStorage.setItem('dac_ts', Date.now());
+            initApp();
+        } else {
+            errEl.textContent = d.message || 'Acesso negado.';
+            errEl.style.display = 'block';
+        }
+    } catch (e) {
+        errEl.textContent = 'Erro de conexão. Tente novamente.';
+        errEl.style.display = 'block';
+    }
+}
+
+function logout() {
+    localStorage.removeItem('dac_role');
+    localStorage.removeItem('dac_viewer_email');
+    localStorage.removeItem('dac_viewer_nome');
+    localStorage.removeItem('dac_ts');
+    location.reload();
+}
+
+function initApp() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('appShell').style.display = 'block';
+    document.getElementById('roleBadge').textContent = `Avaliador: ${viewerEmail}`;
+    loadCriteria();
+    loadConfig();
+    loadData();
+}
+
+async function loadConfig() {
+    try {
+        const r = await fetch('/api/config');
+        const c = await r.json();
+        avaliacoesNecessarias = parseInt(c.avaliacoesNecessarias || 3, 10);
+        document.getElementById('infoBannerText').textContent =
+            `Cada inscrição precisa de ${avaliacoesNecessarias} avaliação(ões) para ser considerada concluída.`;
+    } catch (e) {}
+}
+
+async function loadCriteria() {
+    try {
+        const r = await fetch('/api/criteria');
+        const data = await r.json();
+        criterios = Array.isArray(data) ? data : [];
+    } catch(e) { criterios = []; }
+}
+
+async function loadData() {
+    document.getElementById('avaliacaoList').innerHTML = '<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando inscrições...</div>';
+    try {
+        const r = await fetch('/api/admin/dados-unificados');
+        const data = await r.json();
+        allUnificados = Array.isArray(data) ? data : [];
+        scoresCache = {};
+        // Pré-carregar avaliações em paralelo
+        await Promise.all(allUnificados.map(async (item) => {
+            const p = item.primeiraEtapa;
+            if (!p) return;
+            const id = p.id || p.email;
+            try {
+                const rr = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+                scoresCache[id] = await rr.json();
+            } catch(e) { scoresCache[id] = []; }
+        }));
+        renderAvaliacaoList();
+    } catch (e) {
+        document.getElementById('avaliacaoList').innerHTML = '<div class="error-msg">Erro ao carregar inscrições. Tente novamente.</div>';
+    }
+}
+
+function renderAvaliacaoList() {
+    const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
+    const filterLocal = document.getElementById('filterLocalAv').value;
+    const filterStatus = document.getElementById('filterStatusAv').value;
+    const container = document.getElementById('avaliacaoList');
+
+    const filtered = allUnificados.filter(item => {
+        const p = item.primeiraEtapa;
+        if (!p) return false;
+        const id = p.id || p.email;
+        const avs = scoresCache[id] || [];
+        const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
+        const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
+        const matchStatus = !filterStatus
+            || (filterStatus === 'pendente' && !myAv)
+            || (filterStatus === 'avaliado' && !!myAv);
+        return matchQ && matchLocal && matchStatus;
+    });
+
+    document.getElementById('resultsCount').textContent =
+        `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
+
+    if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada com esses filtros.</div>';
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(item => {
+        const p = item.primeiraEtapa;
+        const idx = allUnificados.indexOf(item);
+        const id = p.id || p.email;
+        const avs = scoresCache[id] || [];
+        const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
+        const minhaMedia = myAv ? calcMedia(myAv.scoresJson || {}) : null;
+        const statusBadge = myAv
+            ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
+            : `<span class="av-status">Pendente</span>`;
+        html += `
+        <div class="av-card">
+            <div class="av-info">
+                <h4>${escapeHtml(p.evento||'SEM EVENTO').toUpperCase()}</h4>
+                <p>${escapeHtml(p.nome||'')} &middot;
+                    <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}">${escapeHtml(p.localNome||'Teatro')}</span>
+                    ${statusBadge}
+                    <span style="color:#888;margin-left:6px">(${avs.length}/${avaliacoesNecessarias} avaliações)</span>
+                </p>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px">
+                ${minhaMedia !== null ? `<span class="av-score">${minhaMedia}/10</span>` : ''}
+                <button class="btn-top btn-refresh" onclick="openAvaliacao(${idx})">
+                    <i class="fas fa-star"></i> ${myAv ? 'Editar' : 'Avaliar'}
+                </button>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+function calcMedia(scores) {
+    const crit = criterios.length ? criterios : defaultCriterios();
+    let total = 0, peso = 0;
+    crit.forEach(c => {
+        const v = parseFloat(scores[c.id] || 0);
+        total += v * (c.peso || 1);
+        peso += (c.peso || 1);
+    });
+    return peso > 0 ? (total / peso).toFixed(1) : '—';
+}
+
+function defaultCriterios() {
+    return [
+        { id: 'A', nome: 'Qualidade Artística', peso: 1 },
+        { id: 'B', nome: 'Relevância Cultural', peso: 1 },
+        { id: 'C', nome: 'Acessibilidade', peso: 1 },
+        { id: 'D', nome: 'Viabilidade Técnica', peso: 1 }
+    ];
+}
+
+async function openAvaliacao(idx) {
+    currentAvaliacaoIndex = idx;
+    currentAvaliacaoScores = {};
+    const p = allUnificados[idx].primeiraEtapa;
+    const id = p.id || p.email;
+    document.getElementById('modalAvaliacaoTitle').innerHTML = `<i class="fas fa-star"></i> Avaliação: ${escapeHtml(p.evento||'—')}`;
+
+    // Buscar minha avaliação atual
+    let existingScores = {};
+    try {
+        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+        const avs = await r.json();
+        scoresCache[id] = avs;
+        const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        if (myAv) existingScores = myAv.scoresJson || {};
+    } catch(e) {}
+
+    const crit = criterios.length ? criterios : defaultCriterios();
+    currentAvaliacaoScores = { ...existingScores };
+
+    let html = `<p style="font-size:13px;color:#666;margin-bottom:8px"><strong>Proponente:</strong> ${escapeHtml(p.nome||'—')}</p>`;
+    html += `<p style="font-size:13px;color:#666;margin-bottom:16px"><strong>Local:</strong> ${escapeHtml(p.localNome||'—')}</p>`;
+    html += `<p style="font-size:12px;color:#888;margin-bottom:20px">Dê uma nota de 1 a 10 para cada critério.</p>`;
+
+    crit.forEach(c => {
+        const nota = parseInt(existingScores[c.id] || 0);
+        html += `<div class="criteria-row">
+            <div class="criteria-label">${escapeHtml(c.nome)}<div class="criteria-weight">Peso: ${c.peso||1}</div></div>
+            <div>
+                <div class="stars" id="stars-${c.id}">`;
+        for (let s = 1; s <= 10; s++) {
+            html += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
+        }
+        html += `</div><div style="text-align:center;font-size:12px;color:#2563eb;margin-top:4px" id="starLabel-${c.id}">${nota>0?nota+'/10':'—'}</div>
+            </div>
+        </div>`;
+    });
+
+    document.getElementById('modalAvaliacaoBody').innerHTML = html;
+    openModal('modalAvaliacao');
+}
+
+function setStar(criterioId, valor) {
+    currentAvaliacaoScores[criterioId] = valor;
+    const stars = document.querySelectorAll(`#stars-${criterioId} .star`);
+    stars.forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= valor));
+    const label = document.getElementById(`starLabel-${criterioId}`);
+    if (label) label.textContent = `${valor}/10`;
+}
+
+async function salvarAvaliacao() {
+    if (currentAvaliacaoIndex === null) return;
+    const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
+    const id = p.id || p.email;
+    if (!viewerEmail) { alert('Sessão expirada. Faça login novamente.'); return; }
+    const crit = criterios.length ? criterios : defaultCriterios();
+    const faltando = crit.filter(c => !currentAvaliacaoScores[c.id]);
+    if (faltando.length > 0) {
+        if (!confirm(`Você ainda não deu nota a ${faltando.length} critério(s). Salvar mesmo assim?`)) return;
+    }
+    try {
+        const r = await fetch('/api/save-assessment', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: viewerEmail, scoresJson: currentAvaliacaoScores })
+        });
+        const d = await r.json();
+        if (d.success) {
+            closeModal('modalAvaliacao');
+            // Atualizar cache local
+            try {
+                const rr = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+                scoresCache[id] = await rr.json();
+            } catch(e) {}
+            renderAvaliacaoList();
+            alert('Avaliação salva com sucesso!');
+        } else {
+            alert('Erro ao salvar: ' + (d.error||''));
+        }
+    } catch(e) {
+        alert('Erro de conexão: ' + e.message);
+    }
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function escapeHtml(s) {
+    return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>

@@ -148,29 +148,16 @@
 <div id="loginOverlay">
     <div class="login-box">
         <h1>🏛️ DAC — UFSC</h1>
-        <p>Painel de Administração e Avaliação</p>
-        <div class="login-tabs">
-            <button class="login-tab active" onclick="setLoginMode('admin')">Administrador</button>
-            <button class="login-tab" onclick="setLoginMode('avaliador')">Avaliador</button>
-        </div>
+        <p>Painel de Administração</p>
         <div id="loginAdmin">
             <div class="form-field">
                 <label>Senha de Administrador</label>
                 <input type="password" id="adminPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
             </div>
         </div>
-        <div id="loginViewer" style="display:none">
-            <div class="form-field">
-                <label>Seu E-mail</label>
-                <input type="email" id="viewerEmail" placeholder="avaliador@exemplo.com" onkeydown="if(event.key==='Enter')doLogin()">
-            </div>
-            <div class="form-field">
-                <label>Senha</label>
-                <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
-            </div>
-        </div>
         <button class="btn-login" onclick="doLogin()">Entrar</button>
         <div class="login-err" id="loginErr"></div>
+        <p style="text-align:center;margin-top:18px;font-size:13px;color:#666">É avaliador? <a href="/avaliador" style="color:#2563eb;font-weight:600;text-decoration:none">Acesse o Painel do Avaliador</a></p>
     </div>
 </div>
 
@@ -273,6 +260,17 @@
             <p style="font-size:13px;color:#888;margin-bottom:16px">Defina os critérios e seus pesos para o cálculo da pontuação final.</p>
             <div id="criteriaList"></div>
             <button class="btn-top" style="background:#eee;color:#666;margin-top:12px" onclick="addCriterion()"><i class="fas fa-plus"></i> Novo Critério</button>
+        </div>
+
+        <!-- Regras de Avaliação -->
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444;display:flex;align-items:center;gap:8px"><i class="fas fa-user-check" style="color:#2563eb"></i> Regras de Avaliação</h3>
+            </div>
+            <label class="form-label" style="font-size:13px;color:#444;font-weight:600">Avaliações Necessárias por Inscrição</label>
+            <input type="number" id="cfgAvaliacoesNecessarias" class="form-input" min="1" max="20" value="3" style="max-width:140px">
+            <p style="font-size:12px;color:#888;margin-top:8px">Define o número de avaliações para uma inscrição ser considerada "concluída".</p>
+            <button class="btn-top btn-purple" style="margin-top:14px;background:#2563eb;border-color:#2563eb" onclick="saveAvaliacoesNecessarias()"><i class="fas fa-save"></i> Salvar Regra de Avaliação</button>
         </div>
     </div>
 
@@ -1240,6 +1238,8 @@ async function loadConfigs() {
         document.getElementById('cfgSheetId').value = c.spreadsheetId || '';
         const tt = document.getElementById('cfgTituloPagina');
         if (tt) tt.value = c.tituloPaginaAgendamento || 'Inscrição de Projeto';
+        const an = document.getElementById('cfgAvaliacoesNecessarias');
+        if (an) an.value = c.avaliacoesNecessarias || 3;
         const bh = c.botoesHome || {};
         const i = bh.interno || { ativo: false, texto: 'Edital Interno' };
         const e = bh.externo || { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' };
@@ -1271,11 +1271,24 @@ function switchCfgTab(name) {
     if (name === 'config') loadConfigs();
 }
 
+async function saveAvaliacoesNecessarias() {
+    const v = parseInt(document.getElementById('cfgAvaliacoesNecessarias').value || '3', 10);
+    const num = (Number.isFinite(v) && v > 0) ? Math.min(v, 20) : 3;
+    try {
+        const cur = await fetch('/api/config').then(r => r.json());
+        const body = { ...cur, avaliacoesNecessarias: num };
+        const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.success) alert('Regra de avaliação salva!'); else alert('Erro ao salvar.');
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
+}
+
 async function saveConfigs() {
     const body = {
         formsLink: document.getElementById('cfgFormsLink').value,
         spreadsheetId: document.getElementById('cfgSheetId').value,
         tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
+        avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
         botoesHome: {
             interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno' },
             externo: { ativo: !!document.getElementById('cfgBtnExternoAtivo')?.checked, texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026' },
