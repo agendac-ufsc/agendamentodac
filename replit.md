@@ -129,3 +129,4 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 8. **Download em ZIP** — Todos os PDFs em um arquivo .zip
 9. **Filtros Avançados** — Por local, status e busca textual
 10. **Bloqueio de Datas** — Admin pode bloquear datas específicas
+11. **Termo Digital** — `/termo?id=...` (pré-preenchido) ou `/termo?blank=1` (em branco). Endpoint `GET /api/agendamento/:id` é tolerante a IDs codificados múltiplas vezes (Outlook Safe Links, Brevo) e a espaços/pontuação no fim. Se a inscrição não for encontrada, a página oferece botão "Preencher manualmente em branco". O admin tem botão **"Termo em Branco"** na barra superior.

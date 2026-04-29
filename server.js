@@ -556,12 +556,29 @@ app.get('/termo', (req, res) => res.sendFile(path.join(__dirname, 'termo.html'))
 
 // Buscar uma única inscrição pelo ID (usado pela página do termo digital)
 app.get('/api/agendamento/:id', async (req, res) => {
-    const { id } = req.params;
+    let { id } = req.params;
     if (!id) return res.status(400).json({ error: 'ID não fornecido' });
+    // Normalizar id: alguns clientes de e-mail (Outlook Safe Links, rastreio Brevo)
+    // codificam a URL múltiplas vezes ou anexam caracteres extras.
+    try {
+        // tentativa de decodeURIComponent recursivo (até 3 níveis)
+        for (let i = 0; i < 3; i++) {
+            const dec = decodeURIComponent(id);
+            if (dec === id) break;
+            id = dec;
+        }
+    } catch (_) {}
+    // Trim e remoção de caracteres de pontuação/whitespace que podem ter sido colados
+    id = String(id).trim().replace(/[\s>"'<>]+$/g, '').replace(/^[\s<"'>]+/g, '');
     try {
         const agendamentos = await getAgendamentos();
-        const ag = agendamentos.find(a => a.id === id);
-        if (!ag) return res.status(404).json({ error: 'Inscrição não encontrada' });
+        const idLower = id.toLowerCase();
+        const ag = agendamentos.find(a => a.id === id)
+                || agendamentos.find(a => String(a.id||'').toLowerCase() === idLower);
+        if (!ag) {
+            console.warn(`[/api/agendamento/:id] não encontrado. id="${id}" (total agendamentos=${agendamentos.length})`);
+            return res.status(404).json({ error: 'Inscrição não encontrada' });
+        }
 
         // Montar string descritiva de data/horário a partir das etapas (se existirem)
         const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };

@@ -567,6 +567,7 @@ function buildTopActions() {
     if (userRole === 'admin') {
         el.innerHTML = `
             <button class="btn-top btn-refresh" onclick="loadData()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button class="btn-top btn-orange" onclick="abrirTermoBranco()" title="Abrir versão em branco do termo digital para preenchimento manual"><i class="fas fa-file-signature"></i> Termo em Branco</button>
             <button class="btn-top btn-success" onclick="downloadAllPDFs()"><i class="fas fa-download"></i> Baixar PDFs</button>
             <button class="btn-top btn-danger" onclick="deleteAllInscricoes()"><i class="fas fa-trash"></i> Excluir Tudo</button>
             <button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
@@ -746,6 +747,10 @@ function toggleCheckAll() {
     const all = document.getElementById('checkAll').checked;
     document.querySelectorAll('.insc-check').forEach(c => c.checked = all);
     updateSelCount();
+}
+
+function abrirTermoBranco() {
+    window.open('/termo?blank=1', '_blank');
 }
 
 function abrirTermoDigital(idx) {
