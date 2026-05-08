@@ -1261,9 +1261,80 @@ app.put('/api/admin/agendamentos/:id', async (req, res) => {
     if (!id || Object.keys(campos).length === 0) {
         return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
     }
+
+    // Buscar agendamento atual antes de atualizar (para ter email, evento, calendarId)
+    const agendamentos = await getAgendamentos();
+    const ag = agendamentos.find(a => a.id === id);
+    if (!ag) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+
+    // Salvar no Redis
     const success = await updateAgendamento(id, campos);
-    if (success) res.json({ success: true });
-    else res.status(404).json({ error: 'Agendamento não encontrado.' });
+    if (!success) return res.status(500).json({ error: 'Erro ao salvar no banco de dados.' });
+
+    // Atualizar Google Calendar se etapas foram alteradas
+    const calResults = { atualizados: 0, naoEncontrados: 0, erros: 0 };
+    if (campos.etapas) {
+        try {
+            if (!googleAuthClient) await initGoogleAuth();
+            const calId = ag.calendarId || CALENDAR_IDS[(ag.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
+            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+
+            const listResp = await calendar.events.list({
+                auth: googleAuthClient,
+                calendarId: calId,
+                maxResults: 2500,
+                singleEvents: true
+            });
+            const allEvents = listResp.data.items || [];
+
+            for (const key in campos.etapas) {
+                const itens = Array.isArray(campos.etapas[key]) ? campos.etapas[key] : [campos.etapas[key]];
+                for (let i = 0; i < itens.length; i++) {
+                    const it = itens[i];
+                    if (!it || !it.data || !it.horario) continue;
+                    const label = itens.length > 1 ? `${nomesEtapas[key] || key} ${i + 1}` : (nomesEtapas[key] || key);
+                    const eventSummary = `${label}: ${ag.evento}`;
+
+                    // Localizar evento no Calendar pelo título + e-mail na descrição
+                    const match = allEvents.find(e =>
+                        e.summary === eventSummary &&
+                        e.description && e.description.includes(ag.email)
+                    );
+
+                    if (!match) {
+                        console.warn(`⚠️ [Calendar] Evento não encontrado: "${eventSummary}" (${ag.email})`);
+                        calResults.naoEncontrados++;
+                        continue;
+                    }
+
+                    const [startTime, endTime] = it.horario.split(' às ');
+                    const startDT = `${it.data}T${startTime}:00-03:00`;
+                    const endDT   = `${it.data}T${endTime}:00-03:00`;
+
+                    try {
+                        await calendar.events.patch({
+                            auth: googleAuthClient,
+                            calendarId: calId,
+                            eventId: match.id,
+                            resource: {
+                                start: { dateTime: startDT, timeZone: 'America/Sao_Paulo' },
+                                end:   { dateTime: endDT,   timeZone: 'America/Sao_Paulo' }
+                            }
+                        });
+                        console.log(`✅ [Calendar] Evento atualizado: "${eventSummary}" → ${it.data} ${it.horario}`);
+                        calResults.atualizados++;
+                    } catch (e) {
+                        console.error(`❌ [Calendar] Erro ao atualizar "${eventSummary}":`, e.message);
+                        calResults.erros++;
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('❌ [Calendar] Erro geral ao atualizar eventos:', e.message);
+        }
+    }
+
+    res.json({ success: true, calendar: calResults });
 });
 
 // ============================================================

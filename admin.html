@@ -946,12 +946,17 @@ async function salvarEtapas() {
         });
         const data = await r.json();
         if (data.success) {
-            status.textContent = '✅ Salvo com sucesso!';
+            const cal = data.calendar || {};
+            let calMsg = '';
+            if (cal.atualizados > 0) calMsg += ` • ${cal.atualizados} evento(s) atualizado(s) no Calendar`;
+            if (cal.naoEncontrados > 0) calMsg += ` • ${cal.naoEncontrados} evento(s) não encontrado(s) no Calendar`;
+            if (cal.erros > 0) calMsg += ` • ${cal.erros} erro(s) no Calendar`;
+            status.textContent = `✅ Salvo com sucesso!${calMsg}`;
             status.style.color = '#16a34a';
             btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
             allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
             renderTable();
-            setTimeout(() => closeModal('modalEditarEtapas'), 1500);
+            setTimeout(() => closeModal('modalEditarEtapas'), 2500);
         } else {
             status.textContent = '❌ Erro: ' + (data.error || 'Falha ao salvar.');
             status.style.color = '#dc2626';
