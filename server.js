@@ -695,6 +695,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 if (p.calendarSynced !== true) {
                     try {
                         const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                        const linhasEtapas = [];
                         for (const key of Object.keys(p.etapas || {})) {
                             const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
                             for (let i = 0; i < itens.length; i++) {
@@ -705,10 +706,47 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                                     `Em análise\nLocal: ${localNomeResolvido}`,
                                     item.data, item.horario, calIdInscricao
                                 );
+                                const [ano, mes, dia] = (item.data || '').split('-');
+                                const dataFormatada = ano ? `${dia}/${mes}/${ano}` : item.data;
+                                linhasEtapas.push(`<tr><td style="border:1px solid #ddd;padding:8px"><strong>${label}</strong></td><td style="border:1px solid #ddd;padding:8px">${dataFormatada}</td><td style="border:1px solid #ddd;padding:8px">${item.horario || ''}</td></tr>`);
                             }
                         }
                         await updateAgendamento(p.id, { calendarSynced: true });
                         console.log(`✅ [Calendar] Eventos criados para inscrição completa: ${p.evento} (${p.email})`);
+
+                        // Notificar administradores sobre inscrição completa
+                        const tabelaEtapas = linhasEtapas.length > 0
+                            ? `<table style="width:100%;border-collapse:collapse;margin-top:10px"><tr style="background:#f8f9fa"><th style="border:1px solid #ddd;padding:8px;text-align:left">Etapa</th><th style="border:1px solid #ddd;padding:8px;text-align:left">Data</th><th style="border:1px solid #ddd;padding:8px;text-align:left">Horário</th></tr>${linhasEtapas.join('')}</table>`
+                            : '<p style="color:#888">Cronograma não informado na etapa 1.</p>';
+                        const htmlAdmin = `
+                        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+                            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 30px;text-align:center">
+                                <h2 style="margin:0;color:#fff;font-size:19px">Nova Inscrição Completa — DAC/UFSC</h2>
+                                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Etapas 1 e 2 concluídas</p>
+                            </div>
+                            <div style="padding:28px 30px">
+                                <p style="font-size:15px;margin-top:0">Uma nova inscrição foi concluída com as duas etapas preenchidas:</p>
+                                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:0 0 20px">
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Proponente:</strong> ${p.nome || 'N/A'}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>E-mail:</strong> ${p.email || 'N/A'}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Telefone:</strong> ${p.telefone || 'N/A'}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Nome do Evento:</strong> ${p.evento || 'N/A'}</p>
+                                    <p style="margin:0;font-size:13px;color:#555"><strong>Local:</strong> ${localNomeResolvido}</p>
+                                </div>
+                                <p style="font-size:14px;font-weight:600;margin-bottom:6px">Cronograma solicitado:</p>
+                                ${tabelaEtapas}
+                                <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+                                <p style="font-size:11px;color:#aaa;text-align:center">
+                                    UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                                    Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+                                </p>
+                            </div>
+                        </div>`;
+                        sendEmail(
+                            'pautas.dac@contato.ufsc.br',
+                            `📋 Inscrição Completa: ${p.evento || 'Novo Projeto'} — ${p.nome || ''} — DAC/UFSC`,
+                            htmlAdmin
+                        ).catch(err => console.error(`⚠️ [E-mail] Erro ao notificar admin sobre inscrição completa:`, err.message));
                     } catch (calErr) {
                         console.error(`⚠️ [Calendar] Falha ao criar eventos para ${p.email}:`, calErr.message);
                     }
