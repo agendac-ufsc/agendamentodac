@@ -1252,6 +1252,53 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
 });
 
 // ============================================================
+// T004b — EMAIL RÁPIDO PARA PROPONENTE (via painel admin)
+// ============================================================
+
+app.post('/api/admin/email-rapido', async (req, res) => {
+    const { to, nome, assunto, mensagem } = req.body;
+    if (!to || !assunto || !mensagem) {
+        return res.status(400).json({ error: 'Destinatário, assunto e mensagem são obrigatórios.' });
+    }
+    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
+    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
+
+    const htmlContent = `
+    <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
+            <h2 style="margin:0;color:#fff;font-size:18px">DAC — Departamento Artístico Cultural</h2>
+            <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">UFSC — Secretaria de Cultura, Arte e Esporte</p>
+        </div>
+        <div style="padding:28px">
+            <p style="font-size:15px">Olá, <strong>${nome || 'Proponente'}</strong>!</p>
+            <div style="font-size:14px;color:#444;line-height:1.8;margin:18px 0;white-space:pre-wrap">${mensagem.replace(/\n/g, '<br>')}</div>
+            <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+            <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato diretamente com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p>
+            <p style="font-size:11px;color:#aaa;margin-top:20px">
+                UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+            </p>
+        </div>
+    </div>`;
+
+    try {
+        await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: { name: 'DAC - UFSC', email: senderEmail },
+            to: [{ email: to, name: nome || to }],
+            replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
+            subject: assunto,
+            htmlContent
+        }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+        console.log(`✅ E-mail rápido enviado para ${to}`);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(`❌ Erro ao enviar e-mail rápido para ${to}:`, e.response?.data || e.message);
+        res.status(500).json({ error: e.response?.data?.message || e.message });
+    }
+});
+
+// ============================================================
 // T005 — ENVIO DE TERMOS DIGITAIS POR E-MAIL (BREVO)
 // ============================================================
 
