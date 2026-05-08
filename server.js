@@ -701,8 +701,8 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                                 const item = itens[i];
                                 const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
                                 await createCalendarEvent(
-                                    `[Em análise] ${label}: ${p.evento}`,
-                                    `Proponente: ${p.nome}\nE-mail: ${p.email}\nTelefone: ${p.telefone}\nLocal: ${localNomeResolvido}`,
+                                    `${label}: ${p.evento}`,
+                                    `Em análise\nLocal: ${localNomeResolvido}`,
                                     item.data, item.horario, calIdInscricao
                                 );
                             }
