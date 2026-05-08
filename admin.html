@@ -223,6 +223,61 @@
         </div>
     </div>
 
+    <!-- Tab: Envio de Termos (admin only) -->
+    <div class="tab-pane" id="pane-termos">
+
+        <!-- Termo em Branco -->
+        <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                <div>
+                    <h4 style="font-size:15px;color:#222;margin:0 0 6px;display:flex;align-items:center;gap:8px">
+                        <i class="fas fa-file-alt" style="color:#2563eb"></i> Termo Digital em Branco
+                    </h4>
+                    <p style="font-size:13px;color:#888;margin:0">Abre uma versão totalmente em branco do termo, para o proponente preencher todos os dados manualmente. Ideal para quando a inscrição não está cadastrada no sistema.</p>
+                </div>
+                <button class="btn-top" style="background:#2563eb;color:#fff;border-color:#2563eb;white-space:nowrap;flex-shrink:0" onclick="window.open('/termo','_blank')">
+                    <i class="fas fa-external-link-alt"></i> Abrir Termo em Branco
+                </button>
+            </div>
+        </div>
+
+        <!-- Envio em Massa -->
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444"><i class="fas fa-paper-plane" style="color:#764ba2"></i> Envio em Massa de Termos Digitais</h3>
+            </div>
+            <p style="font-size:13px;color:#666;margin-bottom:20px">
+                Cole abaixo os e-mails dos proponentes (um por linha, ou separados por vírgula/ponto-e-vírgula). O sistema irá buscar a inscrição de cada e-mail e enviar o link individual do Termo Digital.
+            </p>
+
+            <label class="form-label" style="font-weight:600;color:#444">E-mails dos proponentes</label>
+            <textarea id="termosEmailsInput" rows="7"
+                style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;outline:none;transition:.2s"
+                onfocus="this.style.borderColor='#764ba2'" onblur="this.style.borderColor='#ddd'"
+                oninput="atualizarContadorTermos()"
+                placeholder="proponente1@email.com&#10;proponente2@email.com&#10;proponente3@email.com"></textarea>
+            <p id="termosContador" style="font-size:12px;color:#888;margin:6px 0 20px">0 e-mail(s) detectado(s)</p>
+
+            <label class="form-label" style="font-weight:600;color:#444">Observação / Aviso adicional <span style="font-weight:400;color:#aaa">(opcional)</span></label>
+            <p style="font-size:12px;color:#888;margin:-4px 0 8px">Esta mensagem será exibida em destaque no início do e-mail, antes do link do termo.</p>
+            <textarea id="termosObservacao" rows="3"
+                style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;outline:none;transition:.2s;background:#fffbeb"
+                onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#ddd'"
+                placeholder="Ex: Por favor, desconsidere o e-mail anterior enviado com erro. Utilize apenas este novo link para preencher o Termo Digital."></textarea>
+
+            <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button class="btn-top btn-purple" style="font-size:14px;padding:11px 22px" onclick="enviarLinksTermoMassa()">
+                    <i class="fas fa-paper-plane"></i> Enviar Links em Massa
+                </button>
+                <button class="btn-top" style="background:#eee;color:#666;border-color:#ddd" onclick="document.getElementById('termosEmailsInput').value='';atualizarContadorTermos()">
+                    <i class="fas fa-times"></i> Limpar
+                </button>
+            </div>
+
+            <div id="termosResultado" style="display:none;margin-top:20px"></div>
+        </div>
+    </div>
+
     <!-- Tab: Relatório (admin only) -->
     <div class="tab-pane" id="pane-relatorio">
         <div class="card">
@@ -577,6 +632,7 @@ function buildTabs() {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
             <button class="tab-btn" onclick="switchTab('relatorio')">Relatório</button>
+            <button class="tab-btn" onclick="switchTab('termos')">Envio de Termos</button>
             <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
             <button class="tab-btn" onclick="switchTab('config')">Configurações</button>
         `;
@@ -592,7 +648,7 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const pane = document.getElementById(`pane-${name}`);
     if (pane) pane.classList.add('active');
-    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', avaliadores: 'avaliadores', config: 'config' };
+    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', termos: 'termos', avaliadores: 'avaliadores', config: 'config' };
     const kw = keyMap[name] || name;
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
@@ -823,6 +879,79 @@ async function confirmDeleteAllInscricoes() {
 // ══════════════════════════════════════════════════
 // ENVIO DE TERMOS
 // ══════════════════════════════════════════════════
+function parseEmails(raw) {
+    return raw.split(/[\n,;]+/)
+        .map(e => e.trim().toLowerCase())
+        .filter(e => e.includes('@'));
+}
+
+function atualizarContadorTermos() {
+    const raw = document.getElementById('termosEmailsInput').value;
+    const emails = parseEmails(raw);
+    const el = document.getElementById('termosContador');
+    el.textContent = `${emails.length} e-mail(s) detectado(s)`;
+    el.style.color = emails.length > 0 ? '#2563eb' : '#888';
+}
+
+async function enviarLinksTermoMassa() {
+    const raw = document.getElementById('termosEmailsInput').value;
+    const emails = parseEmails(raw);
+    const observacao = document.getElementById('termosObservacao').value.trim();
+    const resultado = document.getElementById('termosResultado');
+
+    if (emails.length === 0) { alert('Cole ao menos um e-mail válido.'); return; }
+    if (!confirm(`Enviar link do Termo Digital para ${emails.length} e-mail(s)?`)) return;
+
+    resultado.style.display = 'block';
+    resultado.innerHTML = `<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Enviando ${emails.length} e-mail(s)...</div>`;
+
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails, observacao, baseUrl: window.location.origin })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erro no servidor');
+
+        const enviados = d.detalhes.filter(x => x.status === 'enviado');
+        const erros = d.detalhes.filter(x => x.status === 'erro');
+        const naoEncontrados = d.detalhes.filter(x => x.status === 'nao_encontrado');
+
+        const itemRow = (icon, cor, texto) =>
+            `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px">
+                <i class="${icon}" style="color:${cor};width:16px;text-align:center;flex-shrink:0"></i>
+                <span>${texto}</span>
+            </div>`;
+
+        let html = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px">
+            <h4 style="margin:0 0 14px;font-size:15px;color:#222">Resultado do Envio</h4>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+                <div style="background:#d1fae5;border-radius:8px;padding:10px 16px;font-size:13px;color:#065f46"><strong>${enviados.length}</strong> enviados</div>
+                <div style="background:#fee2e2;border-radius:8px;padding:10px 16px;font-size:13px;color:#991b1b"><strong>${naoEncontrados.length}</strong> não encontrados</div>
+                ${erros.length > 0 ? `<div style="background:#fef3c7;border-radius:8px;padding:10px 16px;font-size:13px;color:#92400e"><strong>${erros.length}</strong> com erro</div>` : ''}
+            </div>`;
+
+        if (enviados.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#065f46;margin:10px 0 4px">ENVIADOS COM SUCESSO:</p>`;
+            enviados.forEach(x => { html += itemRow('fas fa-check-circle', '#16a34a', `${escapeHtml(x.nome || x.email)} — <span style="color:#888">${escapeHtml(x.evento || '')}</span> &lt;${escapeHtml(x.email)}&gt;`); });
+        }
+        if (naoEncontrados.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#991b1b;margin:14px 0 4px">NÃO ENCONTRADOS NO SISTEMA:</p>`;
+            naoEncontrados.forEach(x => { html += itemRow('fas fa-question-circle', '#dc2626', escapeHtml(x.email)); });
+            html += `<p style="font-size:11px;color:#aaa;margin:6px 0 0">Estes e-mails não têm inscrição cadastrada. Verifique se foram digitados corretamente.</p>`;
+        }
+        if (erros.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#92400e;margin:14px 0 4px">ERROS DE ENVIO:</p>`;
+            erros.forEach(x => { html += itemRow('fas fa-exclamation-circle', '#d97706', `${escapeHtml(x.email)} — ${escapeHtml(x.msg || 'Erro desconhecido')}`); });
+        }
+        html += `</div>`;
+        resultado.innerHTML = html;
+    } catch(e) {
+        resultado.innerHTML = `<div class="error-msg">Erro ao enviar: ${e.message}</div>`;
+    }
+}
+
 async function enviarTermosSelecionados() {
     const checks = document.querySelectorAll('.insc-check:checked');
     if (checks.length === 0) { alert('Selecione ao menos uma inscrição.'); return; }

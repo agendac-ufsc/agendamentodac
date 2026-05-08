@@ -1245,5 +1245,96 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
     res.json({ success: true, enviados, erros, total: inscricoes.length });
 });
 
+app.post('/api/enviar-links-termo', async (req, res) => {
+    const { emails, observacao, baseUrl } = req.body;
+    if (!Array.isArray(emails) || emails.length === 0) {
+        return res.status(400).json({ error: 'Nenhum e-mail informado.' });
+    }
+    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
+    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
+
+    const inscricoes = await getAgendamentos();
+    const origin = (baseUrl || '').replace(/\/$/, '');
+
+    let enviados = 0, erros = 0;
+    const naoEncontrados = [];
+    const detalhes = [];
+
+    for (const rawEmail of emails) {
+        const email = rawEmail.trim().toLowerCase();
+        if (!email) continue;
+        const insc = inscricoes.find(p => (p.email || '').trim().toLowerCase() === email);
+        if (!insc) {
+            naoEncontrados.push(email);
+            detalhes.push({ email, status: 'nao_encontrado' });
+            continue;
+        }
+
+        const { nome, evento, localNome, local, id } = insc;
+        const localExibir = localNome || (local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
+        const termoUrl = `${origin}/termo?id=${encodeURIComponent(id)}`;
+
+        const obsBlock = observacao ? `
+            <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px 18px;margin:20px 0">
+                <p style="margin:0;font-size:14px;color:#92400e"><strong>⚠️ Aviso da equipe DAC:</strong><br>${observacao.replace(/\n/g, '<br>')}</p>
+            </div>` : '';
+
+        const htmlContent = `
+        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:28px 30px;text-align:center">
+                <h2 style="margin:0;color:#fff;font-size:20px">Termo de Autorização de Uso</h2>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
+            </div>
+            <div style="padding:28px 30px">
+                ${obsBlock}
+                <p style="font-size:15px">Olá, <strong>${nome || 'Proponente'}</strong>!</p>
+                <p style="font-size:14px;color:#555;line-height:1.7">
+                    Você está recebendo o link individual para preencher o <strong>Termo Digital de Autorização de Uso do DAC</strong> referente ao seu evento:
+                </p>
+                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                    <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${evento || 'N/A'}</p>
+                    <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${localExibir}</p>
+                </div>
+                <p style="font-size:14px;color:#555;line-height:1.7">
+                    Por favor, acesse o link abaixo, preencha os dados solicitados e assine digitalmente:
+                </p>
+                <div style="text-align:center;margin:28px 0">
+                    <a href="${termoUrl}" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:.3px">
+                        ✍️ Acessar Meu Termo Digital
+                    </a>
+                </div>
+                <p style="font-size:12px;color:#aaa;text-align:center;word-break:break-all">
+                    Ou copie o link: <a href="${termoUrl}" style="color:#764ba2">${termoUrl}</a>
+                </p>
+                <p style="font-size:13px;color:#555">Em caso de dúvidas, responda a este e-mail ou entre em contato com a equipe do DAC.</p>
+                <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+                <p style="font-size:11px;color:#aaa;text-align:center">
+                    UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                    Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+                </p>
+            </div>
+        </div>`;
+
+        try {
+            await axios.post('https://api.brevo.com/v3/smtp/email', {
+                sender: { name: 'DAC - UFSC', email: senderEmail },
+                to: [{ email: insc.email, name: nome || insc.email }],
+                subject: `✍️ Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
+                htmlContent
+            }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+            enviados++;
+            detalhes.push({ email: insc.email, nome, evento, status: 'enviado' });
+            console.log(`✅ Link do termo enviado para ${insc.email}`);
+        } catch (e) {
+            erros++;
+            detalhes.push({ email: insc.email, nome, evento, status: 'erro', msg: e.response?.data?.message || e.message });
+            console.error(`❌ Erro ao enviar link para ${insc.email}:`, e.response?.data || e.message);
+        }
+    }
+
+    res.json({ success: true, enviados, erros, naoEncontrados, detalhes, total: emails.length });
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando em http://localhost:${PORT}`));
