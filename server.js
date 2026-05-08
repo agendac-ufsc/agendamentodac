@@ -1296,7 +1296,6 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                     <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${evento || 'N/A'}</p>
                     <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${localExibir}</p>
                 </div>
-                ${obsBlock}
                 <p style="font-size:14px;color:#555;line-height:1.7">
                     Por favor, acesse o link abaixo, preencha os dados solicitados e assine digitalmente:
                 </p>
@@ -1308,6 +1307,7 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                 <p style="font-size:12px;color:#aaa;text-align:center;word-break:break-all">
                     Ou copie o link: <a href="${termoUrl}" style="color:#764ba2">${termoUrl}</a>
                 </p>
+                ${obsBlock}
                 <p style="font-size:13px;color:#555">Em caso de dúvidas, responda a este e-mail ou entre em contato com a equipe do DAC.</p>
                 <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
                 <p style="font-size:11px;color:#aaa;text-align:center">
