@@ -1302,6 +1302,7 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
             const resp = await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: 'DAC - UFSC', email: senderEmail },
                 to: [{ email: email, name: nome || email }],
+                cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
                 replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
                 subject: `📋 Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
                 htmlContent
@@ -1395,6 +1396,7 @@ app.post('/api/enviar-links-termo', async (req, res) => {
             await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: 'DAC - UFSC', email: senderEmail },
                 to: [{ email: insc.email, name: nome || insc.email }],
+                cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
                 replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
                 subject: `✍️ Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
                 htmlContent
