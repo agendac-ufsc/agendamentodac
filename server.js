@@ -81,6 +81,22 @@ const saveAgendamento = async (novoAgendamento) => {
     return false;
 };
 
+const updateAgendamento = async (id, campos) => {
+    try {
+        if (redis) {
+            const agendamentos = await getAgendamentos();
+            const idx = agendamentos.findIndex(a => a.id === id);
+            if (idx === -1) return false;
+            agendamentos[idx] = { ...agendamentos[idx], ...campos };
+            await redis.set(AGENDAMENTOS_KEY, agendamentos);
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ [Redis] Erro ao atualizar agendamento:', error.message);
+    }
+    return false;
+};
+
 const verificarEventosNoCalendario = async (agendamento) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
@@ -524,20 +540,12 @@ app.post('/api/agendar', async (req, res) => {
             html += '</table>';
             return html;
         };
-        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-        for (const key of Object.keys(etapas)) {
-            const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
-            for (let i = 0; i < itens.length; i++) {
-                const item = itens[i];
-                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
-                await createCalendarEvent(`${label}: ${evento}`, `Proponente: ${nome}\nE-mail: ${email}\nTelefone: ${telefone}\nLocal: ${localNome}`, item.data, item.horario, calId);
-            }
-        }
         const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
 
         // Salvar no Redis ANTES dos e-mails — garante que a inscrição não se perde se o e-mail falhar
-        await saveAgendamento({ id: Date.now().toString(), nome, email, telefone, evento, etapas, local: localKey, localNome, calendarId: calId, timestamp: new Date().toLocaleString('pt-BR') });
+        // calendarSynced: false — eventos no Google Calendar só serão criados quando a etapa 2 (Forms) for detectada
+        await saveAgendamento({ id: Date.now().toString(), nome, email, telefone, evento, etapas, local: localKey, localNome, calendarId: calId, timestamp: new Date().toLocaleString('pt-BR'), calendarSynced: false });
 
         // Enviar e-mails de forma independente — erro de e-mail não cancela a inscrição já salva
         sendEmail(email, '✅ Confirmação de Inscrição de Projeto - DAC', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá ${nome}!</h2><p>Sua inscrição para o evento <strong>${evento}</strong> no <strong>${localNome}</strong> foi recebida com sucesso.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Resumo do Cronograma:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><p>Caso precise realizar alterações, entre em contato respondendo a este e-mail.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`).catch(err => console.error('⚠️ [E-mail] Erro ao enviar confirmação ao proponente:', err.message));
@@ -679,26 +687,52 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 return matchesEmail || matchesTelefone;
             });
 
-            // Verificar se os eventos ainda existem no Google Calendar
-            const eventosExistem = await verificarEventosNoCalendario(p);
-            
             const localNomeResolvido = p.localNome || mapeamentoLocais[p.local] || mapeamentoLocais[p.calendarId] || 'Teatro';
+            const calIdInscricao = p.calendarId || CALENDAR_IDS[(p.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
+
             if (correspondencia) {
+                // Etapa 2 encontrada — criar eventos no Calendar se ainda não foram criados
+                if (p.calendarSynced !== true) {
+                    try {
+                        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                        for (const key of Object.keys(p.etapas || {})) {
+                            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                            for (let i = 0; i < itens.length; i++) {
+                                const item = itens[i];
+                                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                                await createCalendarEvent(
+                                    `[Em análise] ${label}: ${p.evento}`,
+                                    `Proponente: ${p.nome}\nE-mail: ${p.email}\nTelefone: ${p.telefone}\nLocal: ${localNomeResolvido}`,
+                                    item.data, item.horario, calIdInscricao
+                                );
+                            }
+                        }
+                        await updateAgendamento(p.id, { calendarSynced: true });
+                        console.log(`✅ [Calendar] Eventos criados para inscrição completa: ${p.evento} (${p.email})`);
+                    } catch (calErr) {
+                        console.error(`⚠️ [Calendar] Falha ao criar eventos para ${p.email}:`, calErr.message);
+                    }
+                }
                 unificados.push({
-                    primeiraEtapa: { ...p, localNome: localNomeResolvido },
+                    primeiraEtapa: { ...p, localNome: localNomeResolvido, calendarSynced: true },
                     segundaEtapa: { headers, valores: correspondencia },
-                    // Se houver correspondência na planilha, o status é Completo, 
-                    // independente da verificação do calendário (que pode falhar por delay)
                     status: 'Completo',
-                    eventosExistem: eventosExistem
+                    eventosExistem: true
                 });
             } else {
+                // Ainda só tem etapa 1 — não há eventos no Calendar (novo fluxo) ou pode ter (fluxo antigo)
+                // Só verificar o Calendar para inscrições antigas (calendarSynced undefined = fluxo antigo)
+                let eventosExistem = false;
+                if (p.calendarSynced === undefined) {
+                    eventosExistem = await verificarEventosNoCalendario(p);
+                }
+                const statusPendente = p.calendarSynced === false
+                    ? 'Pendente (Falta Forms)'
+                    : (eventosExistem ? 'Pendente (Falta Forms)' : 'Cancelado (Eventos Removidos)');
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: localNomeResolvido },
                     segundaEtapa: null,
-                    // Se não houver correspondência, mas os eventos existem, está Pendente.
-                    // Se os eventos NÃO existem e NÃO há correspondência, aí sim é Cancelado.
-                    status: eventosExistem ? 'Pendente (Falta Forms)' : 'Cancelado (Eventos Removidos)',
+                    status: statusPendente,
                     eventosExistem: eventosExistem
                 });
             }
