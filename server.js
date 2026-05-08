@@ -1277,7 +1277,8 @@ app.post('/api/enviar-links-termo', async (req, res) => {
 
         const obsBlock = observacao ? `
             <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px 18px;margin:20px 0">
-                <p style="margin:0;font-size:14px;color:#92400e"><strong>⚠️ Aviso da equipe DAC:</strong><br>${observacao.replace(/\n/g, '<br>')}</p>
+                <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#92400e">⚠️ Aviso da equipe DAC:</p>
+                <p style="margin:0;font-size:14px;color:#92400e;line-height:1.6">${observacao.replace(/\n/g, '<br>')}</p>
             </div>` : '';
 
         const htmlContent = `
@@ -1287,7 +1288,6 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                 <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
             </div>
             <div style="padding:28px 30px">
-                ${obsBlock}
                 <p style="font-size:15px">Olá, <strong>${nome || 'Proponente'}</strong>!</p>
                 <p style="font-size:14px;color:#555;line-height:1.7">
                     Você está recebendo o link individual para preencher o <strong>Termo Digital de Autorização de Uso do DAC</strong> referente ao seu evento:
@@ -1296,6 +1296,7 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                     <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${evento || 'N/A'}</p>
                     <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${localExibir}</p>
                 </div>
+                ${obsBlock}
                 <p style="font-size:14px;color:#555;line-height:1.7">
                     Por favor, acesse o link abaixo, preencha os dados solicitados e assine digitalmente:
                 </p>
