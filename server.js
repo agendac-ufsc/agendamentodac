@@ -1252,6 +1252,21 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
 });
 
 // ============================================================
+// T004a — EDIÇÃO DE ETAPAS (via painel admin)
+// ============================================================
+
+app.put('/api/admin/agendamentos/:id', async (req, res) => {
+    const { id } = req.params;
+    const campos = req.body;
+    if (!id || Object.keys(campos).length === 0) {
+        return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
+    }
+    const success = await updateAgendamento(id, campos);
+    if (success) res.json({ success: true });
+    else res.status(404).json({ error: 'Agendamento não encontrado.' });
+});
+
+// ============================================================
 // T004b — EMAIL RÁPIDO PARA PROPONENTE (via painel admin)
 // ============================================================
 

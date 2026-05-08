@@ -474,6 +474,22 @@
 </div>
 
 
+<!-- ═══════════════ MODAL EDITAR ETAPAS ═══ -->
+<div class="modal" id="modalEditarEtapas">
+    <div class="modal-box" style="max-width:580px">
+        <h3><i class="fas fa-pencil-alt"></i> Editar Datas e Horários</h3>
+        <p style="font-size:12px;color:#888;margin:-8px 0 16px">Altere as datas e horários abaixo. As mudanças são salvas no sistema mas <strong>não atualizam automaticamente o Google Calendar</strong>.</p>
+        <div id="editarEtapasBody" style="display:flex;flex-direction:column;gap:14px"></div>
+        <div id="editarEtapasStatus" style="font-size:13px;margin-top:12px;min-height:18px"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalEditarEtapas')">Cancelar</button>
+            <button id="btnSalvarEtapas" class="btn-save-modal" style="background:#764ba2" onclick="salvarEtapas()">
+                <i class="fas fa-save"></i> Salvar Alterações
+            </button>
+        </div>
+    </div>
+</div>
+
 <!-- ═══════════════ MODAL EMAIL RÁPIDO ═══ -->
 <div class="modal" id="modalEmailRapido">
     <div class="modal-box" style="max-width:540px">
@@ -756,6 +772,7 @@ function renderTabela() {
                 });
             }
         }
+        const editEtapasBtn = (userRole === 'admin' && p.id && p.etapas) ? `<button onclick="openEditarEtapas(${originalIndex})" title="Editar datas e horários" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:12px;padding:2px 5px;border-radius:4px;margin-top:4px;display:inline-flex;align-items:center;gap:3px;opacity:.75" onmouseover="this.style.opacity='1';this.style.background='#f3e8ff'" onmouseout="this.style.opacity='.75';this.style.background='none'"><i class="fas fa-pencil-alt"></i> editar</button>` : '';
 
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const localBadge = `<span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}"><i class="fas fa-${isIgrejinha?'church':'theater-masks'}"></i> ${p.localNome||'Teatro'}</span>`;
@@ -783,7 +800,7 @@ function renderTabela() {
                 <div style="font-size:11px;color:#888;margin-top:2px">${p.nome||''} &middot; ${p.email||''}</div>
             </td>
             <td>${localBadge}</td>
-            <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}</td>
+            <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}${editEtapasBtn}</td>
             <td><span class="status-badge ${stClass}">${stText}</span></td>
             <td style="text-align:center;white-space:nowrap">${acoes}</td>
         `;
@@ -847,6 +864,106 @@ function showContact(idx) {
         <p style="margin-top:8px"><strong>Inscrito em:</strong> ${p.timestamp||'—'}</p>
     `;
     openModal('modalContato');
+}
+
+let _editarEtapasData = {};
+const nomesEtapasEdit = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
+
+function openEditarEtapas(idx) {
+    const p = allUnificados[idx].primeiraEtapa;
+    _editarEtapasData = { id: p.id, idx };
+    const body = document.getElementById('editarEtapasBody');
+    body.innerHTML = '';
+    document.getElementById('editarEtapasStatus').textContent = '';
+    const btn = document.getElementById('btnSalvarEtapas');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+
+    const etapas = p.etapas || {};
+    let rowIdx = 0;
+    for (const key in etapas) {
+        const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
+        itens.forEach((it, i) => {
+            if (!it || !it.data) return;
+            const label = itens.length > 1 ? `${nomesEtapasEdit[key]||key} ${i+1}` : (nomesEtapasEdit[key]||key);
+            const [hIni, hFim] = (it.horario||'').split(' às ');
+            const rowId = `etapa_${key}_${i}`;
+            body.innerHTML += `
+            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px" data-key="${key}" data-idx="${i}">
+                <div style="font-weight:700;font-size:13px;color:#764ba2;margin-bottom:10px"><i class="fas fa-calendar-alt"></i> ${label}</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Data</label>
+                        <input type="date" id="${rowId}_data" value="${it.data}" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Início</label>
+                        <input type="time" id="${rowId}_ini" value="${hIni||''}" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Fim</label>
+                        <input type="time" id="${rowId}_fim" value="${hFim||''}" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333">
+                    </div>
+                </div>
+            </div>`;
+            rowIdx++;
+        });
+    }
+    if (rowIdx === 0) {
+        body.innerHTML = '<p style="color:#aaa;font-size:13px">Nenhuma etapa disponível para edição.</p>';
+    }
+    openModal('modalEditarEtapas');
+}
+
+async function salvarEtapas() {
+    const status = document.getElementById('editarEtapasStatus');
+    const btn = document.getElementById('btnSalvarEtapas');
+    const p = allUnificados[_editarEtapasData.idx].primeiraEtapa;
+    const etapasAtualizadas = JSON.parse(JSON.stringify(p.etapas));
+
+    for (const key in etapasAtualizadas) {
+        const itens = Array.isArray(etapasAtualizadas[key]) ? etapasAtualizadas[key] : [etapasAtualizadas[key]];
+        itens.forEach((it, i) => {
+            const rowId = `etapa_${key}_${i}`;
+            const dataEl = document.getElementById(`${rowId}_data`);
+            const iniEl  = document.getElementById(`${rowId}_ini`);
+            const fimEl  = document.getElementById(`${rowId}_fim`);
+            if (dataEl) it.data = dataEl.value;
+            if (iniEl && fimEl && iniEl.value && fimEl.value) it.horario = `${iniEl.value} às ${fimEl.value}`;
+        });
+        etapasAtualizadas[key] = itens;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    status.textContent = '';
+
+    try {
+        const r = await fetch(`/api/admin/agendamentos/${_editarEtapasData.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ etapas: etapasAtualizadas })
+        });
+        const data = await r.json();
+        if (data.success) {
+            status.textContent = '✅ Salvo com sucesso!';
+            status.style.color = '#16a34a';
+            btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
+            allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
+            renderTable();
+            setTimeout(() => closeModal('modalEditarEtapas'), 1500);
+        } else {
+            status.textContent = '❌ Erro: ' + (data.error || 'Falha ao salvar.');
+            status.style.color = '#dc2626';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+        }
+    } catch (e) {
+        status.textContent = '❌ Erro de conexão.';
+        status.style.color = '#dc2626';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+    }
 }
 
 let _emailRapidoData = {};
