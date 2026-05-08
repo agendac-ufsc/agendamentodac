@@ -500,6 +500,7 @@ const sendEmail = async (to, subject, htmlContent) => {
     const data = {
         sender: { "name": "Agendamento DAC", "email": senderEmail },
         to: Array.isArray(to) ? to.map(email => ({ "email": email })) : [{ "email": to }],
+        replyTo: { "email": "pautas.dac@contato.ufsc.br", "name": "DAC - UFSC" },
         subject: subject,
         htmlContent: htmlContent
     };
@@ -1301,6 +1302,7 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
             const resp = await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: 'DAC - UFSC', email: senderEmail },
                 to: [{ email: email, name: nome || email }],
+                replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
                 subject: `📋 Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
                 htmlContent
             }, {
@@ -1393,6 +1395,7 @@ app.post('/api/enviar-links-termo', async (req, res) => {
             await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: 'DAC - UFSC', email: senderEmail },
                 to: [{ email: insc.email, name: nome || insc.email }],
+                replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
                 subject: `✍️ Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
                 htmlContent
             }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
