@@ -1255,9 +1255,8 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
 // T004a — EDIÇÃO DE ETAPAS (via painel admin)
 // ============================================================
 
-app.post('/api/admin/agendamentos/:id/atualizar', async (req, res) => {
-    const { id } = req.params;
-    const campos = req.body;
+app.post('/api/admin/atualizar-etapas', async (req, res) => {
+    const { id, ...campos } = req.body;
     if (!id || Object.keys(campos).length === 0) {
         return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
     }

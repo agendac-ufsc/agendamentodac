@@ -939,11 +939,15 @@ async function salvarEtapas() {
     status.textContent = '';
 
     try {
-        const r = await fetch(`/api/admin/agendamentos/${_editarEtapasData.id}/atualizar`, {
+        const r = await fetch('/api/admin/atualizar-etapas', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ etapas: etapasAtualizadas })
+            body: JSON.stringify({ id: _editarEtapasData.id, etapas: etapasAtualizadas })
         });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${r.status}`);
+        }
         const data = await r.json();
         if (data.success) {
             status.textContent = '✅ Salvo! O Google Calendar está sendo atualizado em segundo plano.';
@@ -953,13 +957,10 @@ async function salvarEtapas() {
             renderTable();
             setTimeout(() => closeModal('modalEditarEtapas'), 2000);
         } else {
-            status.textContent = '❌ Erro: ' + (data.error || 'Falha ao salvar.');
-            status.style.color = '#dc2626';
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+            throw new Error(data.error || 'Falha ao salvar.');
         }
     } catch (e) {
-        status.textContent = '❌ Erro de conexão.';
+        status.textContent = '❌ Erro: ' + (e.message || 'Falha de conexão.');
         status.style.color = '#dc2626';
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
