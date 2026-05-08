@@ -1255,7 +1255,7 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
 // T004a — EDIÇÃO DE ETAPAS (via painel admin)
 // ============================================================
 
-app.put('/api/admin/agendamentos/:id', async (req, res) => {
+app.post('/api/admin/agendamentos/:id/atualizar', async (req, res) => {
     const { id } = req.params;
     const campos = req.body;
     if (!id || Object.keys(campos).length === 0) {

@@ -939,8 +939,8 @@ async function salvarEtapas() {
     status.textContent = '';
 
     try {
-        const r = await fetch(`/api/admin/agendamentos/${_editarEtapasData.id}`, {
-            method: 'PUT',
+        const r = await fetch(`/api/admin/agendamentos/${_editarEtapasData.id}/atualizar`, {
+            method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ etapas: etapasAtualizadas })
         });
