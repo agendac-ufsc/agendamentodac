@@ -1073,6 +1073,20 @@ function generatePDF(idx) {
         });
     }
 
+    // Carimbo de data/hora da inscrição
+    doc.setPage(1);
+    const timestamp = p.timestamp || '—';
+    const carimbX = W - margin - 54;
+    const carimbY = 32;
+    doc.setDrawColor(118, 75, 162);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(carimbX, carimbY, 54, 16, 2, 2, 'S');
+    doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(118, 75, 162);
+    addText('INSCRITO EM', carimbX + 27, carimbY + 5, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    const tsLinhas = doc.splitTextToSize(timestamp, 50);
+    tsLinhas.forEach((linha, i) => addText(linha, carimbX + 27, carimbY + 10 + i * 4, {align:'center'}));
+
     // Rodapé
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
@@ -1082,7 +1096,8 @@ function generatePDF(idx) {
     }
 
     const safe = (p.evento||'evento').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_');
-    const blobUrl = doc.output('bloburl');
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
     const win = window.open(blobUrl, '_blank');
     if (!win) {
         alert('Por favor, permita pop-ups deste site para visualizar o PDF em outra aba.');
