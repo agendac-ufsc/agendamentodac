@@ -528,11 +528,11 @@
             <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.
         </p>
         <p style="font-size:13px;color:#666;margin-top:12px">
-            Para confirmar, digite a palavra <strong style="color:#dc2626;letter-spacing:1px">EXCLUIR</strong> no campo abaixo (maiúsculas, sem aspas):
+            Para confirmar, digite a <strong style="color:#dc2626">senha de autorização</strong> no campo abaixo:
         </p>
         <div class="form-field" style="margin-top:10px">
-            <input type="text" id="excluirTudoConfirmInput" class="form-input"
-                   placeholder='Digite EXCLUIR' autocomplete="off" spellcheck="false"
+            <input type="password" id="excluirTudoConfirmInput" class="form-input"
+                   placeholder='Senha de autorização' autocomplete="off" spellcheck="false"
                    oninput="onExcluirTudoInputChange()">
         </div>
         <div class="modal-footer">
@@ -1044,7 +1044,7 @@ function onExcluirTudoInputChange() {
     const input = document.getElementById('excluirTudoConfirmInput');
     const btn = document.getElementById('btnConfirmExcluirTudo');
     if (!input || !btn) return;
-    const ok = input.value === 'EXCLUIR';
+    const ok = input.value === 'dac.ufsc.br';
     btn.disabled = !ok;
     btn.style.opacity = ok ? '1' : '0.5';
     btn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -1052,7 +1052,7 @@ function onExcluirTudoInputChange() {
 
 async function confirmDeleteAllInscricoes() {
     const input = document.getElementById('excluirTudoConfirmInput');
-    if (!input || input.value !== 'EXCLUIR') return;
+    if (!input || input.value !== 'dac.ufsc.br') return;
     const btn = document.getElementById('btnConfirmExcluirTudo');
     if (btn) {
         btn.disabled = true;
