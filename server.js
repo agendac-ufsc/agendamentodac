@@ -26,6 +26,19 @@ let redis;
 try {
     let url = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/^["']|["']$/g, '');
     let token = (process.env.UPSTASH_REDIS_REST_TOKEN || '').replace(/^["']|["']$/g, '');
+
+    // Fallback: aceitar REDIS_URL no formato https://default:TOKEN@HOST.upstash.io
+    if ((!url || !token) && process.env.REDIS_URL) {
+        const raw = process.env.REDIS_URL.replace(/^["']|["']$/g, '');
+        try {
+            const parsed = new URL(raw);
+            if (parsed.protocol === 'https:') {
+                url = `${parsed.protocol}//${parsed.hostname}`;
+                token = parsed.password || parsed.username;
+            }
+        } catch (_) {}
+    }
+
     // Corrige caso as credenciais tenham sido salvas invertidas
     if (url && token && !url.startsWith('https://') && token.startsWith('https://')) {
         [url, token] = [token, url];
