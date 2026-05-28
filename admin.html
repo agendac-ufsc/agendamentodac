@@ -197,9 +197,6 @@
                 <option value="Pendente">Pendente</option>
                 <option value="Cancelado">Cancelado</option>
             </select>
-            <button class="btn-top btn-orange" id="btnEnviarTermos" onclick="enviarTermosSelecionados()" style="display:none">
-                <i class="fas fa-paper-plane"></i> Enviar Termos (<span id="countSelecionados">0</span>)
-            </button>
         </div>
         <div class="results-count" id="resultsCount"></div>
         <div class="table-wrap">
@@ -224,20 +221,58 @@
         </div>
     </div>
 
-    <!-- Tab: Avaliação -->
-    <div class="tab-pane" id="pane-avaliacao">
-        <div class="filters-bar">
-            <div class="search-wrap">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchAvalia" placeholder="Buscar inscrição para avaliar..." oninput="renderAvaliacaoList()">
-            </div>
-            <select id="filterLocalAv" class="filter-sel" onchange="renderAvaliacaoList()">
-                <option value="">Todos os Locais</option>
-                <option value="Teatro">Teatro</option>
-                <option value="Igrejinha">Igrejinha</option>
-            </select>
+    <!-- Tab: Relatório -->
+    <div class="tab-pane" id="pane-relatorio">
+        <div id="relatorioContent" style="padding:8px 0">
+            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div>
         </div>
-        <div id="avaliacaoList"><div class="loading-msg">Carregando...</div></div>
+    </div>
+
+    <!-- Tab: Envio de Termos -->
+    <div class="tab-pane" id="pane-termos">
+        <!-- Card: Termo em Branco -->
+        <div class="card" style="margin-bottom:20px">
+            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
+                <div>
+                    <h3 style="font-size:16px;color:#1e3a5f;margin:0 0 6px;display:flex;align-items:center;gap:8px">
+                        <i class="fas fa-file-alt" style="color:#2563eb"></i> Termo Digital em Branco
+                    </h3>
+                    <p style="font-size:13px;color:#555;margin:0">Abre uma versão totalmente em branco do termo, para o proponente preencher todos os dados manualmente. Ideal para quando a inscrição não está cadastrada no sistema.</p>
+                </div>
+                <button class="btn-top" style="background:#2563eb;color:#fff;white-space:nowrap;flex-shrink:0" onclick="abrirTermoBranco()">
+                    <i class="fas fa-external-link-alt"></i> Abrir Termo em Branco
+                </button>
+            </div>
+        </div>
+
+        <!-- Card: Envio em Massa -->
+        <div class="card">
+            <h3 style="font-size:16px;color:#1e3a5f;margin:0 0 6px;display:flex;align-items:center;gap:8px">
+                <i class="fas fa-paper-plane" style="color:#2563eb"></i> Envio em Massa de Termos Digitais
+            </h3>
+            <p style="font-size:13px;color:#555;margin:0 0 18px">Cole abaixo os e-mails dos proponentes (um por linha, ou separados por vírgula/ponto-e-vírgula). O sistema irá buscar a inscrição de cada e-mail e enviar o link individual do Termo Digital.</p>
+
+            <label class="form-label">E-mails dos proponentes</label>
+            <textarea id="termosEmailsInput" class="form-input" rows="7"
+                placeholder="proponente1@email.com&#10;proponente2@email.com&#10;proponente3@email.com"
+                oninput="atualizarContagemEmails()"
+                style="font-family:monospace;font-size:13px;resize:vertical"></textarea>
+            <div style="font-size:12px;color:#6b7280;margin:6px 0 18px" id="contagemEmails">0 e-mail(s) detectado(s)</div>
+
+            <label class="form-label">Observação / Aviso adicional <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
+            <p style="font-size:12px;color:#888;margin:-6px 0 8px">Esta mensagem será exibida em destaque no início do e-mail, antes do link do termo.</p>
+            <textarea id="termosAvisoInput" class="form-input" rows="3"
+                placeholder="Ex: Por favor, desconsidere o e-mail anterior enviado com erro. Utilize apenas este novo link para preencher o Termo Digital."
+                style="font-size:13px;resize:vertical"></textarea>
+
+            <div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <button class="btn-top btn-orange" onclick="enviarTermosPorEmail()" id="btnEnviarTermosMassa">
+                    <i class="fas fa-paper-plane"></i> Enviar Termos
+                </button>
+                <span id="termosStatus" style="font-size:13px;color:#555"></span>
+            </div>
+            <div id="termosResultado" style="display:none;margin-top:16px;padding:14px;border-radius:8px;font-size:13px"></div>
+        </div>
     </div>
 
     <!-- Tab: Avaliadores (admin only) -->
@@ -567,7 +602,6 @@ function buildTopActions() {
     if (userRole === 'admin') {
         el.innerHTML = `
             <button class="btn-top btn-refresh" onclick="loadData()"><i class="fas fa-sync-alt"></i> Atualizar</button>
-            <button class="btn-top btn-orange" onclick="abrirTermoBranco()" title="Abrir versão em branco do termo digital para preenchimento manual"><i class="fas fa-file-signature"></i> Termo em Branco</button>
             <button class="btn-top btn-success" onclick="downloadAllPDFs()"><i class="fas fa-download"></i> Baixar PDFs</button>
             <button class="btn-top btn-danger" onclick="deleteAllInscricoes()"><i class="fas fa-trash"></i> Excluir Tudo</button>
             <button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
@@ -582,14 +616,14 @@ function buildTabs() {
     if (userRole === 'admin') {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
-            <button class="tab-btn" onclick="switchTab('avaliacao')">Avaliação</button>
+            <button class="tab-btn" onclick="switchTab('relatorio')">Relatório</button>
+            <button class="tab-btn" onclick="switchTab('termos')">Envio de Termos</button>
             <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
             <button class="tab-btn" onclick="switchTab('config')">Configurações</button>
         `;
     } else {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
-            <button class="tab-btn" onclick="switchTab('avaliacao')">Minhas Avaliações</button>
         `;
     }
 }
@@ -599,12 +633,12 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const pane = document.getElementById(`pane-${name}`);
     if (pane) pane.classList.add('active');
-    const keyMap = { inscricoes: 'inscri', avaliacao: 'avalia', avaliadores: 'avaliadores', config: 'config' };
-    const kw = keyMap[name] || name;
+    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', termos: 'envio de termos', avaliadores: 'avaliadores', config: 'config' };
+    const kw = (keyMap[name] || name).toLowerCase();
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
     });
-    if (name === 'avaliacao') renderAvaliacaoList();
+    if (name === 'relatorio') renderRelatorio();
     if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
     if (name === 'config') loadConfigs();
 }
