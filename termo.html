@@ -430,8 +430,8 @@ async function carregarInscricao() {
 
   if (!id) {
     $('loadingState').style.display = 'none';
-    $('errorState').style.display = 'block';
-    $('errorMsg').textContent = 'Link inválido — falta o identificador da inscrição. Solicite um novo link à equipe do DAC.';
+    $('formState').style.display = 'block';
+    renderClausulas();
     return;
   }
 
