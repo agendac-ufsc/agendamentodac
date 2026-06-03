@@ -135,16 +135,68 @@
             <div style="font-size:48px; margin-bottom:16px;">⚠️</div>
             <h2 style="color:#333; font-size:20px; margin-bottom:16px;">Antes de começar, leia com atenção</h2>
             <div style="background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:18px; text-align:left; margin-bottom:24px;">
-                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:12px; font-size:14px; color:#555; line-height:1.6;">
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:14px; font-size:14px; color:#555; line-height:1.6;">
+                    <li style="background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:12px 14px;">
+                        ✅ <strong>Complete até o fim — a inscrição só é válida se finalizada.</strong><br>
+                        <span style="font-size:13px;">Desistir no meio do processo invalida a inscrição. A inscrição é composta de <strong>duas etapas obrigatórias</strong>:</span>
+                        <ol style="margin:8px 0 0 18px; font-size:13px; color:#666; display:flex; flex-direction:column; gap:4px;">
+                            <li><strong>1ª etapa:</strong> registro de dados pessoais básicos, título do evento, datas e horários.</li>
+                            <li><strong>2ª etapa:</strong> envio da documentação e demais informações do evento.</li>
+                        </ol>
+                    </li>
                     <li>⏱️ <strong>Tempo estimado:</strong> a inscrição leva em média <strong>15 minutos</strong> para ser concluída.</li>
-                    <li>📄 <strong>Documentos:</strong> tenha todos os documentos necessários em mãos antes de começar.</li>
-                    <li>✅ <strong>Complete até o fim:</strong> a inscrição <strong>só é válida se finalizada</strong>. Desistir no meio do processo invalida a inscrição.</li>
+                    <li>
+                        📄 <strong>Documentos:</strong> tenha todos os documentos necessários em mãos antes de começar.<br>
+                        <button type="button" onclick="abrirModalDocumentos()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">📋 Ver lista de documentos necessários</button>
+                    </li>
                 </ul>
             </div>
             <p style="font-size:13px; color:#888; margin-bottom:24px;">Você está pronto(a) para iniciar?</p>
-            <div style="display:flex; gap:12px; justify-content:center;">
+            <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
                 <button type="button" onclick="fecharAvisoInscricao()" style="padding:12px 28px; border-radius:8px; border:2px solid #ddd; background:#fff; color:#555; font-size:14px; font-weight:600; cursor:pointer;">Ainda não estou pronto(a)</button>
                 <button type="button" id="btnConfirmarInscricao" onclick="confirmarContinuar()" style="padding:12px 28px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Estou pronto(a), iniciar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Lista de Documentos -->
+    <div id="modalDocumentos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:#fff; border-radius:16px; max-width:520px; width:100%; padding:32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#333; font-size:18px; margin:0;">📋 Documentos Necessários</h2>
+                <button type="button" onclick="fecharModalDocumentos()" style="background:#eee; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:14px; color:#555;">✕ Fechar</button>
+            </div>
+
+            <div style="margin-bottom:20px;">
+                <h3 style="font-size:15px; color:#2563eb; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                    👤 Pessoa Física
+                </h3>
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f0f7ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#2563eb; font-weight:700; flex-shrink:0;">•</span> RG (Registro Geral)
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f0f7ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#2563eb; font-weight:700; flex-shrink:0;">•</span> CPF (Cadastro de Pessoas Físicas)
+                    </li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 style="font-size:15px; color:#7c3aed; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                    🏢 Pessoa Jurídica
+                </h3>
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> RG do representante legal
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> CPF do representante legal
+                    </li>
+                </ul>
+            </div>
+
+            <div style="margin-top:24px; text-align:center;">
+                <button type="button" onclick="fecharModalDocumentos()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
             </div>
         </div>
     </div>
@@ -812,6 +864,14 @@
         function fecharAvisoInscricao() {
             _localPendente = null;
             document.getElementById('modalAvisoInscricao').style.display = 'none';
+        }
+
+        function abrirModalDocumentos() {
+            document.getElementById('modalDocumentos').style.display = 'flex';
+        }
+
+        function fecharModalDocumentos() {
+            document.getElementById('modalDocumentos').style.display = 'none';
         }
 
         function confirmarContinuar() {
