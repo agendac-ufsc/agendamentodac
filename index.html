@@ -531,17 +531,23 @@
                         if (isUserSelected) d.classList.add('user-selected');
 
                         const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+                        const manualEventsOnDay = eventsOnDay.filter(e => e.source !== 'sistema');
+                        const systemEventsOnDay = eventsOnDay.filter(e => e.source === 'sistema');
+                        let dayBlocked = false;
                         if (eventsOnDay.length > 0) {
-                            if (eventsOnDay.length >= 15) d.classList.add('busy-full');
+                            // Dia fica vermelho se tem eventos manuais ou muitos eventos do sistema
+                            if (manualEventsOnDay.length > 0 || systemEventsOnDay.length >= 15) d.classList.add('busy-full');
                             else d.classList.add('busy-partial');
-                            
-                            if (!permitirDisputa && eventsOnDay.length >= 15) {
-                                d.onclick = null;
+                            // Bloqueia clique no dia apenas se disputa desligada E sistema lotado
+                            if (!permitirDisputa && systemEventsOnDay.length >= 15) {
+                                dayBlocked = true;
                                 d.style.cursor = 'not-allowed';
                             }
                         }
 
-                        d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
+                        if (!dayBlocked) {
+                            d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
+                        }
                         if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
                     }
                 }
@@ -596,18 +602,28 @@
                     slot.className = 'time-slot';
                     slot.textContent = time;
 
-                    const isBusy = eventsOnDay.some(e => {
-                        const start = parseInt(e.start.split('T')[1].substring(0,5).replace(':', ''));
-                        const end = parseInt(e.end.split('T')[1].substring(0,5).replace(':', ''));
-                        return timeVal >= start && timeVal < end;
-                    });
+                    const overlaps = (e) => {
+                        if (!e.start.includes('T')) return false;
+                        const eStart = parseInt(e.start.split('T')[1].substring(0,5).replace(':', ''));
+                        const eEnd   = parseInt(e.end.split('T')[1].substring(0,5).replace(':', ''));
+                        return timeVal >= eStart && timeVal < eEnd;
+                    };
+                    const isBusyManual = eventsOnDay.some(e => e.source !== 'sistema' && overlaps(e));
+                    const isBusySystem = eventsOnDay.some(e => e.source === 'sistema' && overlaps(e));
 
-                    if (isBusy) {
+                    if (isBusyManual) {
+                        // Evento adicionado manualmente no Google Calendar — sempre bloqueado
+                        slot.classList.add('busy');
+                        slot.title = 'Horário indisponível';
+                        container.appendChild(slot);
+                        continue;
+                    } else if (isBusySystem) {
                         if (permitirDisputa) {
                             slot.classList.add('dispute');
-                            slot.title = 'Horário já solicitado (Permite disputa)';
+                            slot.title = 'Horário já solicitado via sistema (disputa permitida)';
                         } else {
                             slot.classList.add('busy');
+                            slot.title = 'Horário já ocupado';
                             slot.onclick = null;
                             container.appendChild(slot);
                             continue;

@@ -409,6 +409,7 @@ const createCalendarEvent = async (summary, description, date, timeRange, calend
             description: description,
             start: { dateTime: startDateTimeStr, timeZone: 'America/Sao_Paulo' },
             end: { dateTime: endDateTimeStr, timeZone: 'America/Sao_Paulo' },
+            extendedProperties: { private: { dac_source: 'sistema' } }
         };
         const response = await calendar.events.insert({
             auth: googleAuthClient,
@@ -457,7 +458,8 @@ app.get('/api/disponibilidade', async (req, res) => {
             start: event.start.dateTime || event.start.date,
             end: event.end.dateTime || event.end.date,
             summary: event.summary,
-            description: event.description || ''
+            description: event.description || '',
+            source: (event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.dac_source) || 'manual'
         }));
         res.json(ocupados);
     } catch (error) {
