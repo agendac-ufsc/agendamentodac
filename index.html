@@ -319,6 +319,8 @@
         };
         let datasBloqueadas = [];
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
+        let dataInicioEdital = null; // Data mínima conforme edital selecionado (YYYY-MM-DD)
+        let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -387,7 +389,13 @@
                 externo: { ...padrao.externo, ...((bh && bh.externo) || {}) },
                 ensaio:  { ...padrao.ensaio,  ...((bh && bh.ensaio)  || {}) }
             };
-            const aplicar = (el, def, onClickAtivo) => {
+            // Armazena data de início por tipo de edital
+            botoesHomeDataInicio = {
+                interno: cfg.interno.dataInicio || null,
+                externo: cfg.externo.dataInicio || null,
+                ensaio:  cfg.ensaio.dataInicio  || null
+            };
+            const aplicar = (el, def, tipo) => {
                 if (!el) return;
                 el.textContent = def.texto;
                 if (def.ativo) {
@@ -400,7 +408,7 @@
                     el.style.boxShadow = '0 4px 10px rgba(37,99,235,0.3)';
                     el.onmouseover = () => { el.style.background = '#1d4ed8'; };
                     el.onmouseout  = () => { el.style.background = '#2563eb'; };
-                    el.onclick = onClickAtivo;
+                    el.onclick = () => abrirSelecaoLocal(tipo);
                 } else {
                     el.disabled = true;
                     el.title = 'Em breve';
@@ -414,9 +422,9 @@
                     el.onclick = null;
                 }
             };
-            aplicar(document.getElementById('btnHomeInterno'), cfg.interno, abrirSelecaoLocal);
-            aplicar(document.getElementById('btnHomeExterno'), cfg.externo, abrirSelecaoLocal);
-            aplicar(document.getElementById('btnHomeEnsaio'),  cfg.ensaio,  abrirSelecaoLocal);
+            aplicar(document.getElementById('btnHomeInterno'), cfg.interno, 'interno');
+            aplicar(document.getElementById('btnHomeExterno'), cfg.externo, 'externo');
+            aplicar(document.getElementById('btnHomeEnsaio'),  cfg.ensaio,  'ensaio');
         }
         carregarTituloPagina();
 
@@ -499,8 +507,10 @@
                 const d = document.createElement('div'); d.className = 'day'; d.textContent = i;
                 const date = new Date(year, month, i);
                 const today = new Date(); today.setHours(0,0,0,0);
+                const minDate = dataInicioEdital ? new Date(dataInicioEdital + 'T00:00:00') : today;
+                const limiteMin = minDate > today ? minDate : today;
                 
-                if (date < today) {
+                if (date < limiteMin) {
                     d.classList.add('other-month');
                 } else {
                     const dateStr = date.toISOString().split('T')[0];
@@ -900,7 +910,17 @@
             document.getElementById('localSelectionContainer').style.display = 'block';
         }
 
-        function abrirSelecaoLocal() {
+        function abrirSelecaoLocal(tipo) {
+            // Aplica data de início do edital selecionado ao calendário
+            dataInicioEdital = (tipo && botoesHomeDataInicio[tipo]) || null;
+            // Reposiciona o mês visível para a dataInicio se ainda não chegou
+            if (dataInicioEdital) {
+                const minDate = new Date(dataInicioEdital + 'T00:00:00');
+                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                if (minDate > hoje) {
+                    globalCurrentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                }
+            }
             document.getElementById('homeContainer').style.display = 'none';
             document.getElementById('btnAreaAdminWrap').style.display = 'none';
             document.getElementById('localSelectionContainer').style.display = 'block';
