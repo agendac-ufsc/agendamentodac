@@ -361,7 +361,8 @@ const saveConfigs = async (configs) => {
         if (configs.botoesHome && typeof configs.botoesHome === 'object') {
             const norm = (b, padraoTexto) => ({
                 ativo: !!(b && b.ativo),
-                texto: ((b && typeof b.texto === 'string' ? b.texto : '') || '').trim() || padraoTexto
+                texto: ((b && typeof b.texto === 'string' ? b.texto : '') || '').trim() || padraoTexto,
+                dataInicio: (b && typeof b.dataInicio === 'string' && b.dataInicio) ? b.dataInicio : null
             });
             BOTOES_HOME = {
                 interno: norm(configs.botoesHome.interno, 'Edital Interno'),
