@@ -18,6 +18,7 @@ const CALENDAR_IDS = {
 };
 const CALENDAR_ID = CALENDAR_IDS.teatro; // retrocompatibilidade
 let googleAuthClient;
+let SERVICE_ACCOUNT_EMAIL = '';
 
 // Funções para persistência com Upstash Redis (REST)
 const AGENDAMENTOS_KEY = 'agendamentos_v1';
@@ -224,6 +225,7 @@ const initGoogleAuth = async () => {
         const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
         if (serviceAccountKey) {
             const credentials = JSON.parse(serviceAccountKey);
+            SERVICE_ACCOUNT_EMAIL = credentials.client_email || '';
             const auth = new google.auth.GoogleAuth({
                 credentials: {
                     client_email: credentials.client_email,
@@ -454,13 +456,18 @@ app.get('/api/disponibilidade', async (req, res) => {
             orderBy: 'startTime',
             maxResults: 2500
         });
-        const ocupados = response.data.items.map(event => ({
-            start: event.start.dateTime || event.start.date,
-            end: event.end.dateTime || event.end.date,
-            summary: event.summary,
-            description: event.description || '',
-            source: (event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.dac_source) || 'manual'
-        }));
+        const ocupados = response.data.items.map(event => {
+            const creatorEmail = event.creator && event.creator.email ? event.creator.email : '';
+            const hasExtProp = event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.dac_source === 'sistema';
+            const isSistema = hasExtProp || (SERVICE_ACCOUNT_EMAIL && creatorEmail === SERVICE_ACCOUNT_EMAIL);
+            return {
+                start: event.start.dateTime || event.start.date,
+                end: event.end.dateTime || event.end.date,
+                summary: event.summary,
+                description: event.description || '',
+                source: isSistema ? 'sistema' : 'manual'
+            };
+        });
         res.json(ocupados);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao consultar calendário' });
