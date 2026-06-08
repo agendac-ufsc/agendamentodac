@@ -271,13 +271,16 @@ let BOTOES_HOME = {
 
 const CONFIG_KEY = 'agendamentos_config';
 
-const getConfigs = async () => {
+const getConfigs = async (caller = 'unknown') => {
+    console.log(`[getConfigs] chamado por: ${caller} | redis disponível: ${!!redis}`);
     try {
         if (redis) {
             const data = await redis.get(CONFIG_KEY);
+            console.log(`[getConfigs] raw Redis value type: ${typeof data} | null? ${data === null}`);
             if (data) {
                 const configs = parseRedisValue(data);
-                // Garantir que o ID em memória esteja sempre limpo
+                const prevSheet = SPREADSHEET_ID;
+                const prevForms = FORMS_LINK;
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
                 PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
@@ -295,6 +298,11 @@ const getConfigs = async () => {
                         ensaio:  { ...BOTOES_HOME.ensaio,  ...(configs.botoesHome.ensaio  || {}) }
                     };
                 }
+                if (prevSheet !== SPREADSHEET_ID || prevForms !== FORMS_LINK) {
+                    console.log(`[getConfigs] ✅ Config carregada do Redis — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
+                } else {
+                    console.log(`[getConfigs] ✅ Config do Redis sem mudança — sheet: ${SPREADSHEET_ID}`);
+                }
                 return { 
                     spreadsheetId: SPREADSHEET_ID, 
                     formsLink: FORMS_LINK,
@@ -305,11 +313,16 @@ const getConfigs = async () => {
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                     botoesHome: BOTOES_HOME
                 };
+            } else {
+                console.warn(`[getConfigs] ⚠️ Nenhum valor encontrado no Redis para chave "${CONFIG_KEY}" — usando padrões em memória`);
             }
+        } else {
+            console.warn('[getConfigs] ⚠️ Redis indisponível — retornando valores em memória');
         }
     } catch (error) {
-        console.error('❌ [Redis] Erro ao buscar configurações:', error.message);
+        console.error('[getConfigs] ❌ Erro ao buscar configurações:', error.message, error.stack);
     }
+    console.log(`[getConfigs] fallback — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
     return { 
         spreadsheetId: SPREADSHEET_ID, 
         formsLink: FORMS_LINK,
@@ -341,6 +354,7 @@ const extractSpreadsheetId = (input) => {
 };
 
 const saveConfigs = async (configs) => {
+    console.log(`[saveConfigs] iniciando — redis: ${!!redis} | sheet recebido: ${configs.spreadsheetId} | forms recebido: ${(configs.formsLink||'').slice(0,60)}`);
     try {
         // Extrair o ID caso tenham colado a URL completa
         const cleanSpreadsheetId = extractSpreadsheetId(configs.spreadsheetId);
@@ -378,7 +392,6 @@ const saveConfigs = async (configs) => {
         }
 
         if (redis) {
-            // Persistir as configurações
             const configToSave = {
                 spreadsheetId: cleanSpreadsheetId,
                 formsLink: FORMS_LINK,
@@ -389,20 +402,25 @@ const saveConfigs = async (configs) => {
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                 botoesHome: BOTOES_HOME
             };
-            await redis.set(CONFIG_KEY, configToSave);
-            console.log('✅ [Redis] Configurações persistidas:', JSON.stringify(configToSave));
+            console.log(`[saveConfigs] gravando no Redis — sheet: ${cleanSpreadsheetId} | forms: ${FORMS_LINK?.slice(0,60)}`);
+            const setResult = await redis.set(CONFIG_KEY, configToSave);
+            console.log(`[saveConfigs] ✅ redis.set resultado: ${JSON.stringify(setResult)}`);
+            // Verificação imediata: re-lê do Redis para confirmar persistência
+            const verify = await redis.get(CONFIG_KEY);
+            const vParsed = parseRedisValue(verify);
+            console.log(`[saveConfigs] verificação pós-set — sheet lido: ${vParsed?.spreadsheetId} | forms lido: ${(vParsed?.formsLink||'').slice(0,60)}`);
         } else {
-            console.warn('⚠️ [Config] Salvo apenas em memória (Redis indisponível).');
+            console.warn('[saveConfigs] ⚠️ Redis indisponível — salvo apenas em memória. Não persistirá entre reinicializações!');
         }
         return true;
     } catch (error) {
-        console.error('❌ Erro ao salvar configurações:', error.message);
+        console.error('[saveConfigs] ❌ Erro:', error.message, error.stack);
     }
     return false;
 };
 
 // Carregar configurações iniciais
-getConfigs();
+getConfigs('startup');
 
 const createCalendarEvent = async (summary, description, date, timeRange, calendarId = CALENDAR_IDS.teatro) => {
     if (!googleAuthClient) await initGoogleAuth();
@@ -429,9 +447,55 @@ const createCalendarEvent = async (summary, description, date, timeRange, calend
     }
 };
 
+// Endpoint de diagnóstico — mostra estado do Redis e configuração em memória
+app.get('/api/debug', async (req, res) => {
+    const env = {
+        UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL ? `${process.env.UPSTASH_REDIS_REST_URL.slice(0, 30)}...` : '❌ NÃO DEFINIDO',
+        UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN ? '✅ definido' : '❌ NÃO DEFINIDO',
+        GOOGLE_SERVICE_ACCOUNT_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_KEY ? '✅ definido' : '❌ NÃO DEFINIDO',
+        BREVO_API_KEY: process.env.BREVO_API_KEY ? '✅ definido' : '❌ NÃO DEFINIDO',
+        SENDER_EMAIL: process.env.SENDER_EMAIL || '❌ NÃO DEFINIDO',
+        ADMIN_EMAIL: process.env.ADMIN_EMAIL || '❌ NÃO DEFINIDO',
+        NODE_ENV: process.env.NODE_ENV || 'não definido',
+    };
+    let redisRaw = null;
+    let redisParsed = null;
+    let redisError = null;
+    try {
+        if (redis) {
+            redisRaw = await redis.get(CONFIG_KEY);
+            redisParsed = parseRedisValue(redisRaw);
+        }
+    } catch(e) {
+        redisError = e.message;
+    }
+    const inMemory = {
+        SPREADSHEET_ID,
+        FORMS_LINK: FORMS_LINK?.slice(0, 80),
+        PERMITIR_DISPUTA,
+        TITULO_PAGINA_AGENDAMENTO,
+        AVALIACOES_NECESSARIAS,
+    };
+    const redisStored = redisParsed ? {
+        spreadsheetId: redisParsed.spreadsheetId,
+        formsLink: (redisParsed.formsLink || '').slice(0, 80),
+        permitirDisputa: redisParsed.permitirDisputa,
+    } : null;
+    console.log('[/api/debug] estado atual:', JSON.stringify({ env, inMemory, redisStored, redisError }));
+    res.json({
+        ts: new Date().toISOString(),
+        redis_disponivel: !!redis,
+        redis_error: redisError,
+        env_vars: env,
+        in_memory: inMemory,
+        redis_stored: redisStored,
+        match: redisStored ? (redisStored.spreadsheetId === inMemory.SPREADSHEET_ID && redisStored.formsLink === inMemory.FORMS_LINK?.slice(0,80)) : null,
+    });
+});
+
 // Rota para obter configurações (pública para o site poder pegar o link do forms)
 app.get('/api/config', async (req, res) => {
-    const configs = await getConfigs();
+    const configs = await getConfigs('GET /api/config');
     res.json(configs);
 });
 
@@ -640,7 +704,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
     res.set('Pragma', 'no-cache');
     if (!googleAuthClient) await initGoogleAuth();
     try {
-                await getConfigs(); // Garantir que temos o ID mais recente
+                await getConfigs('GET /api/admin/dados-unificados'); // Garantir que temos o ID mais recente
         let rows = [];
         let sheetsOk = false;
         try {
