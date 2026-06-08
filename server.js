@@ -212,6 +212,19 @@ const deleteAgendamentoByEmail = async (email) => {
             const filtrados = agendamentos.filter(a => a.email !== email);
             await redis.set(AGENDAMENTOS_KEY, filtrados);
             console.log(`✅ [Redis] Agendamento de ${email} removido.`);
+
+            // Blacklistar também o ID determinístico forms_ para evitar que
+            // a entrada reapareça como Forms-only via Google Sheets
+            if (agendamentoAExcluir) {
+                const nomeEvento = (agendamentoAExcluir.evento || '').trim().toLowerCase().replace(/\s+/g, '_');
+                const emailNorm = (agendamentoAExcluir.email || email || '').trim().toLowerCase();
+                const formsId = `forms_${emailNorm || 'noemail'}_${nomeEvento}`;
+                await addToBlacklist(formsId).catch(() => {});
+                // Blacklistar também o ID original do Redis
+                if (agendamentoAExcluir.id) {
+                    await addToBlacklist(agendamentoAExcluir.id).catch(() => {});
+                }
+            }
             return true;
         }
     } catch (error) {
@@ -634,18 +647,19 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
                 await getConfigs(); // Garantir que temos o ID mais recente
-        let response;
+        let rows = [];
+        let sheetsOk = false;
         try {
-            // Tentar primeiro a aba padrão
-            response = await sheets.spreadsheets.values.get({ 
-                auth: googleAuthClient, 
-                spreadsheetId: SPREADSHEET_ID, 
-                range: 'Respostas ao formulário 1!A:ZZ' 
-            });
-        } catch (sheetError) {
-            console.warn('⚠️ [Sheets] Aba "Respostas ao formulário 1" não encontrada, tentando fallback...');
+            let response;
             try {
-                // Fallback: Pegar a primeira aba disponível dinamicamente
+                // Tentar primeiro a aba padrão
+                response = await sheets.spreadsheets.values.get({ 
+                    auth: googleAuthClient, 
+                    spreadsheetId: SPREADSHEET_ID, 
+                    range: 'Respostas ao formulário 1!A:ZZ' 
+                });
+            } catch (sheetError) {
+                console.warn('⚠️ [Sheets] Aba "Respostas ao formulário 1" não encontrada, tentando fallback...');
                 const meta = await sheets.spreadsheets.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID });
                 if (meta.data && meta.data.sheets && meta.data.sheets.length > 0) {
                     const firstSheetName = meta.data.sheets[0].properties.title;
@@ -658,12 +672,13 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 } else {
                     throw new Error('Nenhuma aba encontrada na planilha.');
                 }
-            } catch (fallbackError) {
-                console.error('❌ [Sheets] Erro crítico ao acessar planilha:', fallbackError.message);
-                return res.status(404).json({ error: 'Não foi possível ler a planilha. Verifique se ela está compartilhada com o e-mail de serviço e se o link está correto.' });
             }
+            rows = response.data.values || [];
+            sheetsOk = true;
+        } catch (sheetsError) {
+            console.warn('⚠️ [Sheets] Não foi possível acessar a planilha — exibindo apenas dados do Redis:', sheetsError.message);
+            rows = [];
         }
-        const rows = response.data.values || [];
         const headers = rows[0] || []; console.log("DEBUG: Headers encontrados:", headers.length, headers.slice(0, 5));
         const dataSegundaEtapa = rows.slice(1); console.log("DEBUG: Linhas de dados encontradas:", dataSegundaEtapa.length);
 
@@ -874,22 +889,22 @@ app.delete('/api/admin/excluir/:email', async (req, res) => {
 app.delete('/api/agendamentos/:id', async (req, res) => {
     const { id } = req.params;
     try {
-        // Se o ID for undefined, retornar erro
         if (!id || id === 'undefined') {
             return res.status(400).json({ success: false, error: 'ID não fornecido' });
         }
-        
+
         const agendamentos = await getAgendamentos();
         const agendamento = agendamentos.find(a => a.id === id);
-        
+
         if (agendamento) {
             const success = await deleteAgendamentoByEmail(agendamento.email);
             res.json({ success });
         } else {
-            // Se não encontrou no Redis, pode ser um registro legado (Forms)
-            // Neste caso, apenas retornar sucesso para não bloquear a interface
-            console.log(`⚠️ [Exclusão] Registro legado ou não encontrado: ${id}`);
-            res.json({ success: true, message: 'Registro legado removido da visualização' });
+            // Registro não encontrado no Redis (Forms-only ou legado):
+            // adicionar à blacklist para que não reapareça via Sheets
+            console.log(`⚠️ [Exclusão] Registro não encontrado no Redis — adicionando à blacklist: ${id}`);
+            await addToBlacklist(id);
+            res.json({ success: true, message: 'Registro ocultado da visualização' });
         }
     } catch (error) {
         console.error('❌ Erro ao deletar agendamento:', error.message);
