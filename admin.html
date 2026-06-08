@@ -1021,8 +1021,18 @@ async function sendEmailRapido() {
 
 async function deleteInscricao(id) {
     if (!confirm('Excluir esta inscrição?')) return;
-    const r = await fetch(`/api/agendamentos/${id}`, { method: 'DELETE' });
-    if (r.ok) loadData(); else alert('Erro ao excluir.');
+    try {
+        const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        let body = {};
+        try { body = await r.json(); } catch(_) {}
+        if (r.ok) {
+            loadData();
+        } else {
+            alert('Erro ao excluir: ' + (body.error || body.message || r.status));
+        }
+    } catch (err) {
+        alert('Erro de conexão ao excluir: ' + err.message);
+    }
 }
 
 function deleteAllInscricoes() {
