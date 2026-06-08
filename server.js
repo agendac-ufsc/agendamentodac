@@ -9,6 +9,7 @@ const { Redis } = require('@upstash/redis');
 const app = express();
 app.use(cors());
 app.use(express.json());
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
 app.use(express.static(path.join(__dirname)));
 
 // Configurar Google Calendar — locais disponíveis
@@ -442,6 +443,7 @@ app.post('/api/admin/config', async (req, res) => {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
     const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias });
+    if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
 

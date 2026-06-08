@@ -1616,8 +1616,10 @@ async function saveConfigs() {
     };
     try {
         const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
-        if (r.ok) alert('Configurações salvas!'); else alert('Erro ao salvar.');
-    } catch(e) { alert('Erro de conexão.'); }
+        const d = await r.json();
+        if (r.ok && d.success) alert('Configurações salvas!');
+        else alert('Erro ao salvar: ' + (d.error || 'Falha desconhecida. Verifique o console.'));
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
 }
 
 function toggleBloqueioData() {
