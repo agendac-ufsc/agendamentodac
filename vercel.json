@@ -20,6 +20,14 @@
       "dest": "admin.html"
     },
     {
+      "src": "/avaliador",
+      "dest": "avaliador.html"
+    },
+    {
+      "src": "/termo",
+      "dest": "termo.html"
+    },
+    {
       "src": "/(.*)",
       "dest": "index.html"
     }

@@ -184,7 +184,7 @@
         <div class="filters-bar">
             <div class="search-wrap">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Buscar por evento ou proponente..." oninput="renderTabela()">
+                <input type="text" id="searchInput" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
             </div>
             <select id="filterLocal" class="filter-sel" onchange="renderTabela()">
                 <option value="">Todos os Locais</option>
@@ -197,6 +197,9 @@
                 <option value="Pendente">Pendente</option>
                 <option value="Cancelado">Cancelado</option>
             </select>
+            <button class="btn-top btn-orange" id="btnEnviarTermos" onclick="enviarTermosSelecionados()" style="display:none">
+                <i class="fas fa-paper-plane"></i> Enviar Termos (<span id="countSelecionados">0</span>)
+            </button>
         </div>
         <div class="results-count" id="resultsCount"></div>
         <div class="table-wrap">
@@ -210,7 +213,6 @@
                         <th>Local</th>
                         <th>Etapas</th>
                         <th>Status</th>
-                        <th>Avaliação</th>
                         <th style="text-align:center">Ações</th>
                     </tr>
                 </thead>
@@ -221,57 +223,83 @@
         </div>
     </div>
 
-    <!-- Tab: Relatório -->
-    <div class="tab-pane" id="pane-relatorio">
-        <div id="relatorioContent" style="padding:8px 0">
-            <div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div>
-        </div>
-    </div>
-
-    <!-- Tab: Envio de Termos -->
+    <!-- Tab: Envio de Termos (admin only) -->
     <div class="tab-pane" id="pane-termos">
-        <!-- Card: Termo em Branco -->
-        <div class="card" style="margin-bottom:20px">
-            <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px">
+
+        <!-- Termo em Branco -->
+        <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
                 <div>
-                    <h3 style="font-size:16px;color:#1e3a5f;margin:0 0 6px;display:flex;align-items:center;gap:8px">
+                    <h4 style="font-size:15px;color:#222;margin:0 0 6px;display:flex;align-items:center;gap:8px">
                         <i class="fas fa-file-alt" style="color:#2563eb"></i> Termo Digital em Branco
-                    </h3>
-                    <p style="font-size:13px;color:#555;margin:0">Abre uma versão totalmente em branco do termo, para o proponente preencher todos os dados manualmente. Ideal para quando a inscrição não está cadastrada no sistema.</p>
+                    </h4>
+                    <p style="font-size:13px;color:#888;margin:0">Abre uma versão totalmente em branco do termo, para o proponente preencher todos os dados manualmente. Ideal para quando a inscrição não está cadastrada no sistema.</p>
                 </div>
-                <button class="btn-top" style="background:#2563eb;color:#fff;white-space:nowrap;flex-shrink:0" onclick="abrirTermoBranco()">
+                <button class="btn-top" style="background:#2563eb;color:#fff;border-color:#2563eb;white-space:nowrap;flex-shrink:0" onclick="window.open('/termo','_blank')">
                     <i class="fas fa-external-link-alt"></i> Abrir Termo em Branco
                 </button>
             </div>
         </div>
 
-        <!-- Card: Envio em Massa -->
+        <!-- Envio em Massa -->
         <div class="card">
-            <h3 style="font-size:16px;color:#1e3a5f;margin:0 0 6px;display:flex;align-items:center;gap:8px">
-                <i class="fas fa-paper-plane" style="color:#2563eb"></i> Envio em Massa de Termos Digitais
-            </h3>
-            <p style="font-size:13px;color:#555;margin:0 0 18px">Cole abaixo os e-mails dos proponentes (um por linha, ou separados por vírgula/ponto-e-vírgula). O sistema irá buscar a inscrição de cada e-mail e enviar o link individual do Termo Digital.</p>
-
-            <label class="form-label">E-mails dos proponentes</label>
-            <textarea id="termosEmailsInput" class="form-input" rows="7"
-                placeholder="proponente1@email.com&#10;proponente2@email.com&#10;proponente3@email.com"
-                oninput="atualizarContagemEmails()"
-                style="font-family:monospace;font-size:13px;resize:vertical"></textarea>
-            <div style="font-size:12px;color:#6b7280;margin:6px 0 18px" id="contagemEmails">0 e-mail(s) detectado(s)</div>
-
-            <label class="form-label">Observação / Aviso adicional <span style="color:#9ca3af;font-weight:400">(opcional)</span></label>
-            <p style="font-size:12px;color:#888;margin:-6px 0 8px">Esta mensagem será exibida em destaque no início do e-mail, antes do link do termo.</p>
-            <textarea id="termosAvisoInput" class="form-input" rows="3"
-                placeholder="Ex: Por favor, desconsidere o e-mail anterior enviado com erro. Utilize apenas este novo link para preencher o Termo Digital."
-                style="font-size:13px;resize:vertical"></textarea>
-
-            <div style="margin-top:18px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-                <button class="btn-top btn-orange" onclick="enviarTermosPorEmail()" id="btnEnviarTermosMassa">
-                    <i class="fas fa-paper-plane"></i> Enviar Termos
-                </button>
-                <span id="termosStatus" style="font-size:13px;color:#555"></span>
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444"><i class="fas fa-paper-plane" style="color:#764ba2"></i> Envio em Massa de Termos Digitais</h3>
             </div>
-            <div id="termosResultado" style="display:none;margin-top:16px;padding:14px;border-radius:8px;font-size:13px"></div>
+            <p style="font-size:13px;color:#666;margin-bottom:20px">
+                Cole abaixo os e-mails dos proponentes (um por linha, ou separados por vírgula/ponto-e-vírgula). O sistema irá buscar a inscrição de cada e-mail e enviar o link individual do Termo Digital.
+            </p>
+
+            <label class="form-label" style="font-weight:600;color:#444">E-mails dos proponentes</label>
+            <textarea id="termosEmailsInput" rows="7"
+                style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;outline:none;transition:.2s"
+                onfocus="this.style.borderColor='#764ba2'" onblur="this.style.borderColor='#ddd'"
+                oninput="atualizarContadorTermos()"
+                placeholder="proponente1@email.com&#10;proponente2@email.com&#10;proponente3@email.com"></textarea>
+            <p id="termosContador" style="font-size:12px;color:#888;margin:6px 0 20px">0 e-mail(s) detectado(s)</p>
+
+            <label class="form-label" style="font-weight:600;color:#444">Observação / Aviso adicional <span style="font-weight:400;color:#aaa">(opcional)</span></label>
+            <p style="font-size:12px;color:#888;margin:-4px 0 8px">Esta mensagem será exibida em destaque no início do e-mail, antes do link do termo.</p>
+            <textarea id="termosObservacao" rows="3"
+                style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;outline:none;transition:.2s;background:#fffbeb"
+                onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#ddd'"
+                placeholder="Ex: Por favor, desconsidere o e-mail anterior enviado com erro. Utilize apenas este novo link para preencher o Termo Digital."></textarea>
+
+            <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button class="btn-top btn-purple" style="font-size:14px;padding:11px 22px" onclick="enviarLinksTermoMassa()">
+                    <i class="fas fa-paper-plane"></i> Enviar Links em Massa
+                </button>
+                <button class="btn-top" style="background:#eee;color:#666;border-color:#ddd" onclick="document.getElementById('termosEmailsInput').value='';atualizarContadorTermos()">
+                    <i class="fas fa-times"></i> Limpar
+                </button>
+            </div>
+
+            <div id="termosResultado" style="display:none;margin-top:20px"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Relatório (admin only) -->
+    <div class="tab-pane" id="pane-relatorio">
+        <div class="card">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px">
+                <h3 style="font-size:16px;color:#444"><i class="fas fa-trophy" style="color:#d97706"></i> Ranking de Avaliações</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <select id="filterLocalRel" class="filter-sel" onchange="renderRelatorio()">
+                        <option value="">Todos os Locais</option>
+                        <option value="Teatro">Teatro</option>
+                        <option value="Igrejinha">Igrejinha</option>
+                    </select>
+                    <select id="filterStatusRel" class="filter-sel" onchange="renderRelatorio()">
+                        <option value="">Todos os Status</option>
+                        <option value="Concluída">Concluídas</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Sem avaliações">Sem avaliações</option>
+                    </select>
+                    <button class="btn-top" style="background:#16a34a;color:#fff;border-color:#16a34a" onclick="exportRelatorioCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                </div>
+            </div>
+            <div id="relatorioResumo" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px"></div>
+            <div id="relatorioContent"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div></div>
         </div>
     </div>
 
@@ -354,6 +382,8 @@
                         <div class="home-btn-body">
                             <label class="form-label" style="font-size:12px;color:#666">Texto do Botão</label>
                             <input type="text" id="cfgBtnInternoTexto" class="form-input" placeholder="Edital Interno" maxlength="80">
+                            <label class="form-label" style="font-size:12px;color:#666;margin-top:8px">Data de Início das Inscrições <span style="color:#aaa;font-weight:400">(bloqueia datas anteriores no calendário)</span></label>
+                            <input type="date" id="cfgBtnInternoDataInicio" class="form-input" style="max-width:200px">
                         </div>
                     </div>
 
@@ -365,6 +395,8 @@
                         <div class="home-btn-body">
                             <label class="form-label" style="font-size:12px;color:#666">Texto do Botão</label>
                             <input type="text" id="cfgBtnExternoTexto" class="form-input" placeholder="Edital de Ocupação dos Espaços do DAC 2026" maxlength="80">
+                            <label class="form-label" style="font-size:12px;color:#666;margin-top:8px">Data de Início das Inscrições <span style="color:#aaa;font-weight:400">(bloqueia datas anteriores no calendário)</span></label>
+                            <input type="date" id="cfgBtnExternoDataInicio" class="form-input" style="max-width:200px">
                         </div>
                     </div>
 
@@ -376,6 +408,8 @@
                         <div class="home-btn-body">
                             <label class="form-label" style="font-size:12px;color:#666">Texto do Botão</label>
                             <input type="text" id="cfgBtnEnsaioTexto" class="form-input" placeholder="Agendar Apenas Ensaio" maxlength="80">
+                            <label class="form-label" style="font-size:12px;color:#666;margin-top:8px">Data de Início das Inscrições <span style="color:#aaa;font-weight:400">(bloqueia datas anteriores no calendário)</span></label>
+                            <input type="date" id="cfgBtnEnsaioDataInicio" class="form-input" style="max-width:200px">
                         </div>
                     </div>
 
@@ -445,14 +479,48 @@
     </div>
 </div>
 
-<!-- ═══════════════ MODAL AVALIAÇÃO ═══ -->
-<div class="modal" id="modalAvaliacao">
-    <div class="modal-box" style="max-width:640px">
-        <h3 id="modalAvaliacaoTitle"><i class="fas fa-star"></i> Avaliar Inscrição</h3>
-        <div id="modalAvaliacaoBody"></div>
+
+<!-- ═══════════════ MODAL EDITAR ETAPAS ═══ -->
+<div class="modal" id="modalEditarEtapas">
+    <div class="modal-box" style="max-width:580px">
+        <h3><i class="fas fa-pencil-alt"></i> Editar Datas e Horários</h3>
+        <p style="font-size:12px;color:#888;margin:-8px 0 16px">Altere as datas e horários abaixo. As mudanças são salvas no sistema mas <strong>não atualizam automaticamente o Google Calendar</strong>.</p>
+        <div id="editarEtapasBody" style="display:flex;flex-direction:column;gap:14px"></div>
+        <div id="editarEtapasStatus" style="font-size:13px;margin-top:12px;min-height:18px"></div>
         <div class="modal-footer">
-            <button class="btn-close-modal" onclick="closeModal('modalAvaliacao')">Cancelar</button>
-            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
+            <button class="btn-close-modal" onclick="closeModal('modalEditarEtapas')">Cancelar</button>
+            <button id="btnSalvarEtapas" class="btn-save-modal" style="background:#764ba2" onclick="salvarEtapas()">
+                <i class="fas fa-save"></i> Salvar Alterações
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL EMAIL RÁPIDO ═══ -->
+<div class="modal" id="modalEmailRapido">
+    <div class="modal-box" style="max-width:540px">
+        <h3><i class="fas fa-paper-plane"></i> Enviar E-mail ao Proponente</h3>
+        <div style="font-size:12px;color:#888;margin:-10px 0 16px;padding:8px 12px;background:#f8f4ff;border-radius:6px;border-left:3px solid #764ba2">
+            <i class="fas fa-info-circle"></i> O proponente verá o Reply-To como <strong>pautas.dac@contato.ufsc.br</strong> ao responder.
+        </div>
+        <div class="form-field">
+            <label>Para</label>
+            <input type="text" id="emailRapidoPara" class="form-input" readonly style="background:#f5f5f5;color:#888;cursor:default">
+        </div>
+        <div class="form-field">
+            <label>Assunto</label>
+            <input type="text" id="emailRapidoAssunto" class="form-input" placeholder="Assunto do e-mail">
+        </div>
+        <div class="form-field">
+            <label>Mensagem</label>
+            <textarea id="emailRapidoMensagem" class="form-input" rows="6" placeholder="Digite sua mensagem aqui..." style="resize:vertical;font-family:inherit;font-size:14px"></textarea>
+        </div>
+        <div id="emailRapidoStatus" style="font-size:13px;margin-bottom:8px;min-height:18px"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalEmailRapido')">Cancelar</button>
+            <button id="btnEnviarEmailRapido" class="btn-save-modal" style="background:#764ba2" onclick="sendEmailRapido()">
+                <i class="fas fa-paper-plane"></i> Enviar
+            </button>
         </div>
     </div>
 </div>
@@ -466,11 +534,11 @@
             <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.
         </p>
         <p style="font-size:13px;color:#666;margin-top:12px">
-            Para confirmar, digite a palavra <strong style="color:#dc2626;letter-spacing:1px">EXCLUIR</strong> no campo abaixo (maiúsculas, sem aspas):
+            Para confirmar, digite a <strong style="color:#dc2626">senha de autorização</strong> no campo abaixo:
         </p>
         <div class="form-field" style="margin-top:10px">
-            <input type="text" id="excluirTudoConfirmInput" class="form-input"
-                   placeholder='Digite EXCLUIR' autocomplete="off" spellcheck="false"
+            <input type="password" id="excluirTudoConfirmInput" class="form-input"
+                   placeholder='Senha de autorização' autocomplete="off" spellcheck="false"
                    oninput="onExcluirTudoInputChange()">
         </div>
         <div class="modal-footer">
@@ -514,8 +582,6 @@ let avaliadores = [];
 let datasBloqueadas = [];
 let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
-let currentAvaliacaoIndex = null;
-let currentAvaliacaoScores = {};
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -633,14 +699,14 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const pane = document.getElementById(`pane-${name}`);
     if (pane) pane.classList.add('active');
-    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', termos: 'envio de termos', avaliadores: 'avaliadores', config: 'config' };
-    const kw = (keyMap[name] || name).toLowerCase();
+    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', termos: 'termos', avaliadores: 'avaliadores', config: 'config' };
+    const kw = keyMap[name] || name;
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
     });
-    if (name === 'relatorio') renderRelatorio();
     if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
     if (name === 'config') loadConfigs();
+    if (name === 'relatorio') loadRelatorio();
 }
 
 // ══════════════════════════════════════════════════
@@ -673,9 +739,17 @@ function renderTabela() {
     const filterStatus = document.getElementById('filterStatus').value;
     const nomesEtapas = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
 
+    const qDigits = q.replace(/\D/g, '');
     let filtered = allUnificados.filter(item => {
         const p = item.primeiraEtapa;
-        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q);
+        const telDigits = (p.telefone || '').replace(/\D/g, '');
+        const matchTel = qDigits.length >= 3 && telDigits && telDigits.includes(qDigits);
+        const matchQ = !q
+            || (p.evento || '').toLowerCase().includes(q)
+            || (p.nome || '').toLowerCase().includes(q)
+            || (p.email || '').toLowerCase().includes(q)
+            || (p.telefone || '').toLowerCase().includes(q)
+            || matchTel;
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
         const matchStatus = !filterStatus || (item.status||'').toLowerCase().includes(filterStatus.toLowerCase());
         return matchQ && matchLocal && matchStatus;
@@ -704,6 +778,7 @@ function renderTabela() {
                 });
             }
         }
+        const editEtapasBtn = (userRole === 'admin' && p.id && p.etapas) ? `<button onclick="openEditarEtapas(${originalIndex})" title="Editar datas e horários" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:12px;padding:2px 5px;border-radius:4px;margin-top:4px;display:inline-flex;align-items:center;gap:3px;opacity:.75" onmouseover="this.style.opacity='1';this.style.background='#f3e8ff'" onmouseout="this.style.opacity='.75';this.style.background='none'"><i class="fas fa-pencil-alt"></i> editar</button>` : '';
 
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const localBadge = `<span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}"><i class="fas fa-${isIgrejinha?'church':'theater-masks'}"></i> ${p.localNome||'Teatro'}</span>`;
@@ -713,17 +788,13 @@ function renderTabela() {
         if ((item.status||'').includes('Cancelado')) { stClass='st-cancelado'; stText='Cancelado'; }
         const rowClass = stText==='Cancelado' ? 'row-cancelada' : '';
 
-        const scoreHtml = `<span style="font-size:11px;color:#888" id="score-row-${originalIndex}">—</span>`;
-
         const acoes = userRole === 'admin' ? `
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="Abrir Termo Digital" onclick="abrirTermoDigital(${originalIndex})" style="color:#16a34a"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="Copiar link do Termo" onclick="copiarLinkTermo(${originalIndex})" style="color:#2563eb"><i class="fas fa-link"></i></button>
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
-        ` : `
-            <button class="btn-action" title="Avaliar" onclick="openAvaliacao(${originalIndex})" style="color:#764ba2"><i class="fas fa-star"></i></button>
-        `;
+        ` : '';
 
         const row = document.createElement('tr');
         row.className = rowClass;
@@ -735,40 +806,12 @@ function renderTabela() {
                 <div style="font-size:11px;color:#888;margin-top:2px">${p.nome||''} &middot; ${p.email||''}</div>
             </td>
             <td>${localBadge}</td>
-            <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}</td>
+            <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}${editEtapasBtn}</td>
             <td><span class="status-badge ${stClass}">${stText}</span></td>
-            <td>${scoreHtml}</td>
             <td style="text-align:center;white-space:nowrap">${acoes}</td>
         `;
         tbody.appendChild(row);
-        loadScoreForRow(originalIndex);
     });
-}
-
-async function loadScoreForRow(idx) {
-    const item = allUnificados[idx];
-    if (!item) return;
-    const id = item.primeiraEtapa.id || item.primeiraEtapa.email;
-    if (!id) return;
-    try {
-        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-        const avs = await r.json();
-        const el = document.getElementById(`score-row-${idx}`);
-        if (!el) return;
-        if (avs.length === 0) { el.textContent = '—'; return; }
-        const crit = criterios.length ? criterios : [{ id:'A',peso:1 },{ id:'B',peso:1 },{ id:'C',peso:1 },{ id:'D',peso:1 }];
-        let totalPontos = 0, totalPeso = 0;
-        avs.forEach(av => {
-            const sc = av.scoresJson || {};
-            crit.forEach(c => {
-                const nota = parseFloat(sc[c.id]||0);
-                totalPontos += nota * (c.peso||1);
-                totalPeso += (c.peso||1);
-            });
-        });
-        const media = totalPeso > 0 ? (totalPontos / avs.length / totalPeso * 10).toFixed(1) : '—';
-        el.innerHTML = `<strong style="color:#764ba2">${media}</strong><span style="color:#aaa"> / 10 (${avs.length} av.)</span>`;
-    } catch(e){}
 }
 
 function updateSelCount() {
@@ -781,10 +824,6 @@ function toggleCheckAll() {
     const all = document.getElementById('checkAll').checked;
     document.querySelectorAll('.insc-check').forEach(c => c.checked = all);
     updateSelCount();
-}
-
-function abrirTermoBranco() {
-    window.open('/termo?blank=1', '_blank');
 }
 
 function abrirTermoDigital(idx) {
@@ -821,12 +860,163 @@ function showContact(idx) {
     const p = allUnificados[idx].primeiraEtapa;
     document.getElementById('contatoBody').innerHTML = `
         <p><strong>Proponente:</strong> ${p.nome||'—'}</p>
-        <p style="margin-top:8px"><strong>E-mail:</strong> <a href="mailto:${p.email}">${p.email||'—'}</a></p>
+        <p style="margin-top:8px;display:flex;align-items:center;gap:8px">
+            <strong>E-mail:</strong>
+            <a href="mailto:${p.email}">${p.email||'—'}</a>
+            ${p.email ? `<button onclick="openEmailRapido('${p.email}','${(p.nome||'').replace(/'/g,"\\'")}','${(p.evento||allUnificados[idx].evento||'').replace(/'/g,"\\'")}');event.stopPropagation()" title="Enviar e-mail rápido" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:15px;padding:2px 4px;border-radius:5px;line-height:1" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='none'"><i class="fas fa-paper-plane"></i></button>` : ''}
+        </p>
         <p style="margin-top:8px"><strong>Telefone:</strong> ${p.telefone||'—'}</p>
         <p style="margin-top:8px"><strong>Local:</strong> ${p.localNome||'—'}</p>
         <p style="margin-top:8px"><strong>Inscrito em:</strong> ${p.timestamp||'—'}</p>
     `;
     openModal('modalContato');
+}
+
+let _editarEtapasData = {};
+const nomesEtapasEdit = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
+
+function openEditarEtapas(idx) {
+    const p = allUnificados[idx].primeiraEtapa;
+    _editarEtapasData = { id: p.id, idx };
+    const body = document.getElementById('editarEtapasBody');
+    body.innerHTML = '';
+    document.getElementById('editarEtapasStatus').textContent = '';
+    const btn = document.getElementById('btnSalvarEtapas');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+
+    const etapas = p.etapas || {};
+    let rowIdx = 0;
+    for (const key in etapas) {
+        const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
+        itens.forEach((it, i) => {
+            if (!it || !it.data) return;
+            const label = itens.length > 1 ? `${nomesEtapasEdit[key]||key} ${i+1}` : (nomesEtapasEdit[key]||key);
+            const [hIni, hFim] = (it.horario||'').split(' às ');
+            const rowId = `etapa_${key}_${i}`;
+            body.innerHTML += `
+            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px" data-key="${key}" data-idx="${i}">
+                <div style="font-weight:700;font-size:13px;color:#764ba2;margin-bottom:10px"><i class="fas fa-calendar-alt"></i> ${label}</div>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Data</label>
+                        <input type="date" id="${rowId}_data" value="${it.data}" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Início</label>
+                        <input type="time" id="${rowId}_ini" value="${hIni||''}" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333">
+                    </div>
+                    <div>
+                        <label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Fim</label>
+                        <input type="time" id="${rowId}_fim" value="${hFim||''}" style="padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333">
+                    </div>
+                </div>
+            </div>`;
+            rowIdx++;
+        });
+    }
+    if (rowIdx === 0) {
+        body.innerHTML = '<p style="color:#aaa;font-size:13px">Nenhuma etapa disponível para edição.</p>';
+    }
+    openModal('modalEditarEtapas');
+}
+
+async function salvarEtapas() {
+    const status = document.getElementById('editarEtapasStatus');
+    const btn = document.getElementById('btnSalvarEtapas');
+    const p = allUnificados[_editarEtapasData.idx].primeiraEtapa;
+    const etapasAtualizadas = JSON.parse(JSON.stringify(p.etapas));
+
+    for (const key in etapasAtualizadas) {
+        const itens = Array.isArray(etapasAtualizadas[key]) ? etapasAtualizadas[key] : [etapasAtualizadas[key]];
+        itens.forEach((it, i) => {
+            const rowId = `etapa_${key}_${i}`;
+            const dataEl = document.getElementById(`${rowId}_data`);
+            const iniEl  = document.getElementById(`${rowId}_ini`);
+            const fimEl  = document.getElementById(`${rowId}_fim`);
+            if (dataEl) it.data = dataEl.value;
+            if (iniEl && fimEl && iniEl.value && fimEl.value) it.horario = `${iniEl.value} às ${fimEl.value}`;
+        });
+        etapasAtualizadas[key] = itens;
+    }
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    status.textContent = '';
+
+    try {
+        const r = await fetch('/api/admin/atualizar-etapas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: _editarEtapasData.id, etapas: etapasAtualizadas })
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${r.status}`);
+        }
+        const data = await r.json();
+        if (data.success) {
+            status.textContent = '✅ Salvo! O Google Calendar está sendo atualizado em segundo plano.';
+            status.style.color = '#16a34a';
+            btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
+            allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
+            renderTable();
+            setTimeout(() => closeModal('modalEditarEtapas'), 2000);
+        } else {
+            throw new Error(data.error || 'Falha ao salvar.');
+        }
+    } catch (e) {
+        status.textContent = '❌ Erro: ' + (e.message || 'Falha de conexão.');
+        status.style.color = '#dc2626';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+    }
+}
+
+let _emailRapidoData = {};
+function openEmailRapido(email, nome, evento) {
+    _emailRapidoData = { email, nome, evento };
+    document.getElementById('emailRapidoPara').value = email;
+    document.getElementById('emailRapidoAssunto').value = evento ? `Ref.: ${evento} — DAC/UFSC` : 'Contato DAC/UFSC';
+    document.getElementById('emailRapidoMensagem').value = '';
+    document.getElementById('emailRapidoStatus').textContent = '';
+    closeModal('modalContato');
+    openModal('modalEmailRapido');
+}
+
+async function sendEmailRapido() {
+    const assunto = document.getElementById('emailRapidoAssunto').value.trim();
+    const mensagem = document.getElementById('emailRapidoMensagem').value.trim();
+    const status = document.getElementById('emailRapidoStatus');
+    if (!assunto || !mensagem) { status.textContent = 'Preencha o assunto e a mensagem.'; status.style.color = '#dc2626'; return; }
+    const btn = document.getElementById('btnEnviarEmailRapido');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    status.textContent = '';
+    try {
+        const r = await fetch('/api/admin/email-rapido', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: _emailRapidoData.email, nome: _emailRapidoData.nome, assunto, mensagem })
+        });
+        const data = await r.json();
+        if (data.success) {
+            status.textContent = '✅ E-mail enviado com sucesso!';
+            status.style.color = '#16a34a';
+            btn.innerHTML = '<i class="fas fa-check"></i> Enviado';
+            setTimeout(() => closeModal('modalEmailRapido'), 1800);
+        } else {
+            status.textContent = '❌ Erro: ' + (data.error || 'Falha no envio.');
+            status.style.color = '#dc2626';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+        }
+    } catch (e) {
+        status.textContent = '❌ Erro de conexão.';
+        status.style.color = '#dc2626';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+    }
 }
 
 async function deleteInscricao(id) {
@@ -860,7 +1050,7 @@ function onExcluirTudoInputChange() {
     const input = document.getElementById('excluirTudoConfirmInput');
     const btn = document.getElementById('btnConfirmExcluirTudo');
     if (!input || !btn) return;
-    const ok = input.value === 'EXCLUIR';
+    const ok = input.value === 'dac.ufsc.br';
     btn.disabled = !ok;
     btn.style.opacity = ok ? '1' : '0.5';
     btn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -868,7 +1058,7 @@ function onExcluirTudoInputChange() {
 
 async function confirmDeleteAllInscricoes() {
     const input = document.getElementById('excluirTudoConfirmInput');
-    if (!input || input.value !== 'EXCLUIR') return;
+    if (!input || input.value !== 'dac.ufsc.br') return;
     const btn = document.getElementById('btnConfirmExcluirTudo');
     if (btn) {
         btn.disabled = true;
@@ -892,6 +1082,79 @@ async function confirmDeleteAllInscricoes() {
 // ══════════════════════════════════════════════════
 // ENVIO DE TERMOS
 // ══════════════════════════════════════════════════
+function parseEmails(raw) {
+    return raw.split(/[\n,;]+/)
+        .map(e => e.trim().toLowerCase())
+        .filter(e => e.includes('@'));
+}
+
+function atualizarContadorTermos() {
+    const raw = document.getElementById('termosEmailsInput').value;
+    const emails = parseEmails(raw);
+    const el = document.getElementById('termosContador');
+    el.textContent = `${emails.length} e-mail(s) detectado(s)`;
+    el.style.color = emails.length > 0 ? '#2563eb' : '#888';
+}
+
+async function enviarLinksTermoMassa() {
+    const raw = document.getElementById('termosEmailsInput').value;
+    const emails = parseEmails(raw);
+    const observacao = document.getElementById('termosObservacao').value.trim();
+    const resultado = document.getElementById('termosResultado');
+
+    if (emails.length === 0) { alert('Cole ao menos um e-mail válido.'); return; }
+    if (!confirm(`Enviar link do Termo Digital para ${emails.length} e-mail(s)?`)) return;
+
+    resultado.style.display = 'block';
+    resultado.innerHTML = `<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Enviando ${emails.length} e-mail(s)...</div>`;
+
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails, observacao, baseUrl: window.location.origin })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erro no servidor');
+
+        const enviados = d.detalhes.filter(x => x.status === 'enviado');
+        const erros = d.detalhes.filter(x => x.status === 'erro');
+        const naoEncontrados = d.detalhes.filter(x => x.status === 'nao_encontrado');
+
+        const itemRow = (icon, cor, texto) =>
+            `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px">
+                <i class="${icon}" style="color:${cor};width:16px;text-align:center;flex-shrink:0"></i>
+                <span>${texto}</span>
+            </div>`;
+
+        let html = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px">
+            <h4 style="margin:0 0 14px;font-size:15px;color:#222">Resultado do Envio</h4>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+                <div style="background:#d1fae5;border-radius:8px;padding:10px 16px;font-size:13px;color:#065f46"><strong>${enviados.length}</strong> enviados</div>
+                <div style="background:#fee2e2;border-radius:8px;padding:10px 16px;font-size:13px;color:#991b1b"><strong>${naoEncontrados.length}</strong> não encontrados</div>
+                ${erros.length > 0 ? `<div style="background:#fef3c7;border-radius:8px;padding:10px 16px;font-size:13px;color:#92400e"><strong>${erros.length}</strong> com erro</div>` : ''}
+            </div>`;
+
+        if (enviados.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#065f46;margin:10px 0 4px">ENVIADOS COM SUCESSO:</p>`;
+            enviados.forEach(x => { html += itemRow('fas fa-check-circle', '#16a34a', `${escapeHtml(x.nome || x.email)} — <span style="color:#888">${escapeHtml(x.evento || '')}</span> &lt;${escapeHtml(x.email)}&gt;`); });
+        }
+        if (naoEncontrados.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#991b1b;margin:14px 0 4px">NÃO ENCONTRADOS NO SISTEMA:</p>`;
+            naoEncontrados.forEach(x => { html += itemRow('fas fa-question-circle', '#dc2626', escapeHtml(x.email)); });
+            html += `<p style="font-size:11px;color:#aaa;margin:6px 0 0">Estes e-mails não têm inscrição cadastrada. Verifique se foram digitados corretamente.</p>`;
+        }
+        if (erros.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#92400e;margin:14px 0 4px">ERROS DE ENVIO:</p>`;
+            erros.forEach(x => { html += itemRow('fas fa-exclamation-circle', '#d97706', `${escapeHtml(x.email)} — ${escapeHtml(x.msg || 'Erro desconhecido')}`); });
+        }
+        html += `</div>`;
+        resultado.innerHTML = html;
+    } catch(e) {
+        resultado.innerHTML = `<div class="error-msg">Erro ao enviar: ${e.message}</div>`;
+    }
+}
+
 async function enviarTermosSelecionados() {
     const checks = document.querySelectorAll('.insc-check:checked');
     if (checks.length === 0) { alert('Selecione ao menos uma inscrição.'); return; }
@@ -1013,6 +1276,20 @@ function generatePDF(idx) {
         });
     }
 
+    // Carimbo de data/hora da inscrição
+    doc.setPage(1);
+    const timestamp = p.timestamp || '—';
+    const carimbX = W - margin - 54;
+    const carimbY = 32;
+    doc.setDrawColor(118, 75, 162);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(carimbX, carimbY, 54, 16, 2, 2, 'S');
+    doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(118, 75, 162);
+    addText('INSCRITO EM', carimbX + 27, carimbY + 5, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    const tsLinhas = doc.splitTextToSize(timestamp, 50);
+    tsLinhas.forEach((linha, i) => addText(linha, carimbX + 27, carimbY + 10 + i * 4, {align:'center'}));
+
     // Rodapé
     const pageCount = doc.internal.getNumberOfPages();
     for (let i = 1; i <= pageCount; i++) {
@@ -1022,7 +1299,8 @@ function generatePDF(idx) {
     }
 
     const safe = (p.evento||'evento').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_');
-    const blobUrl = doc.output('bloburl');
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
     const win = window.open(blobUrl, '_blank');
     if (!win) {
         alert('Por favor, permita pop-ups deste site para visualizar o PDF em outra aba.');
@@ -1049,141 +1327,126 @@ async function downloadAllPDFs() {
 }
 
 // ══════════════════════════════════════════════════
-// AVALIAÇÃO
+// RELATÓRIO DE AVALIAÇÕES
 // ══════════════════════════════════════════════════
-function renderAvaliacaoList() {
-    const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
-    const filterLocal = document.getElementById('filterLocalAv').value;
-    const container = document.getElementById('avaliacaoList');
-    const filtered = allUnificados.filter(item => {
-        const p = item.primeiraEtapa;
-        const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
-        const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
-        return matchQ && matchLocal;
-    });
-    if (filtered.length === 0) { container.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada.</div>'; return; }
+let relatorioData = null;
 
-    let html = '';
-    filtered.forEach(item => {
-        const p = item.primeiraEtapa;
-        const idx = allUnificados.indexOf(item);
-        const id = p.id || p.email;
-        const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
-        html += `
-        <div class="av-card">
-            <div class="av-info">
-                <h4>${(p.evento||'SEM EVENTO').toUpperCase()}</h4>
-                <p>${p.nome||''} &middot; <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}" style="padding:2px 8px">${p.localNome||'Teatro'}</span></p>
-            </div>
-            <div style="display:flex;align-items:center;gap:12px">
-                <span class="av-score" id="av-score-${idx}">—</span>
-                <button class="btn-top btn-purple" onclick="openAvaliacao(${idx})"><i class="fas fa-star"></i> Avaliar</button>
-            </div>
-        </div>`;
-    });
-    container.innerHTML = html;
-    filtered.forEach(item => {
-        const idx = allUnificados.indexOf(item);
-        loadScoreCard(idx);
-    });
-}
-
-async function loadScoreCard(idx) {
-    const p = allUnificados[idx]?.primeiraEtapa;
-    if (!p) return;
-    const id = p.id || p.email;
+async function loadRelatorio() {
+    const content = document.getElementById('relatorioContent');
+    content.innerHTML = '<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div>';
     try {
-        const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-        const avs = await r.json();
-        const el = document.getElementById(`av-score-${idx}`);
-        if (!el) return;
-        if (avs.length === 0) { el.textContent = '—'; return; }
-        const crit = criterios.length ? criterios : [{id:'A',peso:1},{id:'B',peso:1},{id:'C',peso:1},{id:'D',peso:1}];
-        let totalPontos = 0, totalPeso = 0;
-        avs.forEach(av => {
-            crit.forEach(c => {
-                totalPontos += parseFloat(av.scoresJson?.[c.id]||0) * (c.peso||1);
-                totalPeso += (c.peso||1);
-            });
-        });
-        const media = totalPeso > 0 ? (totalPontos/avs.length/totalPeso*10).toFixed(1) : '—';
-        el.textContent = `${media}/10`;
-    } catch(e) {}
-}
-
-async function openAvaliacao(idx) {
-    currentAvaliacaoIndex = idx;
-    currentAvaliacaoScores = {};
-    const p = allUnificados[idx].primeiraEtapa;
-    const id = p.id || p.email;
-    document.getElementById('modalAvaliacaoTitle').innerHTML = `<i class="fas fa-star"></i> Avaliação: ${p.evento||'—'}`;
-
-    let existingScores = {};
-    if (viewerEmail) {
-        try {
-            const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-            const avs = await r.json();
-            const myAv = avs.find(a => a.evaluatorEmail === viewerEmail);
-            if (myAv) existingScores = myAv.scoresJson || {};
-        } catch(e) {}
-    }
-
-    const crit = criterios.length ? criterios : [{id:'A',nome:'Qualidade Artística',peso:1},{id:'B',nome:'Relevância Cultural',peso:1},{id:'C',nome:'Acessibilidade',peso:1},{id:'D',nome:'Viabilidade Técnica',peso:1}];
-    currentAvaliacaoScores = {...existingScores};
-
-    let html = `<p style="font-size:13px;color:#666;margin-bottom:16px"><strong>Proponente:</strong> ${p.nome||'—'} &middot; <strong>Local:</strong> ${p.localNome||'—'}</p>`;
-    html += `<p style="font-size:12px;color:#888;margin-bottom:20px">Dê uma nota de 1 a 10 para cada critério.</p>`;
-
-    crit.forEach(c => {
-        const nota = parseInt(existingScores[c.id] || 0);
-        html += `<div class="criteria-row">
-            <div class="criteria-label">${c.nome}<div class="criteria-weight">Peso: ${c.peso||1}</div></div>
-            <div>
-                <div class="stars" id="stars-${c.id}">`;
-        for (let s = 1; s <= 10; s++) {
-            html += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
-        }
-        html += `</div><div style="text-align:center;font-size:12px;color:#764ba2;margin-top:4px" id="starLabel-${c.id}">${nota>0?nota+'/10':'—'}</div>
-            </div>
-        </div>`;
-    });
-
-    document.getElementById('modalAvaliacaoBody').innerHTML = html;
-    openModal('modalAvaliacao');
-}
-
-function setStar(criterioId, valor) {
-    currentAvaliacaoScores[criterioId] = valor;
-    const stars = document.querySelectorAll(`#stars-${criterioId} .star`);
-    stars.forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= valor));
-    const label = document.getElementById(`starLabel-${criterioId}`);
-    if (label) label.textContent = `${valor}/10`;
-}
-
-async function salvarAvaliacao() {
-    if (currentAvaliacaoIndex === null) return;
-    const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
-    const id = p.id || p.email;
-    const evalEmail = viewerEmail || (userRole === 'admin' ? 'admin' : null);
-    if (!evalEmail) { alert('Faça login como avaliador.'); return; }
-
-    try {
-        const r = await fetch('/api/save-assessment', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: evalEmail, scoresJson: currentAvaliacaoScores })
-        });
+        const r = await fetch('/api/admin/relatorio-avaliacoes');
         const d = await r.json();
-        if (d.success) {
-            alert('Avaliação salva!');
-            closeModal('modalAvaliacao');
-            renderAvaliacaoList();
-            loadScoreForRow(currentAvaliacaoIndex);
-        } else {
-            alert('Erro ao salvar: ' + (d.error||''));
-        }
+        if (!r.ok) throw new Error(d.error || 'Erro ao carregar');
+        relatorioData = d;
+        renderRelatorio();
     } catch(e) {
-        alert('Erro de conexão: ' + e.message);
+        content.innerHTML = `<div class="error-msg">Erro ao carregar relatório: ${e.message}</div>`;
     }
+}
+
+function getRelatorioFiltrado() {
+    if (!relatorioData) return [];
+    const fLocal = document.getElementById('filterLocalRel').value;
+    const fStatus = document.getElementById('filterStatusRel').value;
+    return relatorioData.ranking.filter(r => {
+        const matchLocal = !fLocal || (r.local || '').toLowerCase().includes(fLocal.toLowerCase());
+        const matchStatus = !fStatus || r.statusAvaliacao === fStatus;
+        return matchLocal && matchStatus;
+    });
+}
+
+function renderRelatorio() {
+    if (!relatorioData) return;
+    const lista = getRelatorioFiltrado();
+    const resumo = document.getElementById('relatorioResumo');
+    const concluidas = relatorioData.ranking.filter(r => r.statusAvaliacao === 'Concluída').length;
+    const semAv = relatorioData.ranking.filter(r => r.qtdAvaliacoes === 0).length;
+    const card = (label, val, cor) => `<div style="flex:1;min-width:140px;background:#fff;border:1px solid #eef0f3;border-left:4px solid ${cor};border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">${label}</div><div style="font-size:22px;font-weight:700;color:#222;margin-top:2px">${val}</div></div>`;
+    resumo.innerHTML =
+        card('Total de Inscrições', relatorioData.total, '#2563eb') +
+        card('Avaliadas', relatorioData.avaliadas, '#764ba2') +
+        card('Concluídas', concluidas, '#16a34a') +
+        card('Sem Avaliações', semAv, '#9ca3af') +
+        card('Mín. Necessárias', relatorioData.necessarias, '#d97706');
+
+    const content = document.getElementById('relatorioContent');
+    if (lista.length === 0) {
+        content.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada com esses filtros.</div>';
+        return;
+    }
+    const crit = relatorioData.criterios;
+    let html = `<div class="table-wrap"><table><thead><tr>
+        <th style="width:40px">#</th>
+        <th>Evento / Proponente</th>
+        <th>Local</th>
+        <th style="text-align:center">Avaliações</th>
+        <th style="text-align:center">Status</th>
+        ${crit.map(c => `<th style="text-align:center" title="Peso: ${c.peso}">${escapeHtml(c.nome)}<div style="font-size:10px;color:#888;font-weight:400">peso ${c.peso}</div></th>`).join('')}
+        <th style="text-align:center">Média Final</th>
+    </tr></thead><tbody>`;
+    lista.forEach((r, i) => {
+        const isIgrejinha = (r.local || '').toLowerCase().includes('igrej');
+        const localBadge = `<span class="local-badge ${isIgrejinha ? 'local-igrejinha' : 'local-teatro'}" style="padding:2px 8px;font-size:11px">${escapeHtml(r.local || '—')}</span>`;
+        let stClass = 'st-pendente', stTxt = r.statusAvaliacao;
+        if (r.statusAvaliacao === 'Concluída') stClass = 'st-completo';
+        if (r.statusAvaliacao === 'Sem avaliações') stClass = 'st-cancelado';
+        const mediaCell = r.mediaFinal !== null
+            ? `<strong style="color:#764ba2;font-size:16px">${r.mediaFinal.toFixed(2)}</strong><span style="color:#aaa;font-size:11px"> /10</span>`
+            : '<span style="color:#aaa">—</span>';
+        const critCells = crit.map(c => {
+            const m = r.mediasPorCriterio[c.id];
+            return `<td style="text-align:center;font-size:12px">${m && m.media !== null ? m.media.toFixed(1) : '<span style="color:#ccc">—</span>'}</td>`;
+        }).join('');
+        const avTitle = r.avaliadores.length ? `Avaliadores: ${r.avaliadores.join(', ')}` : 'Sem avaliações';
+        html += `<tr>
+            <td style="color:#888;font-size:12px">${i + 1}</td>
+            <td><strong style="color:#222">${escapeHtml(r.evento || 'SEM EVENTO').toUpperCase()}</strong>
+                <div style="font-size:11px;color:#888;margin-top:2px">${escapeHtml(r.proponente || '')} &middot; ${escapeHtml(r.email || '')}</div></td>
+            <td>${localBadge}</td>
+            <td style="text-align:center" title="${escapeHtml(avTitle)}"><strong>${r.qtdAvaliacoes}</strong><span style="color:#aaa;font-size:11px"> /${r.necessarias}</span></td>
+            <td style="text-align:center"><span class="status-badge ${stClass}">${stTxt}</span></td>
+            ${critCells}
+            <td style="text-align:center">${mediaCell}</td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function exportRelatorioCSV() {
+    if (!relatorioData) { alert('Carregue o relatório primeiro.'); return; }
+    const lista = getRelatorioFiltrado();
+    if (lista.length === 0) { alert('Nada para exportar.'); return; }
+    const crit = relatorioData.criterios;
+    const header = ['Posicao','Evento','Proponente','Email','Local','Avaliacoes','Necessarias','Status', ...crit.map(c => `${c.nome} (peso ${c.peso})`), 'Media Final', 'Avaliadores'];
+    const csvCell = v => {
+        const s = String(v == null ? '' : v).replace(/"/g, '""');
+        return /[",;\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const rows = lista.map((r, i) => [
+        i + 1,
+        r.evento, r.proponente, r.email, r.local,
+        r.qtdAvaliacoes, r.necessarias, r.statusAvaliacao,
+        ...crit.map(c => {
+            const m = r.mediasPorCriterio[c.id];
+            return m && m.media !== null ? m.media.toFixed(2).replace('.', ',') : '';
+        }),
+        r.mediaFinal !== null ? r.mediaFinal.toFixed(2).replace('.', ',') : '',
+        r.avaliadores.join(' | ')
+    ]);
+    const csv = '\uFEFF' + [header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = `relatorio_avaliacoes_dac_${ts}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 // ══════════════════════════════════════════════════
@@ -1285,9 +1548,9 @@ async function loadConfigs() {
         const en= bh.ensaio  || { ativo: false, texto: 'Agendar Apenas Ensaio' };
         const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
         const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
-        setChk('cfgBtnInternoAtivo', i.ativo); set('cfgBtnInternoTexto', i.texto || 'Edital Interno');
-        setChk('cfgBtnExternoAtivo', e.ativo); set('cfgBtnExternoTexto', e.texto || 'Edital de Ocupação dos Espaços do DAC 2026');
-        setChk('cfgBtnEnsaioAtivo',  en.ativo); set('cfgBtnEnsaioTexto',  en.texto || 'Agendar Apenas Ensaio');
+        setChk('cfgBtnInternoAtivo', i.ativo); set('cfgBtnInternoTexto', i.texto || 'Edital Interno'); set('cfgBtnInternoDataInicio', i.dataInicio || '');
+        setChk('cfgBtnExternoAtivo', e.ativo); set('cfgBtnExternoTexto', e.texto || 'Edital de Ocupação dos Espaços do DAC 2026'); set('cfgBtnExternoDataInicio', e.dataInicio || '');
+        setChk('cfgBtnEnsaioAtivo',  en.ativo); set('cfgBtnEnsaioTexto',  en.texto || 'Agendar Apenas Ensaio'); set('cfgBtnEnsaioDataInicio', en.dataInicio || '');
         const disp = document.getElementById('cfgDisputa');
         if (disp) disp.checked = c.permitirDisputa !== false;
         const hl = c.horariosLimites || {};
@@ -1329,9 +1592,9 @@ async function saveConfigs() {
         tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
         botoesHome: {
-            interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno' },
-            externo: { ativo: !!document.getElementById('cfgBtnExternoAtivo')?.checked, texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026' },
-            ensaio:  { ativo: !!document.getElementById('cfgBtnEnsaioAtivo')?.checked,  texto: (document.getElementById('cfgBtnEnsaioTexto')?.value || '').trim() || 'Agendar Apenas Ensaio' }
+            interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno', dataInicio: (document.getElementById('cfgBtnInternoDataInicio')?.value || '') || null },
+            externo: { ativo: !!document.getElementById('cfgBtnExternoAtivo')?.checked, texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026', dataInicio: (document.getElementById('cfgBtnExternoDataInicio')?.value || '') || null },
+            ensaio:  { ativo: !!document.getElementById('cfgBtnEnsaioAtivo')?.checked,  texto: (document.getElementById('cfgBtnEnsaioTexto')?.value || '').trim() || 'Agendar Apenas Ensaio', dataInicio: (document.getElementById('cfgBtnEnsaioDataInicio')?.value || '') || null }
         },
         permitirDisputa: document.getElementById('cfgDisputa').checked,
         horariosLimites: {

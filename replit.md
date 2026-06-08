@@ -69,7 +69,7 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 
 ### Autenticação
 - `POST /api/auth/admin` → Login admin (senha via env `ADMIN_PASSWORD`, padrão: `admin.dac.ufsc`)
-- `POST /api/auth/viewer` → Login avaliador (senha fixa: `avalia.dac.2026`)
+- `POST /api/auth/viewer` → Login avaliador (senha padrão: `dac.ufsc.2026`, configurável via env `EVALUATOR_PASSWORD`)
 
 ### Admin
 - `GET /api/admin/dados-unificados` → Lista unificada (Redis + Google Sheets)
@@ -87,6 +87,7 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 - `POST /api/criteria` → Salvar critérios
 - `POST /api/save-assessment` → Salvar avaliação de uma inscrição
 - `GET /api/assessments/:inscriptionId` → Buscar avaliações de uma inscrição
+- `GET /api/admin/relatorio-avaliacoes` → Ranking consolidado: média ponderada, médias por critério, status (Sem avaliações / Em andamento / Concluída) e lista de avaliadores por inscrição
 
 ### E-mail
 - `POST /api/enviar-termos-digitais` → Enviar termos por e-mail em massa via Brevo
@@ -121,12 +122,12 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 ## Funcionalidades
 1. **Seleção de Local** — Tela inicial com dois botões (Teatro / Igrejinha)
 2. **Autenticação Admin** — Login com senha (sessão salva em localStorage por 8h)
-3. **Login de Avaliador** — E-mail + senha `avalia.dac.2026`
-4. **Sistema de Avaliação** — Estrelas (1-10) por critério, com pesos configuráveis
+3. **Login de Avaliador** — Acesso exclusivo via `/avaliador.html` (e-mail + senha `dac.ufsc.2026`). A aba "Avaliação" foi removida de `admin.html` — o painel admin agora cobre apenas Inscrições, Avaliadores e Configurações.
+4. **Sistema de Avaliação** — Estrelas (1-10) por critério, com pesos configuráveis (em `/avaliador.html`)
 5. **Gerenciamento de Avaliadores** — Adicionar/remover via painel admin
+5b. **Relatório de Avaliações** — Aba "Relatório" no admin com ranking ordenado por média final, cards de resumo (total, avaliadas, concluídas, sem avaliações, mínimo necessárias), filtros por local/status e exportação em CSV (UTF-8 BOM, separador `;`, decimal `,`)
 6. **Envio de Termos** — Seleção múltipla de inscrições + envio em massa via Brevo
 7. **PDF da Ficha** — Geração client-side com jsPDF, com cabeçalho colorido
 8. **Download em ZIP** — Todos os PDFs em um arquivo .zip
 9. **Filtros Avançados** — Por local, status e busca textual
 10. **Bloqueio de Datas** — Admin pode bloquear datas específicas
-11. **Termo Digital** — `/termo?id=...` (pré-preenchido) ou `/termo?blank=1` (em branco). Endpoint `GET /api/agendamento/:id` é tolerante a IDs codificados múltiplas vezes (Outlook Safe Links, Brevo) e a espaços/pontuação no fim. Se a inscrição não for encontrada, a página oferece botão "Preencher manualmente em branco". O admin tem botão **"Termo em Branco"** na barra superior.

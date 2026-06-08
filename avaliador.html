@@ -72,6 +72,26 @@
         .error-msg{text-align:center;padding:40px;color:#d9534f;background:#fff5f5;border-radius:10px;border:1px solid #fcc}
         .results-count{font-size:12px;color:#888;margin-bottom:12px}
         .info-banner{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:18px}
+
+        .btn-details{padding:8px 14px;background:#fff;color:#2563eb;border:1.5px solid #2563eb;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.2s}
+        .btn-details:hover{background:#eff6ff}
+        .modal-box.wide{max-width:780px}
+        .det-section{margin-bottom:22px}
+        .det-section h4{font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .det-grid{display:grid;grid-template-columns:160px 1fr;gap:8px 14px;font-size:13px}
+        .det-grid .lbl{font-weight:600;color:#555}
+        .det-grid .val{color:#222;word-break:break-word}
+        .det-grid .val a{color:#2563eb;text-decoration:none;word-break:break-all}
+        .det-grid .val a:hover{text-decoration:underline}
+        .det-event-list{margin:0;padding-left:18px;font-size:13px;color:#222}
+        .det-event-list li{margin-bottom:4px}
+        .det-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
+        .det-status-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-left:6px}
+        .det-status-completo{background:#d1fae5;color:#065f46}
+        .det-status-pendente{background:#fef3c7;color:#92400e}
+        .det-status-cancelado{background:#fee2e2;color:#991b1b}
+        .det-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
+        .det-link-pill:hover{background:#dbeafe}
     </style>
 </head>
 <body>
@@ -132,6 +152,18 @@
         </div>
         <div class="results-count" id="resultsCount"></div>
         <div id="avaliacaoList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+    </div>
+</div>
+
+<!-- Modal Detalhes -->
+<div class="modal" id="modalDetalhes">
+    <div class="modal-box wide">
+        <h3 id="modalDetalhesTitle"><i class="fas fa-file-alt"></i> Detalhes da Inscrição</h3>
+        <div id="modalDetalhesBody"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalDetalhes')">Fechar</button>
+            <button class="btn-save-modal" id="btnAvaliarFromDetails" onclick="avaliarFromDetails()"><i class="fas fa-star"></i> Avaliar</button>
+        </div>
     </div>
 </div>
 
@@ -305,8 +337,11 @@ function renderAvaliacaoList() {
                     <span style="color:#888;margin-left:6px">(${avs.length}/${avaliacoesNecessarias} avaliações)</span>
                 </p>
             </div>
-            <div style="display:flex;align-items:center;gap:12px">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
                 ${minhaMedia !== null ? `<span class="av-score">${minhaMedia}/10</span>` : ''}
+                <button class="btn-details" onclick="openDetalhes(${idx})">
+                    <i class="fas fa-file-alt"></i> Ver detalhes
+                </button>
                 <button class="btn-top btn-refresh" onclick="openAvaliacao(${idx})">
                     <i class="fas fa-star"></i> ${myAv ? 'Editar' : 'Avaliar'}
                 </button>
@@ -334,6 +369,142 @@ function defaultCriterios() {
         { id: 'C', nome: 'Acessibilidade', peso: 1 },
         { id: 'D', nome: 'Viabilidade Técnica', peso: 1 }
     ];
+}
+
+// === MODAL DE DETALHES ===
+
+function looksLikeUrl(s) {
+    if (typeof s !== 'string') return false;
+    return /^https?:\/\//i.test(s.trim());
+}
+
+function renderValueAsHtml(v) {
+    if (v === null || v === undefined || v === '') return '<span style="color:#aaa">—</span>';
+    const str = String(v);
+    // Pode ter múltiplas URLs separadas por vírgula, espaço ou quebra de linha (típico do Forms)
+    const parts = str.split(/[\s,;\n]+/).filter(Boolean);
+    const allUrls = parts.length > 0 && parts.every(p => looksLikeUrl(p));
+    if (allUrls) {
+        return parts.map(u => {
+            const isDrive = /drive\.google\.com|docs\.google\.com/i.test(u);
+            const icon = isDrive ? 'fa-google-drive' : 'fa-up-right-from-square';
+            const label = isDrive ? 'Abrir no Drive' : 'Abrir link';
+            return `<a class="det-link-pill" href="${escapeAttr(u)}" target="_blank" rel="noopener"><i class="fab ${isDrive ? 'fa-google-drive' : ''}"></i><i class="fas ${isDrive ? '' : icon}"></i> ${label}</a>`;
+        }).join(' ');
+    }
+    // Substituir URLs inline dentro de texto
+    return escapeHtml(str).replace(/(https?:\/\/[^\s,;<>"']+)/gi, (m) =>
+        `<a href="${escapeAttr(m)}" target="_blank" rel="noopener">${escapeHtml(m)}</a>`);
+}
+
+function escapeAttr(s) {
+    return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
+function statusBadgeHtml(status) {
+    if (!status) return '';
+    const s = String(status).toLowerCase();
+    let cls = 'det-status-pendente';
+    if (s.includes('completo')) cls = 'det-status-completo';
+    else if (s.includes('cancelado')) cls = 'det-status-cancelado';
+    return `<span class="det-status-badge ${cls}">${escapeHtml(status)}</span>`;
+}
+
+function formatEventoData(ev) {
+    if (!ev) return '';
+    const data = ev.data || ev.dataInicio || '';
+    const hi = ev.horaInicio || ev.inicio || '';
+    const hf = ev.horaFim || ev.fim || '';
+    const tipo = ev.tipo || ev.titulo || '';
+    let txt = data;
+    if (hi || hf) txt += ` · ${hi || ''}${hi && hf ? ' às ' : ''}${hf || ''}`;
+    if (tipo) txt += ` (${tipo})`;
+    return txt.trim();
+}
+
+let currentDetalhesIdx = null;
+
+function openDetalhes(idx) {
+    currentDetalhesIdx = idx;
+    const item = allUnificados[idx];
+    if (!item) return;
+    const p = item.primeiraEtapa || {};
+    const seg = item.segundaEtapa;
+
+    document.getElementById('modalDetalhesTitle').innerHTML =
+        `<i class="fas fa-file-alt"></i> ${escapeHtml(p.evento || 'Inscrição')} ${statusBadgeHtml(item.status)}`;
+
+    // === SEÇÃO 1: dados da primeira etapa ===
+    const camposEtapa1 = [
+        ['Proponente', p.nome],
+        ['E-mail', p.email],
+        ['Telefone', p.telefone],
+        ['Local', p.localNome],
+        ['Evento', p.evento],
+    ];
+    const camposExtras = ['cpf','cnpj','instituicao','responsavel','representante','endereco','observacoes','descricao'];
+    camposExtras.forEach(k => {
+        if (p[k]) camposEtapa1.push([k.charAt(0).toUpperCase()+k.slice(1), p[k]]);
+    });
+
+    let html = `<div class="det-section">
+        <h4><i class="fas fa-user"></i> Etapa 1 — Dados da Inscrição</h4>
+        <div class="det-grid">
+            ${camposEtapa1.map(([l,v]) =>
+                `<div class="lbl">${escapeHtml(l)}:</div><div class="val">${renderValueAsHtml(v)}</div>`
+            ).join('')}
+        </div>
+    </div>`;
+
+    // === SEÇÃO 2: datas dos eventos agendados ===
+    const etapas = p.etapas || {};
+    const eventos = [];
+    Object.keys(etapas).forEach(k => {
+        const arr = Array.isArray(etapas[k]) ? etapas[k] : [etapas[k]];
+        arr.forEach(ev => { if (ev) eventos.push({ ...ev, tipo: ev.tipo || k }); });
+    });
+    if (eventos.length > 0) {
+        html += `<div class="det-section">
+            <h4><i class="fas fa-calendar-days"></i> Datas e Horários Agendados</h4>
+            <ul class="det-event-list">
+                ${eventos.map(e => `<li>${escapeHtml(formatEventoData(e) || JSON.stringify(e))}</li>`).join('')}
+            </ul>
+        </div>`;
+    }
+
+    // === SEÇÃO 3: respostas da segunda etapa (Forms) ===
+    if (seg && seg.headers && seg.valores) {
+        const linhas = [];
+        seg.headers.forEach((h, i) => {
+            const val = seg.valores[i];
+            if (val !== undefined && val !== null && String(val).trim() !== '') {
+                linhas.push([h, val]);
+            }
+        });
+        html += `<div class="det-section">
+            <h4><i class="fas fa-clipboard-list"></i> Etapa 2 — Respostas do Formulário (Google Forms)</h4>
+            ${linhas.length > 0 ? `<div class="det-grid">
+                ${linhas.map(([l,v]) =>
+                    `<div class="lbl">${escapeHtml(l)}:</div><div class="val">${renderValueAsHtml(v)}</div>`
+                ).join('')}
+            </div>` : `<div class="det-empty">Formulário enviado mas sem campos preenchidos.</div>`}
+        </div>`;
+    } else {
+        html += `<div class="det-section">
+            <h4><i class="fas fa-clipboard-list"></i> Etapa 2 — Respostas do Formulário (Google Forms)</h4>
+            <div class="det-empty">Este proponente ainda não enviou o formulário da segunda etapa.</div>
+        </div>`;
+    }
+
+    document.getElementById('modalDetalhesBody').innerHTML = html;
+    openModal('modalDetalhes');
+}
+
+function avaliarFromDetails() {
+    if (currentDetalhesIdx === null) return;
+    const idx = currentDetalhesIdx;
+    closeModal('modalDetalhes');
+    openAvaliacao(idx);
 }
 
 async function openAvaliacao(idx) {
