@@ -1025,10 +1025,10 @@ async function deleteInscricao(id) {
         const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
         let body = {};
         try { body = await r.json(); } catch(_) {}
-        if (r.ok) {
+        if (r.ok && body.success !== false) {
             loadData();
         } else {
-            alert('Erro ao excluir: ' + (body.error || body.message || r.status));
+            alert('Erro ao excluir: ' + (body.error || body.message || ('HTTP ' + r.status)));
         }
     } catch (err) {
         alert('Erro de conexão ao excluir: ' + err.message);
