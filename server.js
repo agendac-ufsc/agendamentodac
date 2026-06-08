@@ -29,16 +29,28 @@ try {
     let url = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/^["']|["']$/g, '');
     let token = (process.env.UPSTASH_REDIS_REST_TOKEN || '').replace(/^["']|["']$/g, '');
 
-    // Fallback: aceitar REDIS_URL no formato https://default:TOKEN@HOST.upstash.io
+    // Fallback: aceitar REDIS_URL em vários formatos
+    // - https://default:TOKEN@HOST.upstash.io  (REST)
+    // - rediss://default:TOKEN@HOST.upstash.io:PORT  (Redis TLS — formato padrão do Vercel/Upstash integration)
+    // - redis://default:TOKEN@HOST:PORT
     if ((!url || !token) && process.env.REDIS_URL) {
         const raw = process.env.REDIS_URL.replace(/^["']|["']$/g, '');
+        console.log(`[Redis] Tentando REDIS_URL — protocolo detectado: ${raw.split(':')[0]}`);
         try {
             const parsed = new URL(raw);
             if (parsed.protocol === 'https:') {
                 url = `${parsed.protocol}//${parsed.hostname}`;
                 token = parsed.password || parsed.username;
+            } else if (parsed.protocol === 'rediss:' || parsed.protocol === 'redis:') {
+                // Upstash via integração Vercel: rediss://default:TOKEN@host.upstash.io:PORT
+                // Converter para REST: https://host.upstash.io + token = password
+                url = `https://${parsed.hostname}`;
+                token = parsed.password || parsed.username;
+                console.log(`[Redis] REDIS_URL rediss:// convertido para REST — host: ${parsed.hostname}`);
             }
-        } catch (_) {}
+        } catch (parseErr) {
+            console.error('[Redis] Erro ao parsear REDIS_URL:', parseErr.message);
+        }
     }
 
     // Corrige caso as credenciais tenham sido salvas invertidas
