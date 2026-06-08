@@ -158,60 +158,50 @@ const deleteAgendamentoByEmail = async (email) => {
         if (redis) {
             const agendamentos = await getAgendamentos();
             const agendamentoAExcluir = agendamentos.find(a => a.email === email);
-            
-            // Se encontrou o agendamento, tenta deletar os eventos do calendário
-            if (agendamentoAExcluir && agendamentoAExcluir.etapas) {
-                if (!googleAuthClient) await initGoogleAuth();
-                try {
-                    // Buscar todos os eventos do calendário para encontrar os que correspondem a este agendamento
-                    const allEvents = await calendar.events.list({
-                        auth: googleAuthClient,
-                        calendarId: CALENDAR_ID,
-                        maxResults: 2500,
-                        singleEvents: true
-                    });
-                    
-                    const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-                    const eventosADeletar = [];
-                    
-                    // Identificar eventos que pertencem a este agendamento
-                    for (const key in agendamentoAExcluir.etapas) {
-                        const itens = Array.isArray(agendamentoAExcluir.etapas[key]) ? agendamentoAExcluir.etapas[key] : [agendamentoAExcluir.etapas[key]];
-                        itens.forEach((item, i) => {
-                            const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
-                            const eventSummary = `${label}: ${agendamentoAExcluir.evento}`;
-                            
-                            // Procurar eventos com este resumo
-                            const matchingEvents = allEvents.data.items.filter(e => 
-                                e.summary === eventSummary && 
-                                e.description && 
-                                e.description.includes(email)
-                            );
-                            eventosADeletar.push(...matchingEvents);
-                        });
-                    }
-                    
-                    // Deletar os eventos encontrados
-                    for (const event of eventosADeletar) {
-                        try {
-                            await calendar.events.delete({
-                                auth: googleAuthClient,
-                                calendarId: CALENDAR_ID,
-                                eventId: event.id
-                            });
-                            console.log(`✅ [Google Calendar] Evento deletado: ${event.summary}`);
-                        } catch (err) {
-                            console.error(`⚠️ [Google Calendar] Erro ao deletar evento ${event.id}:`, err.message);
-                        }
-                    }
-                } catch (calendarError) {
-                    console.error('⚠️ [Google Calendar] Erro ao processar exclusão de eventos:', calendarError.message);
-                }
-            }
-            
+
+            // Deletar do Redis PRIMEIRO — não bloqueia pela lentidão do Calendar
             const filtrados = agendamentos.filter(a => a.email !== email);
             await redis.set(AGENDAMENTOS_KEY, filtrados);
             console.log(`✅ [Redis] Agendamento de ${email} removido.`);
+
+            // Deleção de Calendar é fire-and-forget (não bloqueia a resposta)
+            if (agendamentoAExcluir && agendamentoAExcluir.etapas) {
+                (async () => {
+                    try {
+                        if (!googleAuthClient) await initGoogleAuth();
+                        if (!googleAuthClient) return;
+                        const allEvents = await calendar.events.list({
+                            auth: googleAuthClient,
+                            calendarId: CALENDAR_ID,
+                            maxResults: 2500,
+                            singleEvents: true
+                        });
+                        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+                        const eventosADeletar = [];
+                        for (const key in agendamentoAExcluir.etapas) {
+                            const itens = Array.isArray(agendamentoAExcluir.etapas[key]) ? agendamentoAExcluir.etapas[key] : [agendamentoAExcluir.etapas[key]];
+                            itens.forEach((item, i) => {
+                                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                                const eventSummary = `${label}: ${agendamentoAExcluir.evento}`;
+                                const matches = allEvents.data.items.filter(e =>
+                                    e.summary === eventSummary && e.description && e.description.includes(email)
+                                );
+                                eventosADeletar.push(...matches);
+                            });
+                        }
+                        for (const event of eventosADeletar) {
+                            try {
+                                await calendar.events.delete({ auth: googleAuthClient, calendarId: CALENDAR_ID, eventId: event.id });
+                                console.log(`✅ [Calendar] Evento deletado: ${event.summary}`);
+                            } catch (err) {
+                                console.error(`⚠️ [Calendar] Erro ao deletar evento ${event.id}:`, err.message);
+                            }
+                        }
+                    } catch (calendarError) {
+                        console.error('⚠️ [Calendar] Fire-and-forget error:', calendarError.message);
+                    }
+                })();
+            }
 
             // Blacklistar também o ID determinístico forms_ para evitar que
             // a entrada reapareça como Forms-only via Google Sheets
