@@ -715,7 +715,7 @@ function switchTab(name) {
 async function loadData() {
     showInscricoesState('loading');
     try {
-        const r = await fetch('/api/admin/dados-unificados');
+        const r = await fetch('/api/admin/dados-unificados?_=' + Date.now());
         const data = await r.json();
         if (data.error) throw new Error(data.error);
         allUnificados = Array.isArray(data) ? data : [];

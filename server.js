@@ -634,6 +634,8 @@ app.get('/api/agendamento/:id', async (req, res) => {
 });
 
 app.get('/api/admin/dados-unificados', async (req, res) => {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    res.set('Pragma', 'no-cache');
     if (!googleAuthClient) await initGoogleAuth();
     try {
                 await getConfigs(); // Garantir que temos o ID mais recente
