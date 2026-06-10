@@ -535,8 +535,8 @@
                         const systemEventsOnDay = eventsOnDay.filter(e => e.source === 'sistema');
                         let dayBlocked = false;
                         if (eventsOnDay.length > 0) {
-                            // Dia fica vermelho se tem eventos manuais ou muitos eventos do sistema
-                            if (manualEventsOnDay.length > 0 || systemEventsOnDay.length >= 15) d.classList.add('busy-full');
+                            // Dia fica vermelho só se sistema lotado (>=15 inscrições); eventos manuais/externos ficam amarelo
+                            if (systemEventsOnDay.length >= 15) d.classList.add('busy-full');
                             else d.classList.add('busy-partial');
                             // Bloqueia clique no dia apenas se disputa desligada E sistema lotado
                             if (!permitirDisputa && systemEventsOnDay.length >= 15) {
