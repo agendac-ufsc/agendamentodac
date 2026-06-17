@@ -413,7 +413,12 @@
                         </div>
                     </div>
 
-                    <button class="btn-top btn-purple" style="margin-top:6px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
+                    <div style="margin-top:14px;padding:12px 14px;background:#fff;border:1px solid #eef0f3;border-radius:10px">
+                        <label class="form-label" style="font-size:13px;color:#333;font-weight:600;margin-bottom:6px;display:block"><i class="fas fa-comment-alt" style="color:#2563eb;margin-right:6px"></i>Mensagem quando todos os botões estiverem desativados</label>
+                        <textarea id="cfgMensagemBotoesDesativados" class="form-input" rows="3" maxlength="300" placeholder="Ex: As inscrições estão encerradas no momento." style="resize:vertical;font-size:13px"></textarea>
+                        <p style="font-size:11px;color:#999;margin:4px 0 0">Esta mensagem aparece em um aviso quando o proponente clicar em um botão desativado.</p>
+                    </div>
+                    <button class="btn-top btn-purple" style="margin-top:10px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
                 </div>
                 <label class="form-label">Link do Google Forms (2ª Etapa)</label>
                 <input type="text" id="cfgFormsLink" class="form-input" placeholder="https://docs.google.com/forms/...">
@@ -1561,6 +1566,8 @@ async function loadConfigs() {
         setChk('cfgBtnInternoAtivo', i.ativo); set('cfgBtnInternoTexto', i.texto || 'Edital Interno'); set('cfgBtnInternoDataInicio', i.dataInicio || '');
         setChk('cfgBtnExternoAtivo', e.ativo); set('cfgBtnExternoTexto', e.texto || 'Edital de Ocupação dos Espaços do DAC 2026'); set('cfgBtnExternoDataInicio', e.dataInicio || '');
         setChk('cfgBtnEnsaioAtivo',  en.ativo); set('cfgBtnEnsaioTexto',  en.texto || 'Agendar Apenas Ensaio'); set('cfgBtnEnsaioDataInicio', en.dataInicio || '');
+        const msgEl = document.getElementById('cfgMensagemBotoesDesativados');
+        if (msgEl) msgEl.value = c.mensagemBotoesDesativados || 'As inscrições estão encerradas no momento.';
         const disp = document.getElementById('cfgDisputa');
         if (disp) disp.checked = c.permitirDisputa !== false;
         const hl = c.horariosLimites || {};
@@ -1601,6 +1608,7 @@ async function saveConfigs() {
         spreadsheetId: document.getElementById('cfgSheetId').value,
         tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
+        mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',
         botoesHome: {
             interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno', dataInicio: (document.getElementById('cfgBtnInternoDataInicio')?.value || '') || null },
             externo: { ativo: !!document.getElementById('cfgBtnExternoAtivo')?.checked, texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026', dataInicio: (document.getElementById('cfgBtnExternoDataInicio')?.value || '') || null },

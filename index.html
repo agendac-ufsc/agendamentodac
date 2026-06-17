@@ -236,15 +236,24 @@
             <p style="color: #555; font-size: 15px;">O que você gostaria de fazer?</p>
         </div>
         <div style="display: flex; flex-direction: column; gap: 14px; max-width: 380px; margin: 0 auto;">
-            <button type="button" id="btnHomeInterno" data-acao="edital-interno" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Edital Interno</button>
+            <button type="button" id="btnHomeInterno" data-acao="edital-interno" data-desativado="true" onclick="mostrarMensagemDesativado()" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Edital Interno</button>
 
             <button type="button" id="btnHomeExterno" data-acao="edital-ocupacao" onclick="abrirSelecaoLocal()" style="background: #2563eb; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(37,99,235,0.3); transition: background 0.15s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">Edital de Ocupação dos Espaços do DAC 2026</button>
 
-            <button type="button" id="btnHomeEnsaio" data-acao="apenas-ensaio" disabled title="Em breve" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Agendar Apenas Ensaio</button>
+            <button type="button" id="btnHomeEnsaio" data-acao="apenas-ensaio" data-desativado="true" onclick="mostrarMensagemDesativado()" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Agendar Apenas Ensaio</button>
         </div>
     </div>
 
     <!-- Seleção de local -->
+    <!-- Modal: botão desativado -->
+    <div id="modalBtnDesativado" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+            <div style="font-size:40px;margin-bottom:12px">🔒</div>
+            <p id="modalBtnDesativadoTexto" style="font-size:16px;color:#333;font-weight:600;line-height:1.5;margin:0 0 24px"></p>
+            <button onclick="document.getElementById('modalBtnDesativado').style.display='none'" style="background:#2563eb;color:#fff;border:none;padding:10px 32px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">OK</button>
+        </div>
+    </div>
+
     <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
@@ -321,6 +330,7 @@
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
         let dataInicioEdital = null; // Data mínima conforme edital selecionado (YYYY-MM-DD)
         let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
+        let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -375,6 +385,7 @@
                 if (elTopo) elTopo.textContent = titulo;
                 document.querySelectorAll('.tituloPaginaAgendamentoEl').forEach(el => el.textContent = titulo);
                 aplicarBotoesHome(c.botoesHome);
+                if (c.mensagemBotoesDesativados) mensagemBotoesDesativados = c.mensagemBotoesDesativados;
             } catch (e) {}
         }
 
@@ -401,6 +412,7 @@
                 if (def.ativo) {
                     el.disabled = false;
                     el.removeAttribute('title');
+                    el.dataset.desativado = 'false';
                     el.style.background = '#2563eb';
                     el.style.color = '#fff';
                     el.style.cursor = 'pointer';
@@ -410,8 +422,9 @@
                     el.onmouseout  = () => { el.style.background = '#2563eb'; };
                     el.onclick = () => abrirSelecaoLocal(tipo);
                 } else {
-                    el.disabled = true;
-                    el.title = 'Em breve';
+                    el.disabled = false;
+                    el.removeAttribute('title');
+                    el.dataset.desativado = 'true';
                     el.style.background = '#b0b0b0';
                     el.style.color = '#fff';
                     el.style.cursor = 'not-allowed';
@@ -419,7 +432,7 @@
                     el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
                     el.onmouseover = null;
                     el.onmouseout = null;
-                    el.onclick = null;
+                    el.onclick = () => mostrarMensagemDesativado();
                 }
             };
             aplicar(document.getElementById('btnHomeInterno'), cfg.interno, 'interno');
@@ -924,6 +937,13 @@
         function voltarSelecaoLocal() {
             document.getElementById('mainFormContainer').style.display = 'none';
             document.getElementById('localSelectionContainer').style.display = 'block';
+        }
+
+        function mostrarMensagemDesativado() {
+            const modal = document.getElementById('modalBtnDesativado');
+            const txt = document.getElementById('modalBtnDesativadoTexto');
+            if (txt) txt.textContent = mensagemBotoesDesativados;
+            if (modal) modal.style.display = 'flex';
         }
 
         function abrirSelecaoLocal(tipo) {

@@ -280,6 +280,7 @@ let BOTOES_HOME = {
     externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
     ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
 };
+let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.';
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -310,6 +311,9 @@ const getConfigs = async (caller = 'unknown') => {
                         ensaio:  { ...BOTOES_HOME.ensaio,  ...(configs.botoesHome.ensaio  || {}) }
                     };
                 }
+                if (configs.mensagemBotoesDesativados !== undefined) {
+                    MENSAGEM_BOTOES_DESATIVADOS = configs.mensagemBotoesDesativados || MENSAGEM_BOTOES_DESATIVADOS;
+                }
                 if (prevSheet !== SPREADSHEET_ID || prevForms !== FORMS_LINK) {
                     console.log(`[getConfigs] ✅ Config carregada do Redis — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
                 } else {
@@ -323,7 +327,8 @@ const getConfigs = async (caller = 'unknown') => {
                     datasBloqueadas: DATAS_BLOQUEADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
-                    botoesHome: BOTOES_HOME
+                    botoesHome: BOTOES_HOME,
+                    mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
                 };
             } else {
                 console.warn(`[getConfigs] ⚠️ Nenhum valor encontrado no Redis para chave "${CONFIG_KEY}" — usando padrões em memória`);
@@ -343,7 +348,8 @@ const getConfigs = async (caller = 'unknown') => {
         datasBloqueadas: DATAS_BLOQUEADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
-        botoesHome: BOTOES_HOME
+        botoesHome: BOTOES_HOME,
+        mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
     };
 };
 
@@ -402,6 +408,9 @@ const saveConfigs = async (configs) => {
                 ensaio:  norm(configs.botoesHome.ensaio,  'Agendar Apenas Ensaio')
             };
         }
+        if (configs.mensagemBotoesDesativados !== undefined) {
+            MENSAGEM_BOTOES_DESATIVADOS = (configs.mensagemBotoesDesativados || '').trim() || MENSAGEM_BOTOES_DESATIVADOS;
+        }
 
         if (redis) {
             const configToSave = {
@@ -412,7 +421,8 @@ const saveConfigs = async (configs) => {
                 datasBloqueadas: DATAS_BLOQUEADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
-                botoesHome: BOTOES_HOME
+                botoesHome: BOTOES_HOME,
+                mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
             };
             console.log(`[saveConfigs] gravando no Redis — sheet: ${cleanSpreadsheetId} | forms: ${FORMS_LINK?.slice(0,60)}`);
             const setResult = await redis.set(CONFIG_KEY, configToSave);
