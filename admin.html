@@ -209,7 +209,7 @@
                     <tr>
                         <th class="check-col"><input type="checkbox" id="checkAll" class="insc-checkbox" onchange="toggleCheckAll()"></th>
                         <th>#</th>
-                        <th>Evento / Proponente</th>
+                        <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="toggleSort()" title="Alternar ordem por data de inscrição">Evento / Proponente <span id="sortArrow">↓</span></th>
                         <th>Local</th>
                         <th>Etapas</th>
                         <th>Status</th>
@@ -587,6 +587,7 @@ let avaliadores = [];
 let datasBloqueadas = [];
 let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
+let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -724,16 +725,6 @@ async function loadData() {
         const data = await r.json();
         if (data.error) throw new Error(data.error);
         allUnificados = Array.isArray(data) ? data : [];
-        // Ordenar pela inscrição mais recente primeiro
-        allUnificados.sort((a, b) => {
-            const parseTs = ts => {
-                if (!ts) return 0;
-                const m = ts.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})/);
-                if (!m) return 0;
-                return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]).getTime();
-            };
-            return parseTs(b.primeiraEtapa?.timestamp) - parseTs(a.primeiraEtapa?.timestamp);
-        });
         renderTabela();
     } catch (err) {
         document.getElementById('inscricoesError').textContent = 'Erro ao carregar dados: ' + err.message;
@@ -748,11 +739,24 @@ function showInscricoesState(state) {
     document.getElementById('inscricoesError').style.display = state === 'error' ? 'block' : 'none';
 }
 
+function toggleSort() {
+    sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+    document.getElementById('sortArrow').textContent = sortOrder === 'desc' ? '↓' : '↑';
+    renderTabela();
+}
+
 function renderTabela() {
     const q = (document.getElementById('searchInput').value || '').toLowerCase();
     const filterLocal = document.getElementById('filterLocal').value;
     const filterStatus = document.getElementById('filterStatus').value;
     const nomesEtapas = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
+
+    const parseTs = ts => {
+        if (!ts) return 0;
+        const m = ts.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})/);
+        if (!m) return 0;
+        return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]).getTime();
+    };
 
     const qDigits = q.replace(/\D/g, '');
     let filtered = allUnificados.filter(item => {
@@ -768,6 +772,12 @@ function renderTabela() {
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
         const matchStatus = !filterStatus || (item.status||'').toLowerCase().includes(filterStatus.toLowerCase());
         return matchQ && matchLocal && matchStatus;
+    });
+
+    filtered.sort((a, b) => {
+        const tA = parseTs(a.primeiraEtapa?.timestamp);
+        const tB = parseTs(b.primeiraEtapa?.timestamp);
+        return sortOrder === 'desc' ? tB - tA : tA - tB;
     });
 
     document.getElementById('resultsCount').textContent = `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
