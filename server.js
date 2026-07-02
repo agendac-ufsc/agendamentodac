@@ -761,6 +761,10 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         }
         const headers = rows[0] || []; console.log("DEBUG: Headers encontrados:", headers.length, headers.slice(0, 5));
         const dataSegundaEtapa = rows.slice(1); console.log("DEBUG: Linhas de dados encontradas:", dataSegundaEtapa.length);
+        // Log temporário para diagnóstico: mostra e-mails das últimas 5 linhas do Sheets
+        const indicesEmailDiag = headers.reduce((acc, h, i) => { if (['endereço de e-mail','e-mail','email'].some(k => h.toLowerCase().includes(k))) acc.push(i); return acc; }, []);
+        const ultimas5 = dataSegundaEtapa.slice(-5);
+        console.log("DEBUG: E-mails das últimas 5 linhas do Sheets:", ultimas5.map(s => indicesEmailDiag.map(i => s[i]).filter(Boolean).join(' | ')));
 
         // Identificar colunas de e-mail e telefone
         const findIndices = (keywords) => headers.reduce((acc, h, i) => {
@@ -790,12 +794,14 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const agendamentosPrimeiraEtapa = await getAgendamentos();
         const unificados = [];
 
-        // Processar agendamentos da primeira etapa (site)
-        // usedSheetIndices garante que cada linha do Sheets case com no máximo UMA inscrição Redis
-        // (evita "roubo de dados" onde várias inscrições do mesmo e-mail apontam para a mesma linha)
+        // Processar agendamentos da primeira etapa do mais recente para o mais antigo
+        // Assim a inscrição mais nova tem prioridade na busca pela linha do Sheets correspondente,
+        // evitando que inscrições antigas consumam linhas destinadas às novas.
+        // usedSheetIndices garante que cada linha do Sheets case com no máximo UMA inscrição Redis.
         const usedSheetIndices = new Set();
+        const agendamentosOrdenados = [...agendamentosPrimeiraEtapa].reverse();
 
-        for (const p of agendamentosPrimeiraEtapa) {
+        for (const p of agendamentosOrdenados) {
             const pEmail = (p.email || '').trim().toLowerCase();
             const pTelefone = (p.telefone || '').replace(/\D/g, '');
 
