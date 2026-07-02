@@ -668,7 +668,8 @@ app.post('/api/agendar', async (req, res) => {
                 const partes = (horario || '').split('-').map(s => s.trim());
                 return { start: toMin(partes[0]), end: toMin(partes[1] || partes[0]) };
             };
-            const overlaps = (a, b) => a.start < b.end && a.end > b.start;
+            // Buffer de 30 min: dois eventos conflitam se um começa antes de 30 min após o outro terminar
+            const overlaps = (a, b) => a.start < b.end + 30 && a.end + 30 > b.start;
             const conflito = existentes.some(ex => {
                 if ((ex.local || 'teatro') !== localKey) return false;
                 if (!ex.etapas) return false;

@@ -633,7 +633,11 @@
                         if (!e.start.includes('T')) return false;
                         const eStart = parseInt(e.start.split('T')[1].substring(0,5).replace(':', ''));
                         const eEnd   = parseInt(e.end.split('T')[1].substring(0,5).replace(':', ''));
-                        return timeVal >= eStart && timeVal < eEnd;
+                        // Buffer de 30 min após o término: converte HHMM → minutos, soma 30, volta pra HHMM
+                        const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
+                        const fromMins = m => Math.floor(m / 60) * 100 + (m % 60);
+                        const eEndBuf = fromMins(toMins(eEnd) + 30);
+                        return timeVal >= eStart && timeVal < eEndBuf;
                     };
                     const isBusyManual = eventsOnDay.some(e => e.source !== 'sistema' && overlaps(e));
                     const isBusySystem = eventsOnDay.some(e => e.source === 'sistema' && overlaps(e));
