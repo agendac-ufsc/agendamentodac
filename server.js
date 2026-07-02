@@ -791,25 +791,33 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const unificados = [];
 
         // Processar agendamentos da primeira etapa (site)
+        // usedSheetIndices garante que cada linha do Sheets case com no máximo UMA inscrição Redis
+        // (evita "roubo de dados" onde várias inscrições do mesmo e-mail apontam para a mesma linha)
+        const usedSheetIndices = new Set();
+
         for (const p of agendamentosPrimeiraEtapa) {
             const pEmail = (p.email || '').trim().toLowerCase();
             const pTelefone = (p.telefone || '').replace(/\D/g, '');
 
             // Buscar a resposta mais recente (última na planilha) que coincida com e-mail ou telefone
-            const correspondencia = [...dataSegundaEtapa].reverse().find(s => {
+            // e que ainda não tenha sido usada por outra inscrição Redis
+            let correspondenciaIdx = -1;
+            for (let i = dataSegundaEtapa.length - 1; i >= 0; i--) {
+                if (usedSheetIndices.has(i)) continue;
+                const s = dataSegundaEtapa[i];
                 const sEmail = indicesEmail.map(idx => (s[idx] || '').trim().toLowerCase());
                 const sTelefone = indicesTelefone.map(idx => (s[idx] || '').replace(/\D/g, ''));
-                
                 const matchesEmail = pEmail && sEmail.includes(pEmail);
                 const matchesTelefone = pTelefone && pTelefone.length >= 8 && sTelefone.some(st => st && st.includes(pTelefone));
-                
-                return matchesEmail || matchesTelefone;
-            });
+                if (matchesEmail || matchesTelefone) { correspondenciaIdx = i; break; }
+            }
+            const correspondencia = correspondenciaIdx >= 0 ? dataSegundaEtapa[correspondenciaIdx] : null;
 
             const localNomeResolvido = p.localNome || mapeamentoLocais[p.local] || mapeamentoLocais[p.calendarId] || 'Teatro';
             const calIdInscricao = p.calendarId || CALENDAR_IDS[(p.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
 
             if (correspondencia) {
+                usedSheetIndices.add(correspondenciaIdx);
                 // Etapa 2 encontrada — criar eventos no Calendar se ainda não foram criados
                 if (p.calendarSynced !== true) {
                     try {
@@ -877,22 +885,8 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                     eventosExistem: true
                 });
             } else {
-                // Ainda só tem etapa 1 — não há eventos no Calendar (novo fluxo) ou pode ter (fluxo antigo)
-                // Só verificar o Calendar para inscrições antigas (calendarSynced undefined = fluxo antigo)
-                let eventosExistem = false;
-                if (p.calendarSynced === undefined) {
-                    eventosExistem = await verificarEventosNoCalendario(p);
-                }
-                const statusPendente = p.calendarSynced === false
-                    ? 'Pendente (Falta Forms)'
-                    : (eventosExistem ? 'Pendente (Falta Forms)' : 'Cancelado (Eventos Removidos)');
-                console.log(`⏳ [Pendente] ${p.evento || 'sem nome'} | email: ${p.email} | status: ${statusPendente} | e-mails no Sheets (amostra): ${dataSegundaEtapa.slice(0,3).map(s => indicesEmail.map(i => s[i]).filter(Boolean).join('|')).join(', ') || 'nenhum'}`);
-                unificados.push({
-                    primeiraEtapa: { ...p, localNome: localNomeResolvido },
-                    segundaEtapa: null,
-                    status: statusPendente,
-                    eventosExistem: eventosExistem
-                });
+                // Etapa 2 não encontrada — inscrição não existe para o painel (sem Calendar, sem listagem)
+                console.log(`🚫 [Ignorada] Etapa 2 não encontrada para: ${p.evento || 'sem nome'} | email: ${p.email}`);
             }
         }
 
@@ -900,15 +894,9 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         dataSegundaEtapa.forEach((s, idx) => {
             const emailSheet = (indicesEmail.length > 0 ? (s[indicesEmail[0]] || '').trim().toLowerCase() : '');
             const telefoneSheet = (indicesTelefone.length > 0 ? (s[indicesTelefone[0]] || '').replace(/\D/g, '') : '');
-            
-            // Verificar se já foi unificado (pelo email ou telefone)
-            const jaUnificado = unificados.some(u => {
-                const uEmail = (u.primeiraEtapa.email || '').trim().toLowerCase();
-                const uTelefone = (u.primeiraEtapa.telefone || '').replace(/\D/g, '');
-                return (emailSheet && uEmail === emailSheet) || (telefoneSheet && uTelefone === telefoneSheet);
-            });
 
-            if (!jaUnificado) {
+            // Usar o índice já rastreado para saber se essa linha já foi consumida por uma inscrição Redis
+            if (!usedSheetIndices.has(idx)) {
                 const nomeEventoSheet = (idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)') || 'Evento (Forms)';
                 const nomeProponenteSheet = (idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms') || 'Inscrição Forms';
 
