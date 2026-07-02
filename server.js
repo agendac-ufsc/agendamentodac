@@ -281,6 +281,7 @@ let BOTOES_HOME = {
     ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
 };
 let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.';
+let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
 const CONFIG_KEY = 'agendamentos_config';
 
@@ -297,6 +298,7 @@ const getConfigs = async (caller = 'unknown') => {
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
                 PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
+                SOMENTE_FINSEMANA = configs.somenteFinaisDeSemana !== undefined ? configs.somenteFinaisDeSemana : false;
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
@@ -323,6 +325,7 @@ const getConfigs = async (caller = 'unknown') => {
                     spreadsheetId: SPREADSHEET_ID, 
                     formsLink: FORMS_LINK,
                     permitirDisputa: PERMITIR_DISPUTA,
+                    somenteFinaisDeSemana: SOMENTE_FINSEMANA,
                     horariosLimites: HORARIOS_LIMITES,
                     datasBloqueadas: DATAS_BLOQUEADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
@@ -344,6 +347,7 @@ const getConfigs = async (caller = 'unknown') => {
         spreadsheetId: SPREADSHEET_ID, 
         formsLink: FORMS_LINK,
         permitirDisputa: PERMITIR_DISPUTA,
+        somenteFinaisDeSemana: SOMENTE_FINSEMANA,
         horariosLimites: HORARIOS_LIMITES,
         datasBloqueadas: DATAS_BLOQUEADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
@@ -383,6 +387,9 @@ const saveConfigs = async (configs) => {
         if (configs.permitirDisputa !== undefined) {
             PERMITIR_DISPUTA = configs.permitirDisputa;
         }
+        if (configs.somenteFinaisDeSemana !== undefined) {
+            SOMENTE_FINSEMANA = configs.somenteFinaisDeSemana;
+        }
         if (configs.horariosLimites) {
             HORARIOS_LIMITES = configs.horariosLimites;
         }
@@ -417,6 +424,7 @@ const saveConfigs = async (configs) => {
                 spreadsheetId: cleanSpreadsheetId,
                 formsLink: FORMS_LINK,
                 permitirDisputa: PERMITIR_DISPUTA,
+                somenteFinaisDeSemana: SOMENTE_FINSEMANA,
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
@@ -523,12 +531,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
@@ -635,6 +643,54 @@ app.post('/api/agendar', async (req, res) => {
             return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         }
         const localKey = (local || 'teatro').toLowerCase();
+
+        // Validar dias da semana se SOMENTE_FINSEMANA estiver ativo (qui=4, sex=5, sáb=6, dom=0)
+        if (SOMENTE_FINSEMANA) {
+            const diasPermitidos = new Set([0, 4, 5, 6]);
+            for (const tipo of Object.keys(etapas)) {
+                const itens = Array.isArray(etapas[tipo]) ? etapas[tipo] : [etapas[tipo]];
+                for (const item of itens) {
+                    if (!item || !item.data) continue;
+                    const [y, m, d] = item.data.split('-').map(Number);
+                    const diaSemana = new Date(y, m - 1, d).getDay();
+                    if (!diasPermitidos.has(diaSemana)) {
+                        return res.status(400).json({ error: 'Inscrições só são aceitas para datas de quinta-feira a domingo.' });
+                    }
+                }
+            }
+        }
+
+        // Validar conflitos de horário quando disputa não é permitida
+        if (!PERMITIR_DISPUTA) {
+            const existentes = await getAgendamentos();
+            const toMin = (h) => { const [hh, mm] = (h || '00:00').split(':').map(Number); return hh * 60 + (mm || 0); };
+            const parseSlot = (horario) => {
+                const partes = (horario || '').split('-').map(s => s.trim());
+                return { start: toMin(partes[0]), end: toMin(partes[1] || partes[0]) };
+            };
+            const overlaps = (a, b) => a.start < b.end && a.end > b.start;
+            const conflito = existentes.some(ex => {
+                if ((ex.local || 'teatro') !== localKey) return false;
+                if (!ex.etapas) return false;
+                for (const tipo of Object.keys(etapas)) {
+                    if (!ex.etapas[tipo]) continue;
+                    const novas = Array.isArray(etapas[tipo]) ? etapas[tipo] : [etapas[tipo]];
+                    const existEtapas = Array.isArray(ex.etapas[tipo]) ? ex.etapas[tipo] : [ex.etapas[tipo]];
+                    for (const nova of novas) {
+                        if (!nova?.data || !nova?.horario) continue;
+                        for (const exist of existEtapas) {
+                            if (!exist?.data || !exist?.horario) continue;
+                            if (nova.data !== exist.data) continue;
+                            if (overlaps(parseSlot(nova.horario), parseSlot(exist.horario))) return true;
+                        }
+                    }
+                }
+                return false;
+            });
+            if (conflito) {
+                return res.status(409).json({ error: 'Este horário já está ocupado. A disputa de horários está desativada.' });
+            }
+        }
         const calId = CALENDAR_IDS[localKey] || CALENDAR_IDS.teatro;
         const localNome = localKey === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
         const formatarData = (dataStr) => {
