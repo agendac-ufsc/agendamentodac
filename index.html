@@ -254,6 +254,16 @@
         </div>
     </div>
 
+    <div id="modalSegundaEtapa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:36px 28px;max-width:420px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+            <div style="font-size:44px;margin-bottom:14px">📋</div>
+            <h2 style="color:#28a745;font-size:20px;margin:0 0 12px">Primeira etapa concluída!</h2>
+            <p style="color:#333;font-size:15px;line-height:1.6;margin:0 0 8px">Sua inscrição foi salva com sucesso.</p>
+            <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px">Agora você será direcionado para a <strong>segunda etapa</strong> — um formulário complementar que deve ser preenchido para que sua inscrição seja considerada completa.</p>
+            <a id="btnModalSegundaEtapa" href="#" target="_blank" style="display:block;background:linear-gradient(135deg,#28a745 0%,#218838 100%);color:#fff;text-decoration:none;padding:13px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" onclick="document.getElementById('modalSegundaEtapa').style.display='none'">OK — Ir para a Segunda Etapa</a>
+        </div>
+    </div>
+
     <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
@@ -834,7 +844,8 @@
                 if (res.ok) {
                     msg.textContent = '✅ Primeira etapa concluída com sucesso!';
                     msg.className = 'message success';
-                    
+                    submitBtn.style.display = 'none';
+
                     let formsLink = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
                     try {
                         const configRes = await fetch('/api/config');
@@ -844,32 +855,9 @@
                         console.error('Erro ao buscar link do forms:', e);
                     }
 
-                    const secondStepBtn = document.createElement('a');
-                    secondStepBtn.href = formsLink;
-                    secondStepBtn.target = '_blank';
-                    secondStepBtn.className = 'submit';
-                    secondStepBtn.style.display = 'block';
-                    secondStepBtn.style.textAlign = 'center';
-                    secondStepBtn.style.textDecoration = 'none';
-                    secondStepBtn.style.marginTop = '20px';
-                    secondStepBtn.style.background = 'linear-gradient(135deg, #28a745 0%, #218838 100%)';
-                    secondStepBtn.textContent = 'Ir para Segunda Etapa (Google Forms)';
-                    secondStepBtn.onclick = () => {
-                        setTimeout(() => location.reload(), 800);
-                    };
-                    
-                    msg.after(secondStepBtn);
-
-                    const resetBtn = document.createElement('button');
-                    resetBtn.type = 'button';
-                    resetBtn.className = 'submit';
-                    resetBtn.style.background = '#6c757d';
-                    resetBtn.style.marginTop = '10px';
-                    resetBtn.textContent = 'Fazer Outra Inscrição (Limpar Formulário)';
-                    resetBtn.onclick = () => location.reload();
-                    secondStepBtn.after(resetBtn);
-                    
-                    submitBtn.style.display = 'none';
+                    document.getElementById('btnModalSegundaEtapa').href = formsLink;
+                    const m = document.getElementById('modalSegundaEtapa');
+                    m.style.display = 'flex';
                 } else {
                     const result = await res.json();
                     msg.textContent = '❌ Erro: ' + result.error;
