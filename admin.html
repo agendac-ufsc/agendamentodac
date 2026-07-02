@@ -343,7 +343,6 @@
             <div class="cfg-tabs" id="cfgTabsBar">
                 <button class="cfg-tab active" onclick="switchCfgTab('forms')">Formulários</button>
                 <button class="cfg-tab" onclick="switchCfgTab('regras')">Regras</button>
-                <button class="cfg-tab" onclick="switchCfgTab('horarios')">Horários</button>
                 <button class="cfg-tab" onclick="switchCfgTab('calendario')">Calendário</button>
             </div>
             <style>
@@ -474,15 +473,16 @@
                 <h5 style="font-size:13px;font-weight:700;margin-bottom:8px">Datas bloqueadas atualmente:</h5>
                 <div id="listaDatasBloqueadas" style="background:#fff;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data bloqueada.</div>
                 <button class="btn-top btn-purple" style="margin-top:14px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Bloqueios</button>
-            </div>
 
-            <!-- Horários -->
-            <div class="cfg-pane" id="cfg-horarios">
-                <p style="font-size:13px;color:#777;margin-top:8px;margin-bottom:16px">Defina o horário limite final de cada etapa.</p>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><span style="width:110px;font-size:14px;font-weight:600">Ensaio:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-ensaio-fim" class="form-input" style="width:110px" placeholder="17:00"></div>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><span style="width:110px;font-size:14px;font-weight:600">Montagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-montagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
-                <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><span style="width:110px;font-size:14px;font-weight:600">Desmontagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-desmontagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
-                <button class="btn-top btn-purple" style="margin-top:8px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Horários</button>
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
+
+                <!-- Horários Limite (integrado) -->
+                <h4 style="font-size:15px;color:#333;margin:0 0 4px;display:flex;align-items:center;gap:8px"><i class="fas fa-clock" style="color:#764ba2"></i> Horários Limite por Etapa</h4>
+                <p style="font-size:12px;color:#666;margin:0 0 14px">Defina o horário final máximo que cada etapa pode terminar.</p>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="width:110px;font-size:14px;font-weight:600">Ensaio:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-ensaio-fim" class="form-input" style="width:110px" placeholder="17:00"></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="width:110px;font-size:14px;font-weight:600">Montagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-montagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="width:110px;font-size:14px;font-weight:600">Desmontagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-desmontagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
+                <button class="btn-top btn-purple" style="margin-top:4px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Horários</button>
             </div>
 
             <!-- Calendário -->
@@ -1628,7 +1628,7 @@ function switchCfgTab(name) {
     document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
     document.getElementById(`cfg-${name}`).classList.add('active');
     document.querySelectorAll('.cfg-tab').forEach(t => {
-        const map = {forms:'Formulários',regras:'Regras',horarios:'Horários',calendario:'Calendário'};
+        const map = {forms:'Formulários',regras:'Regras',calendario:'Calendário'};
         if (t.textContent.trim() === map[name]) t.classList.add('active');
     });
     if (name === 'config') loadConfigs();
