@@ -724,6 +724,16 @@ async function loadData() {
         const data = await r.json();
         if (data.error) throw new Error(data.error);
         allUnificados = Array.isArray(data) ? data : [];
+        // Ordenar pela inscrição mais recente primeiro
+        allUnificados.sort((a, b) => {
+            const parseTs = ts => {
+                if (!ts) return 0;
+                const m = ts.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})/);
+                if (!m) return 0;
+                return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]).getTime();
+            };
+            return parseTs(b.primeiraEtapa?.timestamp) - parseTs(a.primeiraEtapa?.timestamp);
+        });
         renderTabela();
     } catch (err) {
         document.getElementById('inscricoesError').textContent = 'Erro ao carregar dados: ' + err.message;

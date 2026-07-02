@@ -886,6 +886,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 const statusPendente = p.calendarSynced === false
                     ? 'Pendente (Falta Forms)'
                     : (eventosExistem ? 'Pendente (Falta Forms)' : 'Cancelado (Eventos Removidos)');
+                console.log(`⏳ [Pendente] ${p.evento || 'sem nome'} | email: ${p.email} | status: ${statusPendente} | e-mails no Sheets (amostra): ${dataSegundaEtapa.slice(0,3).map(s => indicesEmail.map(i => s[i]).filter(Boolean).join('|')).join(', ') || 'nenhum'}`);
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: localNomeResolvido },
                     segundaEtapa: null,
