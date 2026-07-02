@@ -340,6 +340,7 @@
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
         let dataInicioEdital = null; // Data mínima conforme edital selecionado (YYYY-MM-DD)
         let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
+        let somenteFinaisDeSemana = false; // Se true, bloqueia seg/ter/qua no calendário
         let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
 
         steps.forEach(s => {
@@ -352,6 +353,7 @@
                 if (configRes.ok) {
                     const config = await configRes.json();
                     permitirDisputa = config.permitirDisputa !== false;
+                    somenteFinaisDeSemana = !!config.somenteFinaisDeSemana;
                     if (config.horariosLimites) horariosLimites = config.horariosLimites;
                     datasBloqueadas = config.datasBloqueadas || [];
                     
@@ -532,8 +534,10 @@
                 const today = new Date(); today.setHours(0,0,0,0);
                 const minDate = dataInicioEdital ? new Date(dataInicioEdital + 'T00:00:00') : today;
                 const limiteMin = minDate > today ? minDate : today;
+                const diasSemana = date.getDay(); // 0=Dom,1=Seg,2=Ter,3=Qua,4=Qui,5=Sex,6=Sáb
+                const diaPermitido = !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
                 
-                if (date < limiteMin) {
+                if (date < limiteMin || !diaPermitido) {
                     d.classList.add('other-month');
                 } else {
                     const dateStr = date.toISOString().split('T')[0];

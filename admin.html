@@ -346,6 +346,11 @@
                 <button class="cfg-tab" onclick="switchCfgTab('horarios')">Horários</button>
                 <button class="cfg-tab" onclick="switchCfgTab('calendario')">Calendário</button>
             </div>
+            <style>
+                .regra-row{background:#f8f9fa;padding:16px 20px;border-radius:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+                .regra-row h4{font-size:15px;color:#333;margin:0 0 4px}
+                .regra-row p{font-size:12px;color:#666;margin:0}
+            </style>
 
             <!-- Forms -->
             <div class="cfg-pane active" id="cfg-forms">
@@ -428,18 +433,47 @@
 
             <!-- Regras -->
             <div class="cfg-pane" id="cfg-regras">
-                <div style="background:#f8f9fa;padding:20px;border-radius:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;margin-top:8px">
+                <style>
+                    .toggle-switch{position:relative;display:inline-block;width:50px;height:24px;flex-shrink:0}
+                    .toggle-switch input{opacity:0;width:0;height:0}
+                    .toggle-switch .ts{position:absolute;cursor:pointer;inset:0;background:#ccc;transition:.3s;border-radius:24px}
+                    .toggle-switch .ts:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}
+                    .toggle-switch input:checked+.ts{background:#764ba2}
+                    .toggle-switch input:checked+.ts:before{transform:translateX(26px)}
+                </style>
+
+                <!-- Disputa de Horários -->
+                <div class="regra-row">
                     <div>
-                        <h4 style="font-size:15px;color:#333;margin-bottom:4px">Permitir Disputa de Horários</h4>
-                        <p style="font-size:12px;color:#666">Se ativo, múltiplos proponentes podem solicitar o mesmo horário.</p>
+                        <h4>Permitir Disputa de Horários</h4>
+                        <p>Se ativo, múltiplos proponentes podem solicitar o mesmo horário via sistema.</p>
                     </div>
-                    <label style="position:relative;display:inline-block;width:50px;height:24px">
-                        <input type="checkbox" id="cfgDisputa" style="opacity:0;width:0;height:0">
-                        <span id="cfgDisputaSlider" onclick="document.getElementById('cfgDisputa').click()" style="position:absolute;cursor:pointer;inset:0;background:#ccc;transition:.3s;border-radius:24px"></span>
-                        <style>#cfgDisputa:checked~#cfgDisputaSlider{background:#764ba2}#cfgDisputaSlider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}#cfgDisputa:checked~#cfgDisputaSlider:before{transform:translateX(26px)}</style>
-                    </label>
+                    <label class="toggle-switch"><input type="checkbox" id="cfgDisputa"><span class="ts"></span></label>
                 </div>
-                <button class="btn-top btn-purple" style="margin-top:16px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar</button>
+
+                <!-- Somente Qui–Dom -->
+                <div class="regra-row">
+                    <div>
+                        <h4>Inscrições somente Qui, Sex, Sáb e Dom</h4>
+                        <p>Se ativo, segunda, terça e quarta ficam bloqueadas no calendário.</p>
+                    </div>
+                    <label class="toggle-switch"><input type="checkbox" id="cfgSomenteFinSemana"><span class="ts"></span></label>
+                </div>
+
+                <button class="btn-top btn-purple" style="margin-top:4px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Regras</button>
+
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
+
+                <!-- Bloqueio de Datas (integrado) -->
+                <h4 style="font-size:15px;color:#333;margin:0 0 4px;display:flex;align-items:center;gap:8px"><i class="fas fa-ban" style="color:#e53e3e"></i> Bloqueio de Datas Específicas</h4>
+                <p style="font-size:12px;color:#666;margin:0 0 14px">Bloqueia datas pontuais para impedir novos agendamentos naquele dia.</p>
+                <div style="display:flex;gap:10px;margin-bottom:16px">
+                    <input type="date" id="bloqueioData" class="form-input" style="flex:1;max-width:220px">
+                    <button class="btn-top btn-danger" onclick="toggleBloqueioData()"><i class="fas fa-ban"></i> Bloquear/Desbloquear</button>
+                </div>
+                <h5 style="font-size:13px;font-weight:700;margin-bottom:8px">Datas bloqueadas atualmente:</h5>
+                <div id="listaDatasBloqueadas" style="background:#fff;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data bloqueada.</div>
+                <button class="btn-top btn-purple" style="margin-top:14px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Bloqueios</button>
             </div>
 
             <!-- Horários -->
@@ -457,17 +491,6 @@
                 <iframe src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border:0;border-radius:8px" width="100%" height="500" frameborder="0" scrolling="no"></iframe>
             </div>
 
-            <!-- Bloqueio -->
-            <div class="cfg-pane" id="cfg-bloqueio">
-                <p style="font-size:13px;color:#777;margin:8px 0 16px">Bloqueie datas específicas para impedir novos agendamentos.</p>
-                <div style="display:flex;gap:10px;margin-bottom:20px">
-                    <input type="date" id="bloqueioData" class="form-input" style="flex:1">
-                    <button class="btn-top btn-danger" onclick="toggleBloqueioData()"><i class="fas fa-ban"></i> Bloquear/Desbloquear</button>
-                </div>
-                <h5 style="font-size:13px;font-weight:700;margin-bottom:10px">Datas bloqueadas atualmente:</h5>
-                <div id="listaDatasBloqueadas" style="background:#f8f9fa;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data bloqueada.</div>
-                <button class="btn-top btn-purple" style="margin-top:16px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Bloqueios</button>
-            </div>
         </div>
     </div>
 </div>
@@ -1589,6 +1612,8 @@ async function loadConfigs() {
         if (msgEl) msgEl.value = c.mensagemBotoesDesativados || 'As inscrições estão encerradas no momento.';
         const disp = document.getElementById('cfgDisputa');
         if (disp) disp.checked = c.permitirDisputa !== false;
+        const sfin = document.getElementById('cfgSomenteFinSemana');
+        if (sfin) sfin.checked = !!c.somenteFinaisDeSemana;
         const hl = c.horariosLimites || {};
         document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
         document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
@@ -1603,7 +1628,7 @@ function switchCfgTab(name) {
     document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
     document.getElementById(`cfg-${name}`).classList.add('active');
     document.querySelectorAll('.cfg-tab').forEach(t => {
-        const map = {forms:'Formulários',regras:'Regras',horarios:'Horários',calendario:'Calendário',bloqueio:'Bloqueio'};
+        const map = {forms:'Formulários',regras:'Regras',horarios:'Horários',calendario:'Calendário'};
         if (t.textContent.trim() === map[name]) t.classList.add('active');
     });
     if (name === 'config') loadConfigs();
@@ -1634,6 +1659,7 @@ async function saveConfigs() {
             ensaio:  { ativo: !!document.getElementById('cfgBtnEnsaioAtivo')?.checked,  texto: (document.getElementById('cfgBtnEnsaioTexto')?.value || '').trim() || 'Agendar Apenas Ensaio', dataInicio: (document.getElementById('cfgBtnEnsaioDataInicio')?.value || '') || null }
         },
         permitirDisputa: document.getElementById('cfgDisputa').checked,
+        somenteFinaisDeSemana: document.getElementById('cfgSomenteFinSemana').checked,
         horariosLimites: {
             ensaio:     { fim: document.getElementById('h-ensaio-fim').value },
             montagem:   { fim: document.getElementById('h-montagem-fim').value },
