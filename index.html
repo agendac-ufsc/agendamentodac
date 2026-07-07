@@ -346,27 +346,6 @@
             <div class="form-group"><label>Telefone *</label><input type="tel" id="telefone" required></div>
             <div class="form-group"><label>Nome do Evento *</label><input type="text" id="evento" required></div>
 
-            <div class="form-group">
-                <label>O evento é gratuito? *</label>
-                <select id="eventoGratuito" required onchange="toggleTaxaLocacao()" style="width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:14px;background:#fff;color:#333;cursor:pointer;">
-                    <option value="">— Selecione —</option>
-                    <option value="sim">Sim, é gratuito</option>
-                    <option value="nao">Não, é pago</option>
-                </select>
-            </div>
-
-            <div id="boxTaxaLocacao" style="display:none; background:#fff7ed; border:1px solid #fed7aa; border-radius:10px; padding:16px; margin-bottom:20px;">
-                <p style="font-weight:700; color:#c2410c; font-size:14px; margin:0 0 8px; display:flex; align-items:center; gap:6px;">
-                    💰 Evento pago — Taxa de Locação
-                </p>
-                <p style="font-size:13px; color:#7c3c12; margin:0 0 8px; line-height:1.6;">
-                    Eventos com cobrança de ingresso estão sujeitos ao pagamento de taxa de locação conforme tabela vigente do DAC/UFSC. O valor e as condições de pagamento serão informados após análise da proposta.
-                </p>
-                <p style="font-size:12px; color:#a85c30; margin:0; font-style:italic;">
-                    Consulte o edital ou entre em contato com o DAC para mais informações sobre os valores.
-                </p>
-            </div>
-
             <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5;">
                 <strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.
             </div>
@@ -678,9 +657,7 @@
             const hLimit = horariosLimites[step] || { fim: '21:00' };
             const minTime = 800;
             const maxTime = parseInt(hLimit.fim.replace(':', ''));
-            const toMinsMS = v => Math.floor(v / 100) * 60 + (v % 100);
-            const fromMinsMS = m => Math.floor(m / 60) * 100 + (m % 60);
-            const maxStartTime = fromMinsMS(toMinsMS(maxTime) - 30);
+            const maxStartTime = maxTime - 100;
 
             for (let h = 0; h <= 23; h++) {
                 for (let m = 0; m < 60; m += 30) {
@@ -895,7 +872,6 @@
                 email: document.getElementById('email').value,
                 telefone: document.getElementById('telefone').value,
                 evento: document.getElementById('evento').value,
-                gratuito: document.getElementById('eventoGratuito').value,
                 local: document.getElementById('localSelecionado').value || 'teatro',
                 etapas: {}
             };
@@ -965,11 +941,6 @@
         function fecharAvisoInscricao() {
             _localPendente = null;
             document.getElementById('modalAvisoInscricao').style.display = 'none';
-        }
-
-        function toggleTaxaLocacao() {
-            const val = document.getElementById('eventoGratuito').value;
-            document.getElementById('boxTaxaLocacao').style.display = val === 'nao' ? 'block' : 'none';
         }
 
         function abrirModalDocumentos() {
