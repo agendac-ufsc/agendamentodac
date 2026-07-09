@@ -1585,28 +1585,61 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
                 });
                 const allEvents = listResp.data.items || [];
 
+                // ── Helper: título esperado de um evento ──────────────────────
+                const makeTitle = (key, idx, total) => {
+                    const label = total > 1 ? `${nomesEtapas[key] || key} ${idx + 1}` : (nomesEtapas[key] || key);
+                    return `${label}: ${ag.evento}`;
+                };
+
+                // ── Coletar títulos que PERMANECEM (novas etapas) ─────────────
+                const titulosRestantes = new Set();
+                for (const key in campos.etapas) {
+                    const itens = Array.isArray(campos.etapas[key]) ? campos.etapas[key] : [campos.etapas[key]];
+                    itens.forEach((it, i) => { if (it && it.data) titulosRestantes.add(makeTitle(key, i, itens.length)); });
+                }
+
+                // ── Excluir do Calendar eventos que foram REMOVIDOS ───────────
+                const etapasAntigas = ag.etapas || {};
+                for (const key in etapasAntigas) {
+                    const itens = Array.isArray(etapasAntigas[key]) ? etapasAntigas[key] : [etapasAntigas[key]];
+                    for (let i = 0; i < itens.length; i++) {
+                        const titulo = makeTitle(key, i, itens.length);
+                        if (titulosRestantes.has(titulo)) continue; // ainda existe — não excluir
+                        const match = allEvents.find(e =>
+                            e.summary === titulo &&
+                            e.description && e.description.includes(ag.email)
+                        );
+                        if (match) {
+                            try {
+                                await calendar.events.delete({ auth: googleAuthClient, calendarId: calId, eventId: match.id });
+                                console.log(`🗑️ [Calendar] Evento excluído: "${titulo}"`);
+                            } catch (e) {
+                                console.error(`❌ [Calendar] Erro ao excluir "${titulo}":`, e.message);
+                            }
+                        } else {
+                            console.warn(`⚠️ [Calendar] Evento a excluir não encontrado: "${titulo}"`);
+                        }
+                    }
+                }
+
+                // ── Atualizar data/hora dos eventos que PERMANECEM ────────────
                 for (const key in campos.etapas) {
                     const itens = Array.isArray(campos.etapas[key]) ? campos.etapas[key] : [campos.etapas[key]];
                     for (let i = 0; i < itens.length; i++) {
                         const it = itens[i];
                         if (!it || !it.data || !it.horario) continue;
-                        const label = itens.length > 1 ? `${nomesEtapas[key] || key} ${i + 1}` : (nomesEtapas[key] || key);
-                        const eventSummary = `${label}: ${ag.evento}`;
-
+                        const titulo = makeTitle(key, i, itens.length);
                         const match = allEvents.find(e =>
-                            e.summary === eventSummary &&
+                            e.summary === titulo &&
                             e.description && e.description.includes(ag.email)
                         );
-
                         if (!match) {
-                            console.warn(`⚠️ [Calendar] Evento não encontrado: "${eventSummary}" (${ag.email})`);
+                            console.warn(`⚠️ [Calendar] Evento não encontrado para atualizar: "${titulo}"`);
                             continue;
                         }
-
                         const [startTime, endTime] = it.horario.split(' às ');
                         const startDT = `${it.data}T${startTime}:00-03:00`;
                         const endDT   = `${it.data}T${endTime}:00-03:00`;
-
                         try {
                             await calendar.events.patch({
                                 auth: googleAuthClient,
@@ -1617,9 +1650,9 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
                                     end:   { dateTime: endDT,   timeZone: 'America/Sao_Paulo' }
                                 }
                             });
-                            console.log(`✅ [Calendar] Evento atualizado: "${eventSummary}" → ${it.data} ${it.horario}`);
+                            console.log(`✅ [Calendar] Evento atualizado: "${titulo}" → ${it.data} ${it.horario}`);
                         } catch (e) {
-                            console.error(`❌ [Calendar] Erro ao atualizar "${eventSummary}":`, e.message);
+                            console.error(`❌ [Calendar] Erro ao atualizar "${titulo}":`, e.message);
                         }
                     }
                 }

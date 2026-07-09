@@ -1078,7 +1078,7 @@ async function salvarEtapas() {
             status.style.color = '#16a34a';
             btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
             allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
-            renderTable();
+            renderTabela();
             setTimeout(() => closeModal('modalEditarEtapas'), 1800);
         } else {
             throw new Error(data.error || 'Falha ao salvar.');
