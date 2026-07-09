@@ -981,6 +981,14 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             }
         });
 
+        // Injetar etapas salvas manualmente para inscrições legadas
+        const legadasEtapasMap = await getLegadasEtapas();
+        unificados.forEach(u => {
+            if (u.primeiraEtapa.isLegada && legadasEtapasMap[u.primeiraEtapa.id]) {
+                u.primeiraEtapa.etapas = legadasEtapasMap[u.primeiraEtapa.id];
+            }
+        });
+
         // Enriquecer entradas legadas com eventos do Google Calendar (busca por nome do evento)
         const legadas = unificados.filter(u => u.primeiraEtapa.isLegada && Object.keys(u.primeiraEtapa.etapas||{}).length === 0);
         if (legadas.length > 0) {
@@ -1522,10 +1530,31 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
 // T004a — EDIÇÃO DE ETAPAS (via painel admin)
 // ============================================================
 
+// ---- Helpers para etapas de inscrições legadas (Forms-only) ----
+async function getLegadasEtapas() {
+    try {
+        const raw = await redis.get('agendamentos_legadas_etapas');
+        return parseRedisValue(raw) || {};
+    } catch { return {}; }
+}
+async function setLegadaEtapas(id, etapas) {
+    const map = await getLegadasEtapas();
+    map[id] = etapas;
+    await redis.set('agendamentos_legadas_etapas', JSON.stringify(map));
+}
+
 app.post('/api/admin/atualizar-etapas', async (req, res) => {
     const { id, ...campos } = req.body;
     if (!id || Object.keys(campos).length === 0) {
         return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
+    }
+
+    // Inscrições legadas (Forms-only) têm IDs "forms_..." — salvar em chave separada
+    if (String(id).startsWith('forms_')) {
+        if (campos.etapas !== undefined) {
+            await setLegadaEtapas(id, campos.etapas);
+        }
+        return res.json({ success: true });
     }
 
     // Buscar agendamento atual antes de atualizar (para ter email, evento, calendarId)
