@@ -825,6 +825,27 @@ function renderTabela() {
                 });
             }
         }
+        // Fallback: extrair datas/horários das colunas do Google Sheets (inscrições legadas)
+        if (!etapasHtml && item.segundaEtapa && item.segundaEtapa.headers && item.segundaEtapa.valores) {
+            const hdr = item.segundaEtapa.headers;
+            const val = item.segundaEtapa.valores;
+            const colMap = [
+                { keywords: ['ensaio'], label: 'Ensaio' },
+                { keywords: ['montagem'], label: 'Montagem' },
+                { keywords: ['1º dia', '1o dia', 'realização do evento'], label: 'Evento' },
+                { keywords: ['2º dia', '2o dia'], label: 'Evento 2' },
+                { keywords: ['3º dia', '3o dia'], label: 'Evento 3' },
+                { keywords: ['4º dia', '4o dia'], label: 'Evento 4' },
+                { keywords: ['desmontagem'], label: 'Desmontagem' },
+            ];
+            colMap.forEach(({ keywords, label }) => {
+                const idx = hdr.findIndex(h => keywords.some(k => h.toLowerCase().includes(k)));
+                if (idx >= 0 && val[idx] && val[idx].trim()) {
+                    etapasHtml += `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#666"><strong>${label}:</strong> ${val[idx].trim()}</span>`;
+                }
+            });
+            if (etapasHtml) etapasHtml = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Forms</span>` + etapasHtml;
+        }
         const editEtapasBtn = (userRole === 'admin' && p.id && p.etapas) ? `<button onclick="openEditarEtapas(${originalIndex})" title="Editar datas e horários" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:12px;padding:2px 5px;border-radius:4px;margin-top:4px;display:inline-flex;align-items:center;gap:3px;opacity:.75" onmouseover="this.style.opacity='1';this.style.background='#f3e8ff'" onmouseout="this.style.opacity='.75';this.style.background='none'"><i class="fas fa-pencil-alt"></i> editar</button>` : '';
 
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
