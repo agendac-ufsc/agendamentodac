@@ -1011,16 +1011,49 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
                     .replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
 
+                // Similaridade Jaccard entre dois conjuntos de palavras ≥3 chars
+                const jaccardSim = (a, b) => {
+                    const wa = new Set(a.split(' ').filter(w => w.length >= 3));
+                    const wb = new Set(b.split(' ').filter(w => w.length >= 3));
+                    if (wa.size === 0 || wb.size === 0) return 0;
+                    const inter = [...wa].filter(w => wb.has(w)).length;
+                    const union = new Set([...wa, ...wb]).size;
+                    return inter / union;
+                };
+                // Detecta numerais romanos simples (I a XX) para exigir correspondência exata
+                const romanoRe = /^(I{1,3}|IV|V|VI{1,3}|IX|X{1,2}|XI{1,3}|XIV|XV|XVI{1,3}|XIX|XX)$/i;
+                const extrairRomano = (s) => {
+                    const m = s.split(' ').find(w => romanoRe.test(w));
+                    return m ? m.toUpperCase() : null;
+                };
+
                 for (const u of legadas) {
                     const nomeEvento = normalizar(u.primeiraEtapa.evento);
                     if (!nomeEvento || nomeEvento.length < 5) continue;
-                    // Palavras-chave: as 3 primeiras palavras com ≥4 chars
-                    const palavras = nomeEvento.split(' ').filter(w => w.length >= 4).slice(0, 3);
-                    if (palavras.length === 0) continue;
+
+                    const romanoInscricao = extrairRomano(u.primeiraEtapa.evento || '');
+
+                    // Palavras longas e específicas do nome da inscrição (≥7 chars)
+                    const palavrasLongas = nomeEvento.split(' ').filter(w => w.length >= 7);
 
                     const matches = allCalEvents.filter(e => {
                         const titulo = normalizar(e.summary || '');
-                        return palavras.some(p => titulo.includes(p));
+                        if (!titulo) return false;
+                        const sim = jaccardSim(nomeEvento, titulo);
+                        if (sim < 0.30) return false;
+                        // Se a inscrição tem numeral romano, exige que o calendário também tenha o mesmo
+                        if (romanoInscricao) {
+                            const romanoEvt = extrairRomano(e.summary || '');
+                            if (romanoEvt && romanoEvt !== romanoInscricao) return false;
+                        }
+                        // Se a inscrição tem palavras longas (≥7 chars), exige que pelo menos
+                        // uma delas apareça no título do evento — evita falsos positivos com
+                        // títulos genéricos curtos como "Teatro 8 ano", "Cineclube 757", etc.
+                        if (palavrasLongas.length > 0) {
+                            const temPalavraLonga = palavrasLongas.some(p => titulo.includes(p));
+                            if (!temPalavraLonga) return false;
+                        }
+                        return true;
                     });
 
                     if (matches.length > 0) {
