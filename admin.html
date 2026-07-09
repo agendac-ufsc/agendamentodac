@@ -846,6 +846,14 @@ function renderTabela() {
             });
             if (etapasHtml) etapasHtml = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Forms</span>` + etapasHtml;
         }
+        // Fallback 2: eventos do Google Calendar encontrados por correspondência de nome (legadas antigas)
+        if (!etapasHtml && p.calendarDates && p.calendarDates.length > 0) {
+            etapasHtml = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Calendário</span>`;
+            p.calendarDates.forEach(cd => {
+                const dataBr = cd.data ? cd.data.split('-').reverse().join('/') : '';
+                etapasHtml += `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${dataBr}</strong>${cd.horario ? ', ' + cd.horario : ''} <span style="font-size:10px;color:#aaa">(${cd.resumo})</span></span>`;
+            });
+        }
         const editEtapasBtn = (userRole === 'admin' && p.id && p.etapas) ? `<button onclick="openEditarEtapas(${originalIndex})" title="Editar datas e horários" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:12px;padding:2px 5px;border-radius:4px;margin-top:4px;display:inline-flex;align-items:center;gap:3px;opacity:.75" onmouseover="this.style.opacity='1';this.style.background='#f3e8ff'" onmouseout="this.style.opacity='.75';this.style.background='none'"><i class="fas fa-pencil-alt"></i> editar</button>` : '';
 
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');

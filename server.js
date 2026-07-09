@@ -981,6 +981,70 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             }
         });
 
+        // Enriquecer entradas legadas com eventos do Google Calendar (busca por nome do evento)
+        const legadas = unificados.filter(u => u.primeiraEtapa.isLegada && Object.keys(u.primeiraEtapa.etapas||{}).length === 0);
+        if (legadas.length > 0) {
+            try {
+                const agora = new Date();
+                const tMin = new Date(agora.getFullYear() - 1, 0, 1).toISOString();
+                const tMax = new Date(agora.getFullYear() + 3, 11, 31).toISOString();
+                const fetchCal = async (calId) => {
+                    try {
+                        const r = await calendar.events.list({
+                            auth: googleAuthClient, calendarId: calId,
+                            timeMin: tMin, timeMax: tMax,
+                            singleEvents: true, orderBy: 'startTime', maxResults: 2500
+                        });
+                        return (r.data.items || []).filter(e => e.start && (e.start.dateTime || e.start.date));
+                    } catch { return []; }
+                };
+                const [evTeat, evIgrej] = await Promise.all([
+                    fetchCal(CALENDAR_IDS.teatro),
+                    fetchCal(CALENDAR_IDS.igrejinha)
+                ]);
+                const allCalEvents = [
+                    ...evTeat.map(e => ({ ...e, _calNome: 'Teatro Carmen Fossari' })),
+                    ...evIgrej.map(e => ({ ...e, _calNome: 'Igrejinha da UFSC' }))
+                ];
+
+                const normalizar = (s) => (s||'').toLowerCase()
+                    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+                    .replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
+
+                for (const u of legadas) {
+                    const nomeEvento = normalizar(u.primeiraEtapa.evento);
+                    if (!nomeEvento || nomeEvento.length < 5) continue;
+                    // Palavras-chave: as 3 primeiras palavras com ≥4 chars
+                    const palavras = nomeEvento.split(' ').filter(w => w.length >= 4).slice(0, 3);
+                    if (palavras.length === 0) continue;
+
+                    const matches = allCalEvents.filter(e => {
+                        const titulo = normalizar(e.summary || '');
+                        return palavras.some(p => titulo.includes(p));
+                    });
+
+                    if (matches.length > 0) {
+                        const calDates = matches.map(e => {
+                            const ini = e.start.dateTime || e.start.date;
+                            const fim = e.end.dateTime || e.end.date;
+                            const d = ini.split('T')[0];
+                            const hIni = ini.includes('T') ? ini.split('T')[1].substring(0,5) : '';
+                            const hFim = fim && fim.includes('T') ? fim.split('T')[1].substring(0,5) : '';
+                            return {
+                                data: d,
+                                horario: hIni && hFim ? `${hIni} às ${hFim}` : (hIni || ''),
+                                resumo: e.summary || '',
+                                local: e._calNome
+                            };
+                        });
+                        u.primeiraEtapa.calendarDates = calDates;
+                    }
+                }
+            } catch (calLookupErr) {
+                console.warn('⚠️ [Calendar] Falha ao enriquecer legadas:', calLookupErr.message);
+            }
+        }
+
         // Filtrar registros que estao na Blacklist
         const blacklist = await getBlacklist();
         const unificadosFiltrados = unificados.filter(u => {
