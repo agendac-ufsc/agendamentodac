@@ -1004,7 +1004,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                             singleEvents: true, orderBy: 'startTime', maxResults: 2500
                         });
                         return (r.data.items || []).filter(e => e.start && (e.start.dateTime || e.start.date));
-                    } catch { return []; }
+                    } catch (err) { return []; }
                 };
                 const [evTeat, evIgrej] = await Promise.all([
                     fetchCal(CALENDAR_IDS.teatro),
