@@ -360,6 +360,7 @@
             </div>
 
             <div class="loading" id="loading">Processando agendamento...</div>
+            <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
             <button type="submit" class="submit" id="submitBtn" disabled>Finalizar Inscrição</button>
             <div class="message" id="message"></div>
         </form>
@@ -804,8 +805,16 @@
                 });
             });
 
+            const hasEvento = confirmedSteps['evento'].length > 0;
+            const submitBtn = document.getElementById('submitBtn');
+            const submitHint = document.getElementById('submitHint');
+
             section.classList.toggle('show', hasConfirmed);
-            document.getElementById('submitBtn').disabled = !hasConfirmed;
+            submitBtn.disabled = !hasEvento;
+
+            if (submitHint) {
+                submitHint.style.display = (hasConfirmed && !hasEvento) ? 'block' : 'none';
+            }
         }
 
         function deleteConfirmedStep(step, index) {

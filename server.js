@@ -642,6 +642,11 @@ app.post('/api/agendar', async (req, res) => {
         if (!nome || !email || !telefone || !evento || !etapas) {
             return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         }
+        const eventoEtapa = etapas.evento;
+        const temEvento = Array.isArray(eventoEtapa) ? eventoEtapa.length > 0 : !!eventoEtapa;
+        if (!temEvento) {
+            return res.status(400).json({ error: 'É obrigatório informar pelo menos uma data de Evento para finalizar a inscrição.' });
+        }
         const localKey = (local || 'teatro').toLowerCase();
 
         // Validar dias da semana se SOMENTE_FINSEMANA estiver ativo (qui=4, sex=5, sáb=6, dom=0)
