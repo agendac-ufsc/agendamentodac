@@ -245,6 +245,19 @@
         </div>
     </div>
 
+    <!-- Modal Confirmação de Dados -->
+    <div class="modal-overlay" id="modalConfirmaDados" style="display:none;">
+        <div class="modal-content" style="max-width:440px;">
+            <h2 style="color:#764ba2;margin-bottom:6px;">Confirmar dados</h2>
+            <p style="color:#333;font-size:16px;font-weight:bold;margin-bottom:18px;">As informações abaixo estão corretas?</p>
+            <div id="modalConfirmaDadosResumo" style="background:#f8f9fa;border-radius:8px;padding:16px;text-align:left;margin-bottom:20px;font-size:14px;line-height:2;color:#333;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-yes" onclick="voltarParaDados()">← Voltar e Revisar</button>
+                <button type="button" class="btn-modal btn-no" onclick="confirmarDadosEProsseguir()">Sim, continuar →</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Adicionar Outro -->
     <div class="modal-overlay" id="modalAddAnother">
         <div class="modal-content">
@@ -364,28 +377,37 @@
         </div>
         <form id="agendamentoForm">
             <input type="hidden" id="localSelecionado" value="teatro">
-            <div class="form-group"><label>Nome Completo *</label><input type="text" id="nome" required></div>
-            <div class="form-group"><label>E-mail *</label><input type="email" id="email" required></div>
-            <div class="form-group"><label>Telefone *</label><input type="tel" id="telefone" required></div>
-            <div class="form-group"><label>Nome do Evento *</label><input type="text" id="evento" required></div>
 
-            <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5;">
-                <strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.
+            <!-- ── FASE 1: Dados do Proponente ── -->
+            <div id="dadosSection">
+                <div class="form-group"><label>Nome Completo *</label><input type="text" id="nome" oninput="checkDadosPreenchidos()" required></div>
+                <div class="form-group"><label>E-mail *</label><input type="email" id="email" oninput="checkDadosPreenchidos()" required></div>
+                <div class="form-group"><label>Telefone *</label><input type="tel" id="telefone" oninput="checkDadosPreenchidos()" required></div>
+                <div class="form-group"><label>Nome do Evento *</label><input type="text" id="evento" oninput="checkDadosPreenchidos()" required></div>
+                <button type="button" id="btnConfirmarDados" class="submit btn-blocked" onclick="abrirModalConfirmaDados()" style="margin-top:8px;">Confirmar Dados e Escolher Datas →</button>
             </div>
 
-            <div class="accordion" id="stepsAccordion">
-                <!-- Etapas Geradas via JS -->
+            <!-- ── FASE 2: Calendário + Envio (oculto até confirmar dados) ── -->
+            <div id="schedulingSection" style="display:none;">
+                <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:13px;display:flex;align-items:center;gap:10px;">
+                    <span style="font-size:18px;">✅</span>
+                    <span>Dados confirmados. Agora escolha as datas e horários abaixo. <button type="button" onclick="voltarParaDados()" style="background:none;border:none;color:#1565c0;cursor:pointer;font-weight:600;padding:0;font-size:13px;text-decoration:underline;">Editar dados</button></span>
+                </div>
+                <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5;">
+                    <strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.
+                </div>
+                <div class="accordion" id="stepsAccordion">
+                    <!-- Etapas Geradas via JS -->
+                </div>
+                <div class="summary-section" id="summarySection">
+                    <h3 style="font-size: 18px; margin-bottom: 15px; color: #333;">Resumo do Cronograma</h3>
+                    <div id="summaryList"></div>
+                </div>
+                <div class="loading" id="loading">Processando agendamento...</div>
+                <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
+                <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar Inscrição</button>
+                <div class="message" id="message"></div>
             </div>
-
-            <div class="summary-section" id="summarySection">
-                <h3 style="font-size: 18px; margin-bottom: 15px; color: #333;">Resumo do Cronograma</h3>
-                <div id="summaryList"></div>
-            </div>
-
-            <div class="loading" id="loading">Processando agendamento...</div>
-            <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
-            <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar Inscrição</button>
-            <div class="message" id="message"></div>
         </form>
     </div>
 
@@ -1077,6 +1099,45 @@
             document.getElementById('mainFormContainer').style.display = 'none';
             document.getElementById('homeContainer').style.display = 'flex';
             document.getElementById('gearMenuWrap').style.display = 'block';
+        }
+
+        // ── FLUXO DE DADOS ──────────────────────────────────
+        function checkDadosPreenchidos() {
+            const ok = ['nome','email','telefone','evento'].every(id => {
+                const el = document.getElementById(id);
+                return el && el.value.trim().length > 0;
+            });
+            const btn = document.getElementById('btnConfirmarDados');
+            if (ok) btn.classList.remove('btn-blocked');
+            else btn.classList.add('btn-blocked');
+        }
+
+        function abrirModalConfirmaDados() {
+            const btn = document.getElementById('btnConfirmarDados');
+            if (btn.classList.contains('btn-blocked')) return;
+            const nome     = document.getElementById('nome').value.trim();
+            const email    = document.getElementById('email').value.trim();
+            const telefone = document.getElementById('telefone').value.trim();
+            const evento   = document.getElementById('evento').value.trim();
+            document.getElementById('modalConfirmaDadosResumo').innerHTML =
+                `<div><strong>Nome:</strong> ${nome}</div>` +
+                `<div><strong>E-mail:</strong> ${email}</div>` +
+                `<div><strong>Telefone:</strong> ${telefone}</div>` +
+                `<div><strong>Nome do Evento:</strong> ${evento}</div>`;
+            document.getElementById('modalConfirmaDados').style.display = 'flex';
+        }
+
+        function confirmarDadosEProsseguir() {
+            document.getElementById('modalConfirmaDados').style.display = 'none';
+            document.getElementById('dadosSection').style.display = 'none';
+            document.getElementById('schedulingSection').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function voltarParaDados() {
+            document.getElementById('modalConfirmaDados').style.display = 'none';
+            document.getElementById('schedulingSection').style.display = 'none';
+            document.getElementById('dadosSection').style.display = 'block';
         }
 
         initAccordion();
