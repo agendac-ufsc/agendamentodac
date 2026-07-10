@@ -252,8 +252,8 @@
             <p style="color:#333;font-size:16px;font-weight:bold;margin-bottom:18px;">As informações abaixo estão corretas?</p>
             <div id="modalConfirmaDadosResumo" style="background:#f8f9fa;border-radius:8px;padding:16px;text-align:left;margin-bottom:20px;font-size:14px;line-height:2;color:#333;"></div>
             <div class="modal-actions">
-                <button type="button" class="btn-modal btn-yes" onclick="voltarParaDados()">← Voltar e Revisar</button>
-                <button type="button" class="btn-modal btn-no" onclick="confirmarDadosEProsseguir()">Sim, continuar →</button>
+                <button type="button" class="btn-modal btn-no" onclick="voltarParaDados()">← Voltar e Revisar</button>
+                <button type="button" class="btn-modal btn-yes" onclick="confirmarDadosEProsseguir()">Sim, continuar →</button>
             </div>
         </div>
     </div>
@@ -389,9 +389,12 @@
 
             <!-- ── FASE 2: Calendário + Envio (oculto até confirmar dados) ── -->
             <div id="schedulingSection" style="display:none;">
-                <div style="background:#e8f5e9;border:1px solid #a5d6a7;border-radius:8px;padding:12px 16px;margin-bottom:18px;font-size:13px;display:flex;align-items:center;gap:10px;">
-                    <span style="font-size:18px;">✅</span>
-                    <span>Dados confirmados. Agora escolha as datas e horários abaixo. <button type="button" onclick="voltarParaDados()" style="background:none;border:none;color:#1565c0;cursor:pointer;font-weight:600;padding:0;font-size:13px;text-decoration:underline;">Editar dados</button></span>
+                <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:14px 18px;margin-bottom:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:13px;font-weight:700;color:#28a745;">✅ Dados confirmados</span>
+                        <button type="button" onclick="voltarParaDados()" style="background:none;border:1px solid #adb5bd;color:#555;cursor:pointer;font-weight:600;padding:4px 12px;font-size:12px;border-radius:6px;">✏️ Editar dados</button>
+                    </div>
+                    <div id="dadosBannerResumo" style="font-size:13px;color:#444;line-height:1.9;"></div>
                 </div>
                 <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5;">
                     <strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.
@@ -1130,6 +1133,15 @@
         function confirmarDadosEProsseguir() {
             document.getElementById('modalConfirmaDados').style.display = 'none';
             document.getElementById('dadosSection').style.display = 'none';
+            const nome     = document.getElementById('nome').value.trim();
+            const email    = document.getElementById('email').value.trim();
+            const telefone = document.getElementById('telefone').value.trim();
+            const evento   = document.getElementById('evento').value.trim();
+            document.getElementById('dadosBannerResumo').innerHTML =
+                `<div><strong>Nome:</strong> ${nome}</div>` +
+                `<div><strong>E-mail:</strong> ${email}</div>` +
+                `<div><strong>Telefone:</strong> ${telefone}</div>` +
+                `<div><strong>Nome do Evento:</strong> ${evento}</div>`;
             document.getElementById('schedulingSection').style.display = 'block';
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
