@@ -100,6 +100,7 @@
             cursor: pointer; transition: transform 0.2s; margin-top: 20px;
         }
         button.submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.submit.btn-blocked { opacity: 0.5; cursor: not-allowed; }
 
         /* Modal & Messages */
         .modal-overlay {
@@ -361,9 +362,7 @@
 
             <div class="loading" id="loading">Processando agendamento...</div>
             <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
-            <div onclick="document.getElementById('submitBtn').disabled && (document.getElementById('submitHint').style.display='block')" style="display:block">
-              <button type="submit" class="submit" id="submitBtn" disabled>Finalizar Inscrição</button>
-            </div>
+            <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar Inscrição</button>
             <div class="message" id="message"></div>
         </form>
     </div>
@@ -812,7 +811,7 @@
             const submitHint = document.getElementById('submitHint');
 
             section.classList.toggle('show', hasConfirmed);
-            submitBtn.disabled = !hasEvento;
+            submitBtn.classList.toggle('btn-blocked', !hasEvento);
 
             if (hasEvento && submitHint) {
                 submitHint.style.display = 'none';
@@ -865,15 +864,20 @@
             finishStepSelection(currentStepContext);
         };
 
-        document.getElementById('agendamentoForm').onsubmit = async (e) => {
-            e.preventDefault();
+        async function handleSubmitClick(e) {
             const submitBtn = document.getElementById('submitBtn');
             const loading = document.getElementById('loading');
             const msg = document.getElementById('message');
-            
+            const submitHint = document.getElementById('submitHint');
+
+            if (submitBtn.classList.contains('btn-blocked')) {
+                submitHint.style.display = 'block';
+                return;
+            }
+
             if (submitBtn.getAttribute('data-submitting') === 'true') return;
             submitBtn.setAttribute('data-submitting', 'true');
-            submitBtn.disabled = true;
+            submitBtn.classList.add('btn-blocked');
             submitBtn.style.opacity = '0.5';
             submitBtn.textContent = 'Enviando...';
             loading.classList.add('show');
@@ -930,11 +934,11 @@
             } finally {
                 loading.classList.remove('show');
                 submitBtn.removeAttribute('data-submitting');
-                submitBtn.disabled = false;
-                submitBtn.style.opacity = '1';
+                submitBtn.classList.remove('btn-blocked');
+                submitBtn.style.opacity = '';
                 submitBtn.textContent = 'Finalizar Inscrição';
             }
-        };
+        }
 
         // ── SELEÇÃO DE LOCAL ──────────────────────────────────
         const locaisNomes = {
