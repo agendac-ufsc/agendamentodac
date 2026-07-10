@@ -74,6 +74,7 @@
         .time-slot.user-busy { background: #d4edda; color: #155724; border-color: #28a745; cursor: not-allowed; font-weight: bold; }
         .time-slot.dispute { background: #fff4cc; color: #856404; border-color: #ffe066; text-decoration: none; }
         .time-slot.dispute:hover { background: #ffe066; }
+        .time-slot.step-conflict { background: #fde8d8; color: #92400e; border-color: #f59e0b; cursor: not-allowed; font-size: 10px; }
 
         /* Step Confirmation Button */
         .btn-confirm-step {
@@ -682,11 +683,33 @@
             const maxTime = parseInt(hLimit.fim.replace(':', ''));
             const maxStartTime = maxTime - 100;
 
+            const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
+            const fromMins = n => Math.floor(n / 60) * 100 + (n % 60);
+
+            // Intervalos já confirmados por OUTRAS etapas desta inscrição no mesmo dia
+            const otherIntervals = steps.filter(s => s !== step).flatMap(s =>
+                confirmedSteps[s]
+                    .filter(conf => conf.date.toISOString().split('T')[0] === dateStr)
+                    .map(conf => ({
+                        start: parseInt(conf.start.replace(':', '')),
+                        end:   parseInt(conf.end.replace(':', '')),
+                        name:  stepNames[s]
+                    }))
+            );
+
+            // Retorna o nome da etapa conflitante, ou null
+            const getStepConflict = (tVal) =>
+                (otherIntervals.find(iv => tVal >= iv.start && tVal < iv.end) || null);
+
+            // Verifica se o intervalo [startVal, endVal) sobrepõe alguma outra etapa
+            const rangeConflicts = (startVal, endVal) =>
+                otherIntervals.some(iv => startVal < iv.end && endVal > iv.start);
+
             for (let h = 0; h <= 23; h++) {
                 for (let m = 0; m < 60; m += 30) {
                     const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
                     const timeVal = parseInt(time.replace(':', ''));
-                    
+
                     if (timeVal < minTime || timeVal > maxTime) continue;
                     if (!sel.start && timeVal > maxStartTime) continue;
 
@@ -698,9 +721,6 @@
                         if (!e.start.includes('T')) return false;
                         const eStart = parseInt(e.start.split('T')[1].substring(0,5).replace(':', ''));
                         const eEnd   = parseInt(e.end.split('T')[1].substring(0,5).replace(':', ''));
-                        // Buffer de 30 min após o término: converte HHMM → minutos, soma 30, volta pra HHMM
-                        const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
-                        const fromMins = m => Math.floor(m / 60) * 100 + (m % 60);
                         const eEndBuf = fromMins(toMins(eEnd) + 30);
                         return timeVal >= eStart && timeVal < eEndBuf;
                     };
@@ -708,7 +728,6 @@
                     const isBusySystem = eventsOnDay.some(e => e.source === 'sistema' && overlaps(e));
 
                     if (isBusyManual) {
-                        // Evento adicionado manualmente no Google Calendar — sempre bloqueado
                         slot.classList.add('busy');
                         slot.title = 'Horário indisponível';
                         container.appendChild(slot);
@@ -726,13 +745,29 @@
                         }
                     }
 
+                    // Bloquear slots ocupados por outras etapas desta inscrição
+                    const stepConflict = getStepConflict(timeVal);
+                    if (stepConflict) {
+                        slot.classList.add('step-conflict');
+                        slot.title = `Reservado: ${stepConflict.name}`;
+                        slot.textContent = `${time} (${stepConflict.name})`;
+                        container.appendChild(slot);
+                        continue;
+                    }
+
                     if (sel.start === time) slot.classList.add('selected');
                     if (sel.end === time) slot.classList.add('selected');
-                    
+
                     if (sel.start && !sel.end) {
                         const sVal = parseInt(sel.start.replace(':', ''));
                         if (timeVal > sVal && timeVal <= maxTime) {
-                            slot.onclick = () => selectTime(step, time);
+                            if (rangeConflicts(sVal, timeVal)) {
+                                slot.style.opacity = '0.3';
+                                slot.style.cursor = 'not-allowed';
+                                slot.title = 'Término aqui criaria sobreposição com outra etapa';
+                            } else {
+                                slot.onclick = () => selectTime(step, time);
+                            }
                         } else {
                             slot.style.opacity = '0.3';
                             slot.style.cursor = 'not-allowed';
