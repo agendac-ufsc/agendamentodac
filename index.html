@@ -361,7 +361,9 @@
 
             <div class="loading" id="loading">Processando agendamento...</div>
             <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
-            <button type="submit" class="submit" id="submitBtn" disabled>Finalizar Inscrição</button>
+            <div onclick="document.getElementById('submitBtn').disabled && (document.getElementById('submitHint').style.display='block')" style="display:block">
+              <button type="submit" class="submit" id="submitBtn" disabled>Finalizar Inscrição</button>
+            </div>
             <div class="message" id="message"></div>
         </form>
     </div>
@@ -812,8 +814,8 @@
             section.classList.toggle('show', hasConfirmed);
             submitBtn.disabled = !hasEvento;
 
-            if (submitHint) {
-                submitHint.style.display = (hasConfirmed && !hasEvento) ? 'block' : 'none';
+            if (hasEvento && submitHint) {
+                submitHint.style.display = 'none';
             }
         }
 
