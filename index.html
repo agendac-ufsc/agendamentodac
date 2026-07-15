@@ -408,7 +408,7 @@
                 </div>
                 <div class="loading" id="loading">Processando agendamento...</div>
                 <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
-                <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar Inscrição</button>
+                <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar 1ª Etapa da Inscrição</button>
                 <div class="message" id="message"></div>
             </div>
         </form>
@@ -1019,7 +1019,7 @@
                 submitBtn.removeAttribute('data-submitting');
                 submitBtn.classList.remove('btn-blocked');
                 submitBtn.style.opacity = '';
-                submitBtn.textContent = 'Finalizar Inscrição';
+                submitBtn.textContent = 'Finalizar 1ª Etapa da Inscrição';
             }
         }
 
