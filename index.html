@@ -712,8 +712,9 @@
             const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
             const fromMins = n => Math.floor(n / 60) * 100 + (n % 60);
 
-            // Intervalos já confirmados por OUTRAS etapas desta inscrição no mesmo dia
-            const otherIntervals = steps.filter(s => s !== step).flatMap(s =>
+            // Intervalos já confirmados por todas as etapas desta inscrição no mesmo dia
+            // Inclui a própria etapa para que slots já confirmados apareçam ao adicionar um segundo
+            const otherIntervals = steps.flatMap(s =>
                 confirmedSteps[s]
                     .filter(conf => conf.date.toISOString().split('T')[0] === dateStr)
                     .map(conf => ({
