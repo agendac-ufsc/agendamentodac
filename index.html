@@ -151,10 +151,6 @@
                         📄 <strong>Documentos:</strong> tenha todos os documentos necessários em mãos antes de começar.<br>
                         <button type="button" onclick="abrirModalDocumentos()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">📋 Ver lista de documentos necessários</button>
                     </li>
-                    <li style="margin-top:4px">
-                        💰 <strong>Taxa de locação:</strong> verifique se o seu evento está sujeito ao pagamento.<br>
-                        <button type="button" onclick="abrirModalTaxaLocacao()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">💰 Ver informações sobre a taxa de locação</button>
-                    </li>
                 </ul>
             </div>
             <p style="font-size:13px; color:#888; margin-bottom:24px;">Você está pronto(a) para iniciar?</p>
@@ -245,26 +241,6 @@
 
             <div style="margin-top:24px; text-align:center;">
                 <button type="button" onclick="fecharModalDocumentos()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="modalTaxaLocacao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10000; align-items:center; justify-content:center; padding:20px;">
-        <div style="background:#fff; border-radius:16px; max-width:480px; width:100%; padding:32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h2 style="color:#333; font-size:18px; margin:0;">💰 Taxa de Locação dos Espaços do DAC</h2>
-                <button type="button" onclick="fecharModalTaxaLocacao()" style="background:#eee; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:14px; color:#555;">✕ Fechar</button>
-            </div>
-            <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:10px; padding:18px 20px; margin-bottom:20px;">
-                <p style="margin:0 0 10px; font-size:14px; color:#92400e; line-height:1.7;">
-                    Eventos com cobrança de ingresso estão sujeitos ao pagamento da taxa de locação dos espaços do DAC, inclusive pelos turnos destinados a <strong>ensaios, montagem e desmontagem</strong>.
-                </p>
-                <p style="margin:0; font-size:14px; color:#92400e; line-height:1.7;">
-                    Os valores de locação estão disponíveis no <strong>item 11 do edital</strong>.
-                </p>
-            </div>
-            <div style="margin-top:24px; text-align:center;">
-                <button type="button" onclick="fecharModalTaxaLocacao()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
             </div>
         </div>
     </div>
@@ -440,7 +416,7 @@
 
     <script>
         const stepNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-        const steps = ['evento', 'ensaio', 'montagem', 'desmontagem'];
+        const steps = Object.keys(stepNames);
         const selections = {};
         const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
         let currentStepContext = null;
@@ -572,7 +548,7 @@
             const accordion = document.getElementById('stepsAccordion');
             steps.forEach(s => {
                 const item = document.createElement('div');
-                item.className = 'accordion-item' + (s !== 'evento' ? ' disabled' : '');
+                item.className = 'accordion-item' + (s === 'desmontagem' ? ' disabled' : '');
                 item.setAttribute('data-step', s);
                 item.innerHTML = `
                     <div class="accordion-header" onclick="toggleStep('${s}')">
@@ -596,7 +572,7 @@
         }
 
         function toggleStep(step) {
-            if (step !== 'evento' && confirmedSteps.evento.length === 0) return;
+            if (step === 'desmontagem' && confirmedSteps.evento.length === 0) return;
 
             steps.forEach(s => {
                 const content = document.getElementById(`content-${s}`);
@@ -651,23 +627,9 @@
                 const minDate = dataInicioEdital ? new Date(dataInicioEdital + 'T00:00:00') : today;
                 const limiteMin = minDate > today ? minDate : today;
                 const diasSemana = date.getDay(); // 0=Dom,1=Seg,2=Ter,3=Qua,4=Qui,5=Sex,6=Sáb
-                // somenteFinaisDeSemana NÃO se aplica ao Ensaio (ele tem regra própria de dias)
-                const diaPermitido = step === 'ensaio' || !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
-
-                // Ensaio: só seg-sex, exceto se houver evento confirmado neste mesmo dia
-                let bloqueadoParaEnsaio = false;
-                if (step === 'ensaio') {
-                    const isWeekend = diasSemana === 0 || diasSemana === 6;
-                    if (isWeekend) {
-                        const dateStrEns = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-                        const temEventoNoDia = confirmedSteps.evento.some(conf =>
-                            conf.date.toISOString().split('T')[0] === dateStrEns
-                        );
-                        if (!temEventoNoDia) bloqueadoParaEnsaio = true;
-                    }
-                }
-
-                if (date < limiteMin || !diaPermitido || bloqueadoParaEnsaio) {
+                const diaPermitido = !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
+                
+                if (date < limiteMin || !diaPermitido) {
                     d.classList.add('other-month');
                 } else {
                     const dateStr = date.toISOString().split('T')[0];
@@ -744,14 +706,7 @@
 
             const hLimit = horariosLimites[step] || { fim: '21:00' };
             const minTime = 800;
-            // Ensaio em dia sem evento do mesmo proponente: limite fixo de 17h independente do config
-            let maxTime = parseInt(hLimit.fim.replace(':', ''));
-            if (step === 'ensaio') {
-                const temEventoNoDia = confirmedSteps.evento.some(conf =>
-                    conf.date.toISOString().split('T')[0] === dateStr
-                );
-                if (!temEventoNoDia) maxTime = Math.min(maxTime, 1700);
-            }
+            const maxTime = parseInt(hLimit.fim.replace(':', ''));
             const maxStartTime = maxTime - 100;
 
             const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
@@ -904,9 +859,7 @@
             selections[step].end = null;
 
             if (step === 'evento') {
-                ['ensaio', 'montagem', 'desmontagem'].forEach(s => {
-                    document.querySelector(`.accordion-item[data-step="${s}"]`).classList.remove('disabled');
-                });
+                document.querySelector('.accordion-item[data-step="desmontagem"]').classList.remove('disabled');
             }
 
             toggleStep(null);
@@ -953,11 +906,9 @@
             if (confirmedSteps[step].length === 0) {
                 document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.remove('completed');
                 if (step === 'evento') {
-                    ['ensaio', 'montagem', 'desmontagem'].forEach(s => {
-                        document.querySelector(`.accordion-item[data-step="${s}"]`).classList.add('disabled');
-                        confirmedSteps[s] = [];
-                        document.querySelector(`.accordion-item[data-step="${s}"] .accordion-header`).classList.remove('completed');
-                    });
+                    document.querySelector('.accordion-item[data-step="desmontagem"]').classList.add('disabled');
+                    confirmedSteps.desmontagem = [];
+                    document.querySelector('.accordion-item[data-step="desmontagem"] .accordion-header').classList.remove('completed');
                 }
             }
             updateSummary();
@@ -1096,14 +1047,6 @@
 
         function fecharModalDocumentos() {
             document.getElementById('modalDocumentos').style.display = 'none';
-        }
-
-        function abrirModalTaxaLocacao() {
-            document.getElementById('modalTaxaLocacao').style.display = 'flex';
-        }
-
-        function fecharModalTaxaLocacao() {
-            document.getElementById('modalTaxaLocacao').style.display = 'none';
         }
 
         function confirmarContinuar() {
