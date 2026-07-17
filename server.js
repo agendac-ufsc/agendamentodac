@@ -450,7 +450,7 @@ const saveConfigs = async (configs) => {
 };
 
 // Carregar configurações iniciais
-getConfigs('startup');
+getConfigs('startup').catch(err => console.error('❌ [startup] Erro ao carregar configs:', err.message));
 
 const createCalendarEvent = async (summary, description, date, timeRange, calendarId = CALENDAR_IDS.teatro) => {
     if (!googleAuthClient) await initGoogleAuth();
