@@ -627,7 +627,8 @@
                 const minDate = dataInicioEdital ? new Date(dataInicioEdital + 'T00:00:00') : today;
                 const limiteMin = minDate > today ? minDate : today;
                 const diasSemana = date.getDay(); // 0=Dom,1=Seg,2=Ter,3=Qua,4=Qui,5=Sex,6=Sáb
-                const diaPermitido = !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
+                // somenteFinaisDeSemana NÃO se aplica ao Ensaio (ele tem regra própria de dias)
+                const diaPermitido = step === 'ensaio' || !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
 
                 // Ensaio: só seg-sex, exceto se houver evento confirmado neste mesmo dia
                 let bloqueadoParaEnsaio = false;
