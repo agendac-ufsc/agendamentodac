@@ -1,4 +1,13 @@
 require('dotenv').config();
+
+// Captura qualquer crash antes de chegar nos handlers — crítico para serverless
+process.on('uncaughtException', (err) => {
+    console.error('❌ [process] uncaughtException:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ [process] unhandledRejection:', reason);
+});
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -260,7 +269,7 @@ const initGoogleAuth = async () => {
     }
 };
 
-initGoogleAuth();
+initGoogleAuth().catch(err => console.error('❌ [initGoogleAuth] Falha na inicialização:', err.message));
 
 const calendar = google.calendar({ version: 'v3' });
 const sheets = google.sheets({ version: 'v4' });
