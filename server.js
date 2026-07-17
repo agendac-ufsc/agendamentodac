@@ -1829,6 +1829,64 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
 
                 console.log(`✅ [Exclusão Geral] Concluído: ${eventosDeletedos} eventos removidos dos calendários, ${agendamentos.length} registros removidos do banco de dados`);
                 console.log(`🚨 [AUDITORIA] [Exclusão Geral] FINALIZADA com sucesso (disparo: ${auditTimestamp}, IP: ${auditIp}, eventos: ${eventosDeletedos}, falhas: ${eventosFalhos}, inscrições: ${agendamentos.length})`);
+
+                // Notificar admin por e-mail (falha aqui não afeta a operação principal)
+                try {
+                    const adminEmailRaw = process.env.ADMIN_EMAIL;
+                    const adminEmails = adminEmailRaw
+                        ? adminEmailRaw.split(/[,;]/).map(e => e.trim()).filter(Boolean)
+                        : [];
+                    if (adminEmails.length > 0) {
+                        const dataHoraBr = new Date(auditTimestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+                        const resultado = await sendEmail(
+                            adminEmails,
+                            '🚨 [DAC/UFSC] Exclusão Geral de Inscrições Executada',
+                            `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                                <h2 style="color: #c0392b; margin-top: 0;">⚠️ Exclusão Geral de Inscrições</h2>
+                                <p>A operação <strong>"Excluir Tudo"</strong> foi executada com sucesso no sistema de agendamento DAC/UFSC.</p>
+                                <hr style="border: 0; border-top: 1px solid #eee; margin: 16px 0;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                                    <tr style="background: #f8f8f8;">
+                                        <td style="padding: 8px 12px; font-weight: bold; width: 40%;">Data/Hora (Brasília)</td>
+                                        <td style="padding: 8px 12px;">${dataHoraBr}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 12px; font-weight: bold;">IP de Origem</td>
+                                        <td style="padding: 8px 12px; font-family: monospace;">${auditIp}</td>
+                                    </tr>
+                                    <tr style="background: #f8f8f8;">
+                                        <td style="padding: 8px 12px; font-weight: bold;">User-Agent</td>
+                                        <td style="padding: 8px 12px; font-size: 12px; word-break: break-all;">${auditUserAgent}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 12px; font-weight: bold;">Inscrições removidas</td>
+                                        <td style="padding: 8px 12px;">${agendamentos.length}</td>
+                                    </tr>
+                                    <tr style="background: #f8f8f8;">
+                                        <td style="padding: 8px 12px; font-weight: bold;">Eventos do calendário deletados</td>
+                                        <td style="padding: 8px 12px;">${eventosDeletedos}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="padding: 8px 12px; font-weight: bold;">Falhas na exclusão de eventos</td>
+                                        <td style="padding: 8px 12px; color: ${eventosFalhos > 0 ? '#c0392b' : '#27ae60'};">${eventosFalhos}</td>
+                                    </tr>
+                                </table>
+                                <hr style="border: 0; border-top: 1px solid #eee; margin: 16px 0;">
+                                <p style="font-size: 13px; color: #777;">Se você não reconhece esta ação, altere a senha do painel administrativo imediatamente.</p>
+                                <p style="margin-bottom: 0;">Atenciosamente,<br><strong>Sistema DAC/UFSC</strong></p>
+                            </div>`
+                        );
+                        if (resultado) {
+                            console.log(`📧 [AUDITORIA] E-mail de notificação enviado ao(s) admin(s): ${adminEmails.join(', ')}`);
+                        } else {
+                            console.error(`⚠️ [AUDITORIA] Falha ao enviar e-mail de notificação ao(s) admin(s): sendEmail retornou null (verificar BREVO_API_KEY e logs anteriores)`);
+                        }
+                    } else {
+                        console.warn('⚠️ [AUDITORIA] ADMIN_EMAIL não configurado — e-mail de notificação não enviado');
+                    }
+                } catch (emailErr) {
+                    console.error('⚠️ [AUDITORIA] Falha ao enviar e-mail de notificação ao admin:', emailErr.message);
+                }
             } catch (error) {
                 console.error('❌ Erro na exclusão geral em segundo plano:', error.message);
             }
