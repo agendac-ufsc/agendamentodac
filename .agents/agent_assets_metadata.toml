@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "Nz_8zjVstMCb81e5wtkIx"
+uri = "file://.local/RELATORIO_TASK_2.md"
+type = "text"
+title = "Relatório — Eventos do Teatro não recuperados (Task #2)"
