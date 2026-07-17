@@ -151,9 +151,9 @@
                         📄 <strong>Documentos:</strong> tenha todos os documentos necessários em mãos antes de começar.<br>
                         <button type="button" onclick="abrirModalDocumentos()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">📋 Ver lista de documentos necessários</button>
                     </li>
-                    <li style="margin-top:10px">
-                        💰 <strong>Taxa de locação dos espaços do DAC:</strong><br>
-                        <span style="font-size:13px; color:#555; line-height:1.6">Eventos com cobrança de ingresso estão sujeitos ao pagamento da taxa de locação dos espaços do DAC, inclusive pelos turnos destinados a ensaios, montagem e desmontagem.<br>Os valores de locação estão disponíveis no item 11 do edital.</span>
+                    <li style="margin-top:4px">
+                        💰 <strong>Taxa de locação:</strong> verifique se o seu evento está sujeito ao pagamento.<br>
+                        <button type="button" onclick="abrirModalTaxaLocacao()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">💰 Ver informações sobre a taxa de locação</button>
                     </li>
                 </ul>
             </div>
@@ -245,6 +245,26 @@
 
             <div style="margin-top:24px; text-align:center;">
                 <button type="button" onclick="fecharModalDocumentos()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalTaxaLocacao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:#fff; border-radius:16px; max-width:480px; width:100%; padding:32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#333; font-size:18px; margin:0;">💰 Taxa de Locação dos Espaços do DAC</h2>
+                <button type="button" onclick="fecharModalTaxaLocacao()" style="background:#eee; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:14px; color:#555;">✕ Fechar</button>
+            </div>
+            <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:10px; padding:18px 20px; margin-bottom:20px;">
+                <p style="margin:0 0 10px; font-size:14px; color:#92400e; line-height:1.7;">
+                    Eventos com cobrança de ingresso estão sujeitos ao pagamento da taxa de locação dos espaços do DAC, inclusive pelos turnos destinados a <strong>ensaios, montagem e desmontagem</strong>.
+                </p>
+                <p style="margin:0; font-size:14px; color:#92400e; line-height:1.7;">
+                    Os valores de locação estão disponíveis no <strong>item 11 do edital</strong>.
+                </p>
+            </div>
+            <div style="margin-top:24px; text-align:center;">
+                <button type="button" onclick="fecharModalTaxaLocacao()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
             </div>
         </div>
     </div>
@@ -1076,6 +1096,14 @@
 
         function fecharModalDocumentos() {
             document.getElementById('modalDocumentos').style.display = 'none';
+        }
+
+        function abrirModalTaxaLocacao() {
+            document.getElementById('modalTaxaLocacao').style.display = 'flex';
+        }
+
+        function fecharModalTaxaLocacao() {
+            document.getElementById('modalTaxaLocacao').style.display = 'none';
         }
 
         function confirmarContinuar() {
