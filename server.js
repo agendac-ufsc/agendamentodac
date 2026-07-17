@@ -1882,5 +1882,9 @@ app.post('/api/enviar-links-termo', async (req, res) => {
     res.json({ success: true, enviados, erros, naoEncontrados, detalhes, total: emails.length });
 });
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando em http://localhost:${PORT}`));
+module.exports = app;
+
+if (require.main === module) {
+    const PORT = process.env.PORT || 5000;
+    app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando em http://localhost:${PORT}`));
+}
