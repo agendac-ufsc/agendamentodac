@@ -720,7 +720,14 @@
 
             const hLimit = horariosLimites[step] || { fim: '21:00' };
             const minTime = 800;
-            const maxTime = parseInt(hLimit.fim.replace(':', ''));
+            // Ensaio em dia sem evento do mesmo proponente: limite fixo de 17h independente do config
+            let maxTime = parseInt(hLimit.fim.replace(':', ''));
+            if (step === 'ensaio') {
+                const temEventoNoDia = confirmedSteps.evento.some(conf =>
+                    conf.date.toISOString().split('T')[0] === dateStr
+                );
+                if (!temEventoNoDia) maxTime = Math.min(maxTime, 1700);
+            }
             const maxStartTime = maxTime - 100;
 
             const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
