@@ -26,12 +26,12 @@
   @media (max-width: 640px) { .row, .row-3 { grid-template-columns: 1fr; } }
   label { display: block; font-size: 12px; font-weight: 600; color: #4b5563; margin-bottom: 4px; }
   .req { color: #ef4444; }
-  input[type="text"], textarea {
+  input[type="text"], input[type="email"], textarea {
     width: 100%; padding: 9px 11px; font-size: 14px; color: #111827;
     border: 1px solid #d1d5db; border-radius: 6px; background: #fff;
     transition: border-color .15s, box-shadow .15s; font-family: inherit;
   }
-  input[type="text"]:focus, textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
+  input[type="text"]:focus, input[type="email"]:focus, textarea:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37,99,235,.15); }
   textarea { resize: vertical; min-height: 60px; }
   .field { margin-bottom: 14px; }
   .pillrow { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -76,6 +76,16 @@
   .progress strong { color: #2563eb; }
   .progress.complete { color: #15803d; background: #f0fdf4; border-top-color: #bbf7d0; }
   .progress.complete strong { color: #15803d; }
+  .final-authorization {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    color: #374151; font-size: 13px; line-height: 1.55;
+  }
+  .final-authorization input {
+    width: 19px; height: 19px; margin: 1px 0 0; accent-color: #16a34a;
+    flex-shrink: 0; cursor: pointer;
+  }
+  .final-authorization input:disabled { cursor: not-allowed; }
+  .final-authorization strong { color: #111827; }
   .actions { display: flex; gap: 10px; }
   .btn {
     flex: 1; padding: 11px 22px; border-radius: 6px; border: none; cursor: pointer;
@@ -88,6 +98,10 @@
   .btn-primary:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
   .btn-ghost { background: #f3f4f6; color: #374151; }
   .btn-ghost:hover { background: #e5e7eb; }
+  .btn-email { background: #16a34a; color: #fff; }
+  .btn-email:hover:not(:disabled) { background: #15803d; }
+  .btn-email:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+  @media (max-width: 560px) { .actions { flex-direction: column; } }
   .err { color: #ef4444; font-size: 12px; margin-top: 4px; }
   .err-input { border-color: #fca5a5 !important; background: #fef2f2; }
   .loading, .error-state {
@@ -176,6 +190,7 @@
         <div class="field"><label for="cpfCnpj">CPF/CNPJ <span class="req">*</span></label><input type="text" id="cpfCnpj" placeholder="123.456.789-00"></div>
         <div class="field"><label for="rg">RG <span class="req">*</span></label><input type="text" id="rg" placeholder="2.662.359"></div>
         <div class="field"><label for="telefone">Telefone <span class="req">*</span></label><input type="text" id="telefone" placeholder="(48) 99999-9999"></div>
+        <div class="field"><label for="email">E-mail <span class="req">*</span></label><input type="email" id="email" placeholder="proponente@email.com"></div>
       </div>
       <div class="row-3">
         <div class="field"><label for="endereco">Endereço <span class="req">*</span></label><input type="text" id="endereco" placeholder="Rua / Avenida"></div>
@@ -201,15 +216,28 @@
     </div>
   </div>
 
+  <div class="card">
+    <div class="card-body">
+      <label class="final-authorization" for="confirmacaoFinal">
+        <input type="checkbox" id="confirmacaoFinal" disabled onchange="atualizarAutorizacaoFinal()">
+        <span>
+          <strong>Declaração final de ciência e concordância</strong><br>
+          Declaro que li integralmente este termo, estou ciente de todas as suas cláusulas,
+          confirmo que os dados informados são verdadeiros e concordo com as condições aqui estabelecidas.
+        </span>
+      </label>
+    </div>
+  </div>
+
   <!-- Buttons -->
   <div class="card">
     <div class="card-body">
       <div class="actions">
+        <button type="button" id="btnEnviarPDF" class="btn btn-email" disabled onclick="enviarPDF()">
+          ✉ Enviar PDF para o e-mail
+        </button>
         <button type="button" id="btnPDF" class="btn btn-primary" disabled onclick="gerarPDF()">
           ⬇ Gerar PDF do Termo Assinado
-        </button>
-        <button type="button" class="btn btn-ghost" onclick="if(confirm('Limpar todos os campos preenchidos manualmente?')) limparCampos()">
-          Limpar Manuais
         </button>
       </div>
     </div>
@@ -413,13 +441,15 @@ function updateProgress() {
   const bar = $('progressBar');
   if (n === CLAUSULAS.length) {
     bar.classList.add('complete');
-    bar.innerHTML = '✓ Todas as cláusulas aprovadas — <strong>você pode gerar o PDF</strong>';
-    $('btnPDF').disabled = false;
+    bar.innerHTML = '✓ Todas as cláusulas aprovadas — <strong>confirme a declaração final abaixo para liberar as ações</strong>';
+    $('confirmacaoFinal').disabled = false;
   } else {
     bar.classList.remove('complete');
-    bar.innerHTML = `Cláusulas aprovadas: <strong><span id="progNum">${n}</span> de ${CLAUSULAS.length}</strong> — o botão de gerar PDF será liberado após aprovar todas.`;
-    $('btnPDF').disabled = true;
+    bar.innerHTML = `Cláusulas aprovadas: <strong><span id="progNum">${n}</span> de ${CLAUSULAS.length}</strong> — as ações serão liberadas após aprovar todas e confirmar a declaração final.`;
+    $('confirmacaoFinal').checked = false;
+    $('confirmacaoFinal').disabled = true;
   }
+  atualizarBotoes();
 }
 
 // === CARREGAR INSCRIÇÃO ===
@@ -444,6 +474,7 @@ async function carregarInscricao() {
     const data = await r.json();
 
     $('nomeCompleto').value = data.nome || '';
+    $('email').value = data.email || '';
     $('telefone').value = data.telefone || '';
     $('nomeEvento').value = data.evento || '';
     $('dataHorarioEvento').value = data.dataHorarioEvento || '';
@@ -469,8 +500,10 @@ async function carregarInscricao() {
 
 function limparCampos() {
   ['cpfCnpj','rg','endereco','numero','apartamento','bairro','cidade','outrasInformacoes'].forEach(id => $(id).value = '');
+  $('email').value = '';
   state.clausulasAuth = CLAUSULAS.map(() => false);
   state.clausulasOpen = CLAUSULAS.map(() => false);
+  $('confirmacaoFinal').checked = false;
   renderClausulas();
   showToast('Campos manuais limpos.');
 }
@@ -487,6 +520,7 @@ function coletarForm() {
     cpfCnpj: $('cpfCnpj').value.trim(),
     rg: $('rg').value.trim(),
     telefone: $('telefone').value.trim(),
+    email: $('email').value.trim(),
     endereco: $('endereco').value.trim(),
     numero: $('numero').value.trim(),
     apartamento: $('apartamento').value.trim(),
@@ -496,7 +530,7 @@ function coletarForm() {
 }
 
 function validar(f) {
-  const obrig = ['nomeEvento','dataHorarioEvento','nomeCompleto','cpfCnpj','rg','telefone','endereco','numero','bairro','cidade'];
+  const obrig = ['nomeEvento','dataHorarioEvento','nomeCompleto','cpfCnpj','rg','telefone','email','endereco','numero','bairro','cidade'];
   let firstErr = null;
   document.querySelectorAll('.err-input').forEach(el => el.classList.remove('err-input'));
   for (const k of obrig) {
@@ -513,6 +547,11 @@ function validar(f) {
   } else {
     $('errEspaco').style.display = 'none';
   }
+  if (f.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email)) {
+    const emailEl = $('email');
+    emailEl.classList.add('err-input');
+    if (!firstErr) firstErr = emailEl;
+  }
   if (firstErr) {
     firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
     showToast('Preencha todos os campos obrigatórios.', 'error');
@@ -521,12 +560,26 @@ function validar(f) {
   return true;
 }
 
+function termoPronto() {
+  return state.clausulasAuth.every(Boolean) && $('confirmacaoFinal').checked;
+}
+
+function atualizarAutorizacaoFinal() {
+  atualizarBotoes();
+}
+
+function atualizarBotoes() {
+  const pronto = termoPronto();
+  $('btnPDF').disabled = !pronto;
+  $('btnEnviarPDF').disabled = !pronto;
+}
+
 // === GERAÇÃO DE PDF (estilo do modelo oficial) ===
-function gerarPDF() {
+function criarPDF() {
   const f = coletarForm();
   if (!validar(f)) return;
-  if (!state.clausulasAuth.every(Boolean)) {
-    showToast('Aprove todas as 9 cláusulas antes de gerar o PDF.', 'error');
+  if (!termoPronto()) {
+    showToast('Aprove todas as cláusulas e confirme a declaração final antes de continuar.', 'error');
     return;
   }
 
@@ -689,6 +742,8 @@ function gerarPDF() {
     { text: f.bairro, bold: true },
     { text: ', Telefone', bold: false },
     { text: f.telefone, bold: true },
+     { text: ', e-mail', bold: false },
+     { text: f.email, bold: true },
     { text: ', na cidade de', bold: false },
     { text: f.cidade, bold: true },
     { text: ', doravante denominado(a) AUTORIZADO(A), mediante as seguintes cláusulas:', bold: false }
@@ -712,6 +767,18 @@ function gerarPDF() {
       y += 1;
     });
   });
+
+   // === DECLARAÇÃO FINAL DE CIÊNCIA ===
+   const declaracao = 'Declaro que li integralmente este Termo de Autorização, estou ciente de todas as suas cláusulas e condições, confirmo a veracidade dos dados informados e concordo com o presente instrumento.';
+   pageBreak(24);
+   y += 6;
+   doc.setFontSize(9); doc.setFont('helvetica', 'bold');
+   doc.text('DECLARAÇÃO DE CIÊNCIA E CONCORDÂNCIA:', margin, y);
+   y += 5;
+   doc.setFont('helvetica', 'normal');
+   const declaracaoLines = doc.splitTextToSize(declaracao, contentW);
+   doc.text(declaracaoLines, margin, y);
+   y += declaracaoLines.length * 4 + 4;
 
   // === DATA E ASSINATURAS ===
   pageBreak(50);
@@ -748,8 +815,53 @@ function gerarPDF() {
   }
 
   const safeName = (f.nomeCompleto || 'termo').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
-  doc.save(`Termo_DAC_2026_${safeName}.pdf`);
-  showToast('PDF gerado com sucesso!', 'success');
+   return {
+     doc,
+     form: f,
+     fileName: `Termo_DAC_2026_${safeName}.pdf`
+   };
+ }
+
+ function gerarPDF() {
+   const pdf = criarPDF();
+   if (!pdf) return;
+   pdf.doc.save(pdf.fileName);
+   showToast('PDF gerado com sucesso!', 'success');
+ }
+
+ async function enviarPDF() {
+   const pdf = criarPDF();
+   if (!pdf) return;
+
+   const btn = $('btnEnviarPDF');
+   const textoOriginal = btn.innerHTML;
+   btn.disabled = true;
+   btn.innerHTML = '⏳ Enviando PDF...';
+
+   try {
+     const dataUri = pdf.doc.output('datauristring');
+     const pdfBase64 = dataUri.split(',')[1];
+     const response = await fetch('/api/enviar-termo-assinado', {
+       method: 'POST',
+       headers: { 'Content-Type': 'application/json' },
+       body: JSON.stringify({
+         id: state.inscricaoId,
+         email: pdf.form.email,
+         nome: pdf.form.nomeCompleto,
+         evento: pdf.form.nomeEvento,
+         fileName: pdf.fileName,
+         pdfBase64
+       })
+     });
+     const result = await response.json().catch(() => ({}));
+     if (!response.ok) throw new Error(result.error || 'Não foi possível enviar o PDF.');
+     showToast('PDF enviado ao proponente e ao DAC.', 'success');
+   } catch (e) {
+     showToast('Erro ao enviar o PDF: ' + e.message, 'error');
+   } finally {
+     btn.innerHTML = textoOriginal;
+     atualizarBotoes();
+   }
 }
 
 // === INIT ===

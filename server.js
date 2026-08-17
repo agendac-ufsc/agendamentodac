@@ -17,7 +17,8 @@ const { Redis } = require('@upstash/redis');
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+// O termo assinado é enviado como PDF em base64; manter margem suficiente para o anexo.
+app.use(express.json({ limit: '10mb' }));
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
 app.use(express.static(path.join(__dirname)));
 
@@ -644,6 +645,13 @@ const sendEmail = async (to, subject, htmlContent) => {
         return null;
     }
 };
+
+const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 
 app.post('/api/agendar', async (req, res) => {
     try {
@@ -1795,6 +1803,101 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
     }
 
     res.json({ success: true, enviados, erros, total: inscricoes.length });
+});
+
+// ============================================================
+// T005b — ENVIO DO TERMO ASSINADO EM PDF
+// ============================================================
+
+app.post('/api/enviar-termo-assinado', async (req, res) => {
+    const { id, email, nome, evento, fileName, pdfBase64 } = req.body || {};
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
+    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+
+    if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+        return res.status(400).json({ error: 'Informe um e-mail válido para o envio.' });
+    }
+    if (!pdfBase64 || typeof pdfBase64 !== 'string') {
+        return res.status(400).json({ error: 'O PDF assinado não foi recebido.' });
+    }
+    if (!apiKey) {
+        return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
+    }
+
+    // Quando o termo veio de uma inscrição, o destinatário deve ser o e-mail original.
+    if (id) {
+        const inscricoes = await getAgendamentos();
+        const inscricao = inscricoes.find(item => String(item.id) === String(id));
+        if (!inscricao) {
+            return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        }
+        const emailOriginal = String(inscricao.email || '').trim().toLowerCase();
+        if (emailOriginal && emailOriginal !== normalizedEmail) {
+            return res.status(400).json({ error: 'O e-mail informado não corresponde ao e-mail da inscrição.' });
+        }
+    }
+
+    const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '').replace(/\s/g, '');
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(cleanBase64)) {
+        return res.status(400).json({ error: 'Formato do PDF inválido.' });
+    }
+
+    const pdfBuffer = Buffer.from(cleanBase64, 'base64');
+    if (pdfBuffer.length === 0 || pdfBuffer.length > 8 * 1024 * 1024) {
+        return res.status(400).json({ error: 'O PDF precisa ter entre 1 byte e 8 MB.' });
+    }
+
+    const safeFileName = String(fileName || 'Termo_DAC_2026.pdf')
+        .replace(/[^a-zA-Z0-9_.-]/g, '_')
+        .slice(0, 180) || 'Termo_DAC_2026.pdf';
+    const nomeSeguro = escapeHtml(nome || 'Proponente');
+    const eventoSeguro = escapeHtml(evento || 'Seu projeto');
+
+    const htmlContent = `
+    <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+            <h2 style="margin:0;color:#fff;font-size:19px">Termo de Autorização Assinado</h2>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
+        </div>
+        <div style="padding:26px 28px">
+            <p style="font-size:15px">Olá, <strong>${nomeSeguro}</strong>!</p>
+            <p style="font-size:14px;color:#555;line-height:1.7">
+                Conforme sua autorização, segue em anexo o PDF do Termo de Autorização assinado digitalmente
+                referente ao evento <strong>${eventoSeguro}</strong>.
+            </p>
+            <p style="font-size:13px;color:#666">O mesmo documento foi encaminhado ao DAC para registro.</p>
+            <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato com
+                <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>.
+            </p>
+            <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+            <p style="font-size:11px;color:#aaa">
+                UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+            </p>
+        </div>
+    </div>`;
+
+    try {
+        await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: { name: 'DAC - UFSC', email: senderEmail },
+            to: [{ email: normalizedEmail, name: nome || normalizedEmail }],
+            cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
+            replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
+            subject: `📄 Termo Assinado — ${evento || 'Projeto DAC'} — DAC/UFSC`,
+            htmlContent,
+            attachment: [{
+                content: pdfBuffer.toString('base64'),
+                name: safeFileName
+            }]
+        }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+
+        console.log(`✅ Termo assinado enviado para ${normalizedEmail} com cópia para o DAC`);
+        res.json({ success: true });
+    } catch (e) {
+        console.error(`❌ Erro ao enviar termo assinado para ${normalizedEmail}:`, e.response?.data || e.message);
+        res.status(500).json({ error: e.response?.data?.message || 'Não foi possível enviar o PDF por e-mail.' });
+    }
 });
 
 app.post('/api/enviar-links-termo', async (req, res) => {
