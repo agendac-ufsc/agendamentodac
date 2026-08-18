@@ -928,10 +928,6 @@ function toggleCheckAll() {
 async function abrirTermoDigital(idx) {
     const p = allUnificados[idx]?.primeiraEtapa;
     if (!p || !p.id) { alert('Inscrição sem identificador — não é possível gerar o link.'); return; }
-    if (String(p.id).startsWith('forms_')) {
-        alert('Esta inscrição é apenas do Forms (sem registro da primeira etapa). O termo digital usa os dados da inscrição feita no site.');
-        return;
-    }
     if (!p.email) { alert('Esta inscrição não possui e-mail para receber o link.'); return; }
 
     const termoUrl = `${window.location.origin}/termo?id=${encodeURIComponent(p.id)}`;
@@ -966,10 +962,6 @@ async function abrirTermoDigital(idx) {
 async function copiarLinkTermo(idx) {
     const p = allUnificados[idx]?.primeiraEtapa;
     if (!p || !p.id) { alert('Inscrição sem identificador.'); return; }
-    if (String(p.id).startsWith('forms_')) {
-        alert('Esta inscrição é apenas do Forms — sem dados completos pra gerar termo digital.');
-        return;
-    }
     const url = `${window.location.origin}/termo?id=${encodeURIComponent(p.id)}`;
     try {
         await navigator.clipboard.writeText(url);

@@ -760,13 +760,174 @@ app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html'))
 app.get('/avaliador', (req, res) => res.sendFile(path.join(__dirname, 'avaliador.html')));
 app.get('/termo', (req, res) => res.sendFile(path.join(__dirname, 'termo.html')));
 
+async function buscarDatasCalendarioLegada(nomeEvento) {
+    if (!nomeEvento) return [];
+    try {
+        if (!googleAuthClient) await initGoogleAuth();
+        const agora = new Date();
+        const tMin = new Date(agora.getFullYear() - 1, 0, 1).toISOString();
+        const tMax = new Date(agora.getFullYear() + 3, 11, 31).toISOString();
+        const buscar = async (calendarId, local) => {
+            try {
+                const r = await calendar.events.list({
+                    auth: googleAuthClient, calendarId, timeMin: tMin, timeMax: tMax,
+                    singleEvents: true, orderBy: 'startTime', maxResults: 2500
+                });
+                return (r.data.items || [])
+                    .filter(e => e.start && (e.start.dateTime || e.start.date))
+                    .map(e => ({ ...e, _calNome: local }));
+            } catch { return []; }
+        };
+        const eventos = [
+            ...(await buscar(CALENDAR_IDS.teatro, 'Teatro Carmen Fossari')),
+            ...(await buscar(CALENDAR_IDS.igrejinha, 'Igrejinha da UFSC'))
+        ];
+        const normalizar = s => (s || '').toLowerCase()
+            .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+        const palavras = normalizar(nomeEvento).split(' ').filter(w => w.length >= 3);
+        const palavrasLongas = palavras.filter(w => w.length >= 7);
+        const alvo = new Set(palavras);
+        const matches = eventos.filter(e => {
+            const titulo = new Set(normalizar(e.summary).split(' ').filter(w => w.length >= 3));
+            if (!titulo.size || !alvo.size) return false;
+            const inter = [...alvo].filter(w => titulo.has(w)).length;
+            const sim = inter / new Set([...alvo, ...titulo]).size;
+            return sim >= 0.30 && (!palavrasLongas.length || palavrasLongas.some(w => titulo.has(w)));
+        });
+        return matches.map(e => {
+            const ini = e.start.dateTime || e.start.date;
+            const fim = e.end?.dateTime || e.end?.date || '';
+            const data = ini.split('T')[0];
+            const inicio = ini.includes('T') ? ini.split('T')[1].substring(0, 5) : '';
+            const final = fim.includes('T') ? fim.split('T')[1].substring(0, 5) : '';
+            return {
+                data,
+                horario: inicio && final ? `${inicio} às ${final}` : (inicio || ''),
+                resumo: e.summary || '',
+                local: e._calNome
+            };
+        });
+    } catch (e) {
+        console.warn('⚠️ [Calendar] Falha ao buscar datas para termo legado:', e.message);
+        return [];
+    }
+}
+
+async function buscarDadosInscricaoForms(id) {
+    if (!String(id).startsWith('forms_')) return null;
+    try {
+        if (!googleAuthClient) await initGoogleAuth();
+        await getConfigs('GET /api/agendamento/forms');
+
+        let response;
+        try {
+            response = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
+                range: 'Respostas ao formulário 1!A:ZZ'
+            });
+        } catch {
+            const meta = await sheets.spreadsheets.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID });
+            const firstSheetName = meta.data?.sheets?.[0]?.properties?.title;
+            if (!firstSheetName) return null;
+            response = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
+                range: `'${firstSheetName}'!A:ZZ`
+            });
+        }
+
+        const rows = response.data.values || [];
+        const headers = rows[0] || [];
+        const lowerHeaders = headers.map(h => String(h || '').toLowerCase());
+        const findIndex = keywords => lowerHeaders.findIndex(h => keywords.some(k => h.includes(k)));
+        const emailIndex = findIndex(['endereço de e-mail', 'e-mail', 'email', 'e mail']);
+        const phoneIndex = findIndex(['telefone', 'celular', 'contato', 'phone', 'whatsapp', 'mobile']);
+        const eventIndex = findIndex(['nome do evento', 'título do projeto', 'event name', 'project title']);
+        const nameIndex = lowerHeaders.findIndex(h =>
+            (h.includes('nome completo') && !h.includes('representante')) || h.includes('full name')
+        );
+
+        const row = rows.slice(1).find(values => {
+            const email = emailIndex >= 0 ? String(values[emailIndex] || '').trim().toLowerCase() : '';
+            const evento = eventIndex >= 0 ? String(values[eventIndex] || '').trim() : 'Evento (Forms)';
+            const candidate = `forms_${email || 'noemail'}_${evento.toLowerCase().replace(/\s+/g, '_')}`;
+            return candidate === String(id);
+        });
+        if (!row) return null;
+
+        const email = emailIndex >= 0 ? String(row[emailIndex] || '').trim() : '';
+        const evento = eventIndex >= 0 ? String(row[eventIndex] || '').trim() : 'Evento (Forms)';
+        const nome = nameIndex >= 0 ? String(row[nameIndex] || '').trim() : 'Inscrição Forms';
+        const telefone = phoneIndex >= 0 ? String(row[phoneIndex] || '').trim() : '';
+        const etapasMap = await getLegadasEtapas();
+        const etapas = etapasMap[id] || {};
+        const calendarDates = Object.keys(etapas).length ? [] : await buscarDatasCalendarioLegada(evento);
+        const termoMap = await getTermosLegadas();
+        const termo = termoMap[id] || {};
+        const localNome = termo.espacoIgreja ? 'Igrejinha da UFSC'
+            : termo.espacoTeatro ? 'Teatro Carmen Fossari'
+            : calendarDates[0]?.local || 'Teatro Carmen Fossari';
+
+        return {
+            id, nome, email, telefone, evento, localNome,
+            local: localNome.toLowerCase().includes('igrej') ? 'igrejinha' : 'teatro',
+            etapas, calendarDates,
+            termoAssinado: termo.termoAssinado === true,
+            termoDados: termo.termoDados || null
+        };
+    } catch (e) {
+        console.error('[/api/agendamento/:id] erro ao buscar inscrição Forms:', e.message);
+        return null;
+    }
+}
+
+async function buscarInscricaoFormsPorEmail(emailBuscado) {
+    const emailAlvo = String(emailBuscado || '').trim().toLowerCase();
+    if (!emailAlvo) return null;
+    try {
+        if (!googleAuthClient) await initGoogleAuth();
+        await getConfigs('buscar termo Forms por e-mail');
+        let response;
+        try {
+            response = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
+                range: 'Respostas ao formulário 1!A:ZZ'
+            });
+        } catch {
+            const meta = await sheets.spreadsheets.get({ auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID });
+            const firstSheetName = meta.data?.sheets?.[0]?.properties?.title;
+            if (!firstSheetName) return null;
+            response = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
+                range: `'${firstSheetName}'!A:ZZ`
+            });
+        }
+        const rows = response.data.values || [];
+        const headers = (rows[0] || []).map(h => String(h || '').toLowerCase());
+        const findIndex = keywords => headers.findIndex(h => keywords.some(k => h.includes(k)));
+        const emailIndex = findIndex(['endereço de e-mail', 'e-mail', 'email', 'e mail']);
+        const eventIndex = findIndex(['nome do evento', 'título do projeto', 'event name', 'project title']);
+        if (emailIndex < 0 || eventIndex < 0) return null;
+        const row = rows.slice(1).find(values =>
+            String(values[emailIndex] || '').trim().toLowerCase() === emailAlvo
+        );
+        if (!row) return null;
+        const evento = String(row[eventIndex] || '').trim() || 'Evento (Forms)';
+        const id = `forms_${emailAlvo}_${evento.toLowerCase().replace(/\s+/g, '_')}`;
+        return buscarDadosInscricaoForms(id);
+    } catch (e) {
+        console.error('❌ [Sheets] Erro ao buscar termo Forms por e-mail:', e.message);
+        return null;
+    }
+}
+
 // Buscar uma única inscrição pelo ID (usado pela página do termo digital)
 app.get('/api/agendamento/:id', async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ error: 'ID não fornecido' });
     try {
         const agendamentos = await getAgendamentos();
-        const ag = agendamentos.find(a => a.id === id);
+        const ag = agendamentos.find(a => a.id === id) || await buscarDadosInscricaoForms(id);
         if (!ag) return res.status(404).json({ error: 'Inscrição não encontrada' });
 
         // Montar string descritiva de data/horário a partir das etapas (se existirem)
@@ -783,6 +944,14 @@ app.get('/api/agendamento/:id', async (req, res) => {
                     }
                 });
             }
+        }
+        if (!partes.length && Array.isArray(ag.calendarDates)) {
+            ag.calendarDates.forEach(cd => {
+                if (cd?.data) {
+                    const dataBr = cd.data.split('-').reverse().join('/');
+                    partes.push(`${dataBr}${cd.horario ? ', ' + cd.horario : ''}`);
+                }
+            });
         }
         const dataHorarioEvento = partes.join(' | ');
 
@@ -1011,9 +1180,15 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
         // Injetar etapas salvas manualmente para inscrições legadas
         const legadasEtapasMap = await getLegadasEtapas();
+        const termosLegadasMap = await getTermosLegadas();
         unificados.forEach(u => {
             if (u.primeiraEtapa.isLegada && legadasEtapasMap[u.primeiraEtapa.id]) {
                 u.primeiraEtapa.etapas = legadasEtapasMap[u.primeiraEtapa.id];
+            }
+            if (u.primeiraEtapa.isLegada && termosLegadasMap[u.primeiraEtapa.id]) {
+                const termoSalvo = termosLegadasMap[u.primeiraEtapa.id];
+                u.primeiraEtapa.termoAssinado = termoSalvo.termoAssinado === true;
+                u.primeiraEtapa.termoDados = termoSalvo.termoDados || null;
             }
         });
 
@@ -1571,6 +1746,27 @@ async function setLegadaEtapas(id, etapas) {
     await redis.set('agendamentos_legadas_etapas', JSON.stringify(map));
 }
 
+const TERMOS_LEGADAS_KEY = 'termos_assinados_legadas';
+async function getTermosLegadas() {
+    try {
+        if (!redis) return {};
+        const raw = await redis.get(TERMOS_LEGADAS_KEY);
+        return parseRedisValue(raw) || {};
+    } catch { return {}; }
+}
+async function saveTermoLegada(id, dados) {
+    try {
+        if (!redis) return false;
+        const map = await getTermosLegadas();
+        map[id] = dados;
+        await redis.set(TERMOS_LEGADAS_KEY, JSON.stringify(map));
+        return true;
+    } catch (e) {
+        console.error('❌ [Redis] Erro ao salvar termo legado:', e.message);
+        return false;
+    }
+}
+
 app.post('/api/admin/atualizar-etapas', async (req, res) => {
     const { id, ...campos } = req.body;
     if (!id || Object.keys(campos).length === 0) {
@@ -1830,7 +2026,8 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
     // Quando o termo veio de uma inscrição, o destinatário deve ser o e-mail original.
     if (id) {
         const inscricoes = await getAgendamentos();
-        const inscricao = inscricoes.find(item => String(item.id) === String(id));
+        const inscricao = inscricoes.find(item => String(item.id) === String(id))
+            || await buscarDadosInscricaoForms(String(id));
         if (!inscricao) {
             return res.status(404).json({ error: 'Inscrição não encontrada.' });
         }
@@ -1909,11 +2106,14 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
                     }
                 });
             }
-            statusSaved = await updateAgendamento(id, {
+            const dadosTermo = {
                 termoAssinado: true,
                 termoAssinadoEm: new Date().toISOString(),
                 termoDados: dadosSalvos
-            });
+            };
+            statusSaved = String(id).startsWith('forms_')
+                ? await saveTermoLegada(String(id), dadosTermo)
+                : await updateAgendamento(id, dadosTermo);
         }
 
         console.log(`✅ Termo assinado enviado para ${normalizedEmail} com cópia para o DAC`);
@@ -1943,7 +2143,8 @@ app.post('/api/enviar-links-termo', async (req, res) => {
     for (const rawEmail of emails) {
         const email = rawEmail.trim().toLowerCase();
         if (!email) continue;
-        const insc = inscricoes.find(p => (p.email || '').trim().toLowerCase() === email);
+        const insc = inscricoes.find(p => (p.email || '').trim().toLowerCase() === email)
+            || await buscarInscricaoFormsPorEmail(email);
         if (!insc) {
             naoEncontrados.push(email);
             detalhes.push({ email, status: 'nao_encontrado' });
