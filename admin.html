@@ -764,6 +764,14 @@ async function loadData() {
     }
 }
 
+window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin || event.data?.type !== 'termo-assinado') return;
+    const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(event.data.id));
+    if (!item) return;
+    item.primeiraEtapa.termoAssinado = true;
+    renderTabela();
+});
+
 function showInscricoesState(state) {
     document.getElementById('inscricoesLoading').style.display = state === 'loading' ? 'block' : 'none';
     document.getElementById('inscricoesTable').style.display = state === 'data' ? 'table' : 'none';
@@ -868,6 +876,11 @@ function renderTabela() {
 
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const localBadge = `<span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}"><i class="fas fa-${isIgrejinha?'church':'theater-masks'}"></i> ${p.localNome||'Teatro'}</span>`;
+        const termoAssinado = p.termoAssinado === true || p.termoAssinado === 'true';
+        const termoColor = termoAssinado ? '#16a34a' : '#f59e0b';
+        const termoTitle = termoAssinado
+            ? 'Termo preenchido e enviado — abrir novamente'
+            : 'Abrir termo pré-preenchido e enviar link ao proponente';
 
         let stClass = 'st-pendente', stText = 'Pendente';
         if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
@@ -877,7 +890,7 @@ function renderTabela() {
         const acoes = userRole === 'admin' ? `
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
-            <button class="btn-action" title="Abrir Termo Digital" onclick="abrirTermoDigital(${originalIndex})" style="color:#16a34a"><i class="fas fa-file-signature"></i></button>
+            <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="abrirTermoDigital(${originalIndex})" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="Copiar link do Termo" onclick="copiarLinkTermo(${originalIndex})" style="color:#2563eb"><i class="fas fa-link"></i></button>
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
@@ -912,14 +925,42 @@ function toggleCheckAll() {
     updateSelCount();
 }
 
-function abrirTermoDigital(idx) {
+async function abrirTermoDigital(idx) {
     const p = allUnificados[idx]?.primeiraEtapa;
     if (!p || !p.id) { alert('Inscrição sem identificador — não é possível gerar o link.'); return; }
     if (String(p.id).startsWith('forms_')) {
         alert('Esta inscrição é apenas do Forms (sem registro da primeira etapa). O termo digital usa os dados da inscrição feita no site.');
         return;
     }
-    window.open(`/termo?id=${encodeURIComponent(p.id)}`, '_blank');
+    if (!p.email) { alert('Esta inscrição não possui e-mail para receber o link.'); return; }
+
+    const termoUrl = `${window.location.origin}/termo?id=${encodeURIComponent(p.id)}`;
+    const confirmar = confirm(
+        `Abrir o termo pré-preenchido e enviar o link para ${p.email}?\n\n` +
+        `O proponente poderá completar os dados, aprovar as cláusulas e enviar o PDF assinado.`
+    );
+    if (!confirmar) return;
+
+    const termoWindow = window.open(termoUrl, '_blank');
+    if (!termoWindow) {
+        alert('Permita pop-ups deste site para abrir o termo.');
+        return;
+    }
+
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails: [p.email], baseUrl: window.location.origin })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success || data.enviados !== 1) {
+            throw new Error(data.error || 'O link não foi enviado.');
+        }
+        alert(`✅ Termo aberto e link enviado para ${p.email}.`);
+    } catch (e) {
+        alert('O termo foi aberto, mas não foi possível enviar o link: ' + e.message);
+    }
 }
 
 async function copiarLinkTermo(idx) {

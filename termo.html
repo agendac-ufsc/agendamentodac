@@ -473,17 +473,34 @@ async function carregarInscricao() {
     }
     const data = await r.json();
 
-    $('nomeCompleto').value = data.nome || '';
-    $('email').value = data.email || '';
-    $('telefone').value = data.telefone || '';
-    $('nomeEvento').value = data.evento || '';
-    $('dataHorarioEvento').value = data.dataHorarioEvento || '';
+    const termo = data.termoDados || {};
+    $('nomeCompleto').value = termo.nomeCompleto || data.nome || '';
+    $('email').value = termo.email || data.email || '';
+    $('telefone').value = termo.telefone || data.telefone || '';
+    $('nomeEvento').value = termo.nomeEvento || data.evento || '';
+    $('dataHorarioEvento').value = termo.dataHorarioEvento || data.dataHorarioEvento || '';
+    $('outrasInformacoes').value = termo.outrasInformacoes || '';
+    $('cpfCnpj').value = termo.cpfCnpj || '';
+    $('rg').value = termo.rg || '';
+    $('endereco').value = termo.endereco || '';
+    $('numero').value = termo.numero || '';
+    $('apartamento').value = termo.apartamento || '';
+    $('bairro').value = termo.bairro || '';
+    $('cidade').value = termo.cidade || '';
 
-    const localNome = (data.localNome || '').toLowerCase();
-    if (localNome.includes('igrej')) {
+    if (termo.espacoIgreja || (!termo.espacoTeatro && (data.localNome || '').toLowerCase().includes('igrej'))) {
       state.espacoIgreja = true;
       $('pillIgreja').classList.add('active');
-    } else if (localNome.includes('teatro') || localNome) {
+    } else if (termo.espacoTeatro || data.localNome) {
+      state.espacoTeatro = true;
+      $('pillTeatro').classList.add('active');
+    }
+
+    const localNome = (data.localNome || '').toLowerCase();
+    if (!termo.espacoIgreja && !termo.espacoTeatro && localNome.includes('igrej')) {
+      state.espacoIgreja = true;
+      $('pillIgreja').classList.add('active');
+    } else if (!termo.espacoIgreja && !termo.espacoTeatro && (localNome.includes('teatro') || localNome)) {
       state.espacoTeatro = true;
       $('pillTeatro').classList.add('active');
     }
@@ -780,30 +797,16 @@ function criarPDF() {
    doc.text(declaracaoLines, margin, y);
    y += declaracaoLines.length * 4 + 4;
 
-  // === DATA E ASSINATURAS ===
-  pageBreak(50);
+   // === DATA E REGISTRO DO ACEITE DIGITAL ===
+   pageBreak(24);
   y += 8;
   const today = new Date();
   const meses = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
   doc.setFontSize(10); doc.setFont('helvetica', 'bold');
   doc.text(`Florianópolis (SC), ${today.getDate()} de ${meses[today.getMonth()]} de ${today.getFullYear()}.`, centerX, y, { align: 'center' });
-  y += 22;
-
-  // Assinaturas
-  doc.setDrawColor(0,0,0); doc.setLineWidth(0.4);
-  const lineLen = 65;
-  const leftX = margin + 8;
-  const rightX = pageW - margin - 8 - lineLen;
-  doc.line(leftX, y, leftX + lineLen, y);
-  doc.line(rightX, y, rightX + lineLen, y);
-  y += 5;
-  doc.setFontSize(9); doc.setFont('helvetica', 'bold');
-  doc.text('AUTORIZADORA', leftX + lineLen/2, y, { align: 'center' });
-  doc.text('AUTORIZADO(A)', rightX + lineLen/2, y, { align: 'center' });
-  y += 5;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-  if (state.cpfAutorizadora) doc.text(`CPF — ${state.cpfAutorizadora}`, leftX + lineLen/2, y, { align: 'center' });
-  doc.text(`CPF — ${f.cpfCnpj}`, rightX + lineLen/2, y, { align: 'center' });
+   y += 7;
+   doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+   doc.text('Aceite digital registrado após a confirmação de ciência e concordância com todas as cláusulas.', centerX, y, { align: 'center' });
 
   // Numeração de página
   const pages = doc.internal.getNumberOfPages();
@@ -850,12 +853,20 @@ function criarPDF() {
          nome: pdf.form.nomeCompleto,
          evento: pdf.form.nomeEvento,
          fileName: pdf.fileName,
-         pdfBase64
+         pdfBase64,
+         termoDados: pdf.form
        })
      });
      const result = await response.json().catch(() => ({}));
      if (!response.ok) throw new Error(result.error || 'Não foi possível enviar o PDF.');
-     showToast('PDF enviado ao proponente e ao DAC.', 'success');
+     if (result.statusSaved === false) {
+       showToast('PDF enviado, mas não foi possível atualizar o status no painel.', 'error');
+     } else {
+       showToast('PDF enviado ao proponente e ao DAC.', 'success');
+       if (window.opener && !window.opener.closed) {
+         window.opener.postMessage({ type: 'termo-assinado', id: state.inscricaoId }, window.location.origin);
+       }
+     }
    } catch (e) {
      showToast('Erro ao enviar o PDF: ' + e.message, 'error');
    } finally {

@@ -796,7 +796,9 @@ app.get('/api/agendamento/:id', async (req, res) => {
             local: ag.local || '',
             calendarId: ag.calendarId || '',
             dataHorarioEvento,
-            etapas: ag.etapas || {}
+            etapas: ag.etapas || {},
+            termoAssinado: ag.termoAssinado === true,
+            termoDados: ag.termoDados || null
         });
     } catch (e) {
         console.error('[/api/agendamento/:id] erro:', e);
@@ -1810,7 +1812,7 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
 // ============================================================
 
 app.post('/api/enviar-termo-assinado', async (req, res) => {
-    const { id, email, nome, evento, fileName, pdfBase64 } = req.body || {};
+    const { id, email, nome, evento, fileName, pdfBase64, termoDados } = req.body || {};
     const normalizedEmail = String(email || '').trim().toLowerCase();
     const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
     const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
@@ -1892,8 +1894,30 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
             }]
         }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
 
+        let statusSaved = true;
+        if (id) {
+            const camposPermitidos = [
+                'espacoTeatro', 'espacoIgreja', 'nomeEvento', 'dataHorarioEvento',
+                'outrasInformacoes', 'nomeCompleto', 'cpfCnpj', 'rg', 'telefone',
+                'email', 'endereco', 'numero', 'apartamento', 'bairro', 'cidade'
+            ];
+            const dadosSalvos = {};
+            if (termoDados && typeof termoDados === 'object') {
+                camposPermitidos.forEach(campo => {
+                    if (typeof termoDados[campo] === 'string' || typeof termoDados[campo] === 'boolean') {
+                        dadosSalvos[campo] = termoDados[campo];
+                    }
+                });
+            }
+            statusSaved = await updateAgendamento(id, {
+                termoAssinado: true,
+                termoAssinadoEm: new Date().toISOString(),
+                termoDados: dadosSalvos
+            });
+        }
+
         console.log(`✅ Termo assinado enviado para ${normalizedEmail} com cópia para o DAC`);
-        res.json({ success: true });
+        res.json({ success: true, statusSaved });
     } catch (e) {
         console.error(`❌ Erro ao enviar termo assinado para ${normalizedEmail}:`, e.response?.data || e.message);
         res.status(500).json({ error: e.response?.data?.message || 'Não foi possível enviar o PDF por e-mail.' });
