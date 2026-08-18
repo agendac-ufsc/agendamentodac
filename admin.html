@@ -94,6 +94,9 @@
         .row-cancelada{opacity:.6;background:#fff8f8!important}
         .btn-action{background:none;border:none;cursor:pointer;font-size:15px;padding:4px 3px;transition:.2s}
         .btn-action:hover{transform:scale(1.2)}
+        .termo-aceite{display:inline-flex;align-items:center;gap:4px;margin-top:4px;color:#15803d;font-size:10px;font-weight:700}
+        .termo-editar-link{border:0;background:none;color:#764ba2;cursor:pointer;font-size:10px;font-weight:700;padding:0 0 0 6px}
+        .termo-editar-link:hover{text-decoration:underline}
         .check-col{width:36px;text-align:center}
         .insc-checkbox{width:15px;height:15px;cursor:pointer;accent-color:#764ba2}
 
@@ -109,6 +112,11 @@
         .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
         .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
         .btn-save-modal{padding:9px 20px;background:#764ba2;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+        .termo-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .termo-edit-grid .full{grid-column:1 / -1}
+        .termo-edit-grid textarea{min-height:68px;resize:vertical}
+        .termo-edit-note{font-size:12px;line-height:1.5;color:#666;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:16px}
+        @media(max-width:640px){.termo-edit-grid{grid-template-columns:1fr}.termo-edit-grid .full{grid-column:auto}}
 
         /* ── AVALIAÇÃO ── */
         .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -609,6 +617,94 @@
     </div>
 </div>
 
+<!-- ═══════════════ MODAL EDITAR TERMO CONCLUÍDO (admin only) ═══ -->
+<div class="modal" id="modalEditarTermo">
+    <div class="modal-box" style="max-width:720px;border-top:4px solid #16a34a">
+        <h3 style="display:flex;align-items:center;gap:8px">
+            <i class="fas fa-file-signature" style="color:#16a34a"></i>
+            Editar termo concluído
+        </h3>
+        <div class="termo-edit-note">
+            <strong><i class="fas fa-check-circle"></i> Cláusulas aceitas e termo enviado.</strong><br>
+            Esta edição é exclusiva do painel administrativo. Você pode salvar uma correção diretamente
+            ou reenviar o link para o proponente revisar e enviar uma nova versão.
+        </div>
+        <div class="termo-edit-grid">
+            <div class="form-field">
+                <label>Nome completo</label>
+                <input id="adminTermoNome" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>E-mail original <span style="color:#aaa;font-weight:400">(não editável)</span></label>
+                <input id="adminTermoEmail" class="form-input" type="email" readonly style="background:#f5f5f5;color:#777">
+            </div>
+            <div class="form-field">
+                <label>Nome do evento</label>
+                <input id="adminTermoEvento" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Espaço</label>
+                <select id="adminTermoEspaco" class="form-input">
+                    <option value="teatro">Teatro Carmen Fossari</option>
+                    <option value="igrejinha">Igrejinha da UFSC</option>
+                </select>
+            </div>
+            <div class="form-field full">
+                <label>Datas e horários</label>
+                <textarea id="adminTermoDatas" class="form-input"></textarea>
+            </div>
+            <div class="form-field">
+                <label>CPF/CNPJ</label>
+                <input id="adminTermoCpf" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>RG</label>
+                <input id="adminTermoRg" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Telefone</label>
+                <input id="adminTermoTelefone" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Cidade</label>
+                <input id="adminTermoCidade" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Endereço</label>
+                <input id="adminTermoEndereco" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Número</label>
+                <input id="adminTermoNumero" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Apartamento</label>
+                <input id="adminTermoApartamento" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Bairro</label>
+                <input id="adminTermoBairro" class="form-input" type="text">
+            </div>
+            <div class="form-field full">
+                <label>Outras informações</label>
+                <textarea id="adminTermoOutras" class="form-input"></textarea>
+            </div>
+        </div>
+        <div id="adminTermoStatus" style="font-size:13px;min-height:18px;margin-top:12px"></div>
+        <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
+            <button class="btn-close-modal" onclick="closeModal('modalEditarTermo')">Cancelar</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button id="btnReenviarTermoEdicao" class="btn-save-modal" style="background:#d97706" onclick="reenviarTermoParaProponente()">
+                    <i class="fas fa-paper-plane"></i> Reenviar para editar
+                </button>
+                <button id="btnSalvarTermoAdmin" class="btn-save-modal" style="background:#16a34a" onclick="salvarEdicaoTermoAdmin()">
+                    <i class="fas fa-save"></i> Salvar alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // ESTADO GLOBAL
@@ -620,6 +716,7 @@ let datasBloqueadas = [];
 let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
 let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
+let termoEditorIndex = null;
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -879,8 +976,15 @@ function renderTabela() {
         const termoAssinado = p.termoAssinado === true || p.termoAssinado === 'true';
         const termoColor = termoAssinado ? '#16a34a' : '#f59e0b';
         const termoTitle = termoAssinado
-            ? 'Termo preenchido e enviado — abrir novamente'
+            ? 'Termo concluído — cláusulas aceitas'
             : 'Abrir termo pré-preenchido e enviar link ao proponente';
+        const termoEditLink = termoAssinado && userRole === 'admin'
+            ? `<button class="termo-editar-link" onclick="abrirEditorTermo(${originalIndex})" title="Editar dados do termo concluído"><i class="fas fa-edit"></i> editar termo</button>`
+            : '';
+        const termoAceite = termoAssinado
+            ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> cláusulas aceitas${termoEditLink}</div>`
+            : '';
+        const termoClick = termoAssinado ? `abrirEditorTermo(${originalIndex})` : `abrirTermoDigital(${originalIndex})`;
 
         let stClass = 'st-pendente', stText = 'Pendente';
         if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
@@ -890,7 +994,7 @@ function renderTabela() {
         const acoes = userRole === 'admin' ? `
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
-            <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="abrirTermoDigital(${originalIndex})" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
+            <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="Copiar link do Termo" onclick="copiarLinkTermo(${originalIndex})" style="color:#2563eb"><i class="fas fa-link"></i></button>
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
@@ -903,6 +1007,7 @@ function renderTabela() {
             <td>
                 <div style="font-weight:700;color:#333">${(p.evento||'SEM EVENTO').toUpperCase()}</div>
                 <div style="font-size:11px;color:#888;margin-top:2px">${p.nome||''} &middot; ${p.email||''}</div>
+                ${termoAceite}
             </td>
             <td>${localBadge}</td>
             <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}${editEtapasBtn}</td>
@@ -956,6 +1061,130 @@ async function abrirTermoDigital(idx) {
         alert(`✅ Termo aberto e link enviado para ${p.email}.`);
     } catch (e) {
         alert('O termo foi aberto, mas não foi possível enviar o link: ' + e.message);
+    }
+}
+
+function abrirEditorTermo(idx) {
+    if (userRole !== 'admin') return;
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p || !(p.termoAssinado === true || p.termoAssinado === 'true')) return;
+
+    termoEditorIndex = idx;
+    const saved = p.termoDados || {};
+    const value = (key, fallback = '') => saved[key] ?? fallback ?? '';
+    document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
+    document.getElementById('adminTermoEmail').value = value('email', p.email);
+    document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
+    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
+    document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
+    document.getElementById('adminTermoCpf').value = value('cpfCnpj');
+    document.getElementById('adminTermoRg').value = value('rg');
+    document.getElementById('adminTermoTelefone').value = value('telefone', p.telefone);
+    document.getElementById('adminTermoCidade').value = value('cidade');
+    document.getElementById('adminTermoEndereco').value = value('endereco');
+    document.getElementById('adminTermoNumero').value = value('numero');
+    document.getElementById('adminTermoApartamento').value = value('apartamento');
+    document.getElementById('adminTermoBairro').value = value('bairro');
+    document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
+    document.getElementById('adminTermoStatus').textContent = '';
+    openModal('modalEditarTermo');
+}
+
+function coletarEdicaoTermoAdmin() {
+    return {
+        espacoTeatro: document.getElementById('adminTermoEspaco').value === 'teatro',
+        espacoIgreja: document.getElementById('adminTermoEspaco').value === 'igrejinha',
+        nomeEvento: document.getElementById('adminTermoEvento').value.trim(),
+        dataHorarioEvento: document.getElementById('adminTermoDatas').value.trim(),
+        outrasInformacoes: document.getElementById('adminTermoOutras').value.trim(),
+        nomeCompleto: document.getElementById('adminTermoNome').value.trim(),
+        cpfCnpj: document.getElementById('adminTermoCpf').value.trim(),
+        rg: document.getElementById('adminTermoRg').value.trim(),
+        telefone: document.getElementById('adminTermoTelefone').value.trim(),
+        email: document.getElementById('adminTermoEmail').value.trim(),
+        endereco: document.getElementById('adminTermoEndereco').value.trim(),
+        numero: document.getElementById('adminTermoNumero').value.trim(),
+        apartamento: document.getElementById('adminTermoApartamento').value.trim(),
+        bairro: document.getElementById('adminTermoBairro').value.trim(),
+        cidade: document.getElementById('adminTermoCidade').value.trim()
+    };
+}
+
+async function salvarEdicaoTermoAdmin(fechar = true) {
+    if (userRole !== 'admin' || termoEditorIndex === null) return false;
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p?.id) return false;
+    const termoDados = coletarEdicaoTermoAdmin();
+    const status = document.getElementById('adminTermoStatus');
+    const btn = document.getElementById('btnSalvarTermoAdmin');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    status.style.color = '#666';
+    status.textContent = 'Salvando dados do termo...';
+    try {
+        const r = await fetch('/api/admin/atualizar-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, termoDados })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o termo.');
+        p.termoDados = termoDados;
+        p.nome = termoDados.nomeCompleto || p.nome;
+        p.email = termoDados.email || p.email;
+        p.telefone = termoDados.telefone || p.telefone;
+        p.evento = termoDados.nomeEvento || p.evento;
+        p.localNome = termoDados.espacoIgreja ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
+        status.style.color = '#15803d';
+        status.textContent = 'Alterações salvas. O termo continua marcado como concluído.';
+        renderTabela();
+        if (fechar) {
+            setTimeout(() => closeModal('modalEditarTermo'), 450);
+        }
+        return true;
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+        return false;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+
+async function reenviarTermoParaProponente() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p?.email) return;
+    if (!confirm(`Reenviar o link do termo para ${p.email}?\n\nO proponente poderá revisar os dados, reaprová-los e enviar uma nova versão.`)) return;
+    const salvo = await salvarEdicaoTermoAdmin(false);
+    if (!salvo) return;
+    const status = document.getElementById('adminTermoStatus');
+    const btn = document.getElementById('btnReenviarTermoEdicao');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emails: [p.email],
+                baseUrl: window.location.origin,
+                observacao: 'Seu Termo Digital foi reaberto para revisão. Confira os dados, aprove novamente todas as cláusulas e envie uma nova versão.'
+            })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success || data.enviados !== 1) throw new Error(data.error || 'Não foi possível reenviar o link.');
+        status.style.color = '#15803d';
+        status.textContent = `Link reenviado para ${p.email}.`;
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
     }
 }
 
