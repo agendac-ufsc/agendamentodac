@@ -115,6 +115,16 @@
         .termo-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
         .termo-edit-grid .full{grid-column:1 / -1}
         .termo-edit-grid textarea{min-height:68px;resize:vertical}
+        .termo-edit-grid input:disabled,.termo-edit-grid textarea:disabled,.termo-edit-grid select:disabled{opacity:1;color:#374151;background:#f8fafc;border-color:#e5e7eb;cursor:default}
+        .form-section-label{grid-column:1 / -1;border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;font-size:13px;font-weight:700;color:#4b5563}
+        .termo-pillrow{display:flex;gap:10px;flex-wrap:wrap}
+        .termo-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;font-weight:500;color:#374151;transition:all .15s}
+        .termo-pill.active{background:#2563eb;color:#fff;border-color:#2563eb}
+        .termo-pill:disabled{opacity:1;cursor:default}
+        .termo-pill .check{width:14px;height:14px;border:1.5px solid #9ca3af;border-radius:3px;display:inline-flex;align-items:center;justify-content:center}
+        .termo-pill.active .check{background:#fff;border-color:#fff;color:#2563eb}
+        .termo-pill .check::after{content:'✓';display:none;font-size:10px;line-height:1}
+        .termo-pill.active .check::after{display:block}
         .termo-edit-note{font-size:12px;line-height:1.5;color:#666;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:16px}
         @media(max-width:640px){.termo-edit-grid{grid-template-columns:1fr}.termo-edit-grid .full{grid-column:auto}}
 
@@ -617,41 +627,50 @@
     </div>
 </div>
 
-<!-- ═══════════════ MODAL EDITAR TERMO CONCLUÍDO (admin only) ═══ -->
+<!-- ═══════════════ MODAL VISUALIZAR TERMO CONCLUÍDO (admin only) ═══ -->
 <div class="modal" id="modalEditarTermo">
     <div class="modal-box" style="max-width:720px;border-top:4px solid #16a34a">
         <h3 style="display:flex;align-items:center;gap:8px">
             <i class="fas fa-file-signature" style="color:#16a34a"></i>
-            Editar termo concluído
+            Visualizar termo concluído
         </h3>
         <div class="termo-edit-note">
-            <strong><i class="fas fa-check-circle"></i> Cláusulas aceitas e termo enviado.</strong><br>
-            Esta edição é exclusiva do painel administrativo. Você pode salvar uma correção diretamente
-            ou reenviar o link para o proponente revisar e enviar uma nova versão.
+            <strong><i class="fas fa-check-circle"></i> Termo concluído e enviado.</strong><br>
+            Os dados abaixo estão congelados para consulta. As cláusulas não são exibidas nesta versão.
+            Para corrigir alguma informação, clique em <strong>Editar</strong> no rodapé.
         </div>
         <div class="termo-edit-grid">
-            <div class="form-field">
-                <label>Nome completo</label>
-                <input id="adminTermoNome" class="form-input" type="text">
-            </div>
-            <div class="form-field">
-                <label>E-mail original <span style="color:#aaa;font-weight:400">(não editável)</span></label>
-                <input id="adminTermoEmail" class="form-input" type="email" readonly style="background:#f5f5f5;color:#777">
-            </div>
-            <div class="form-field">
-                <label>Nome do evento</label>
-                <input id="adminTermoEvento" class="form-input" type="text">
-            </div>
-            <div class="form-field">
-                <label>Espaço</label>
-                <select id="adminTermoEspaco" class="form-input">
+            <div class="form-field full">
+                <label>1. Espaço físico objeto desta autorização</label>
+                <div class="termo-pillrow" id="adminTermoEspacoPills">
+                    <button type="button" class="termo-pill" id="adminPillTeatro" onclick="selecionarEspacoAdmin('teatro')">
+                        <span class="check"></span> Teatro Carmen Fossari
+                    </button>
+                    <button type="button" class="termo-pill" id="adminPillIgreja" onclick="selecionarEspacoAdmin('igrejinha')">
+                        <span class="check"></span> Igrejinha da UFSC
+                    </button>
+                </div>
+                <select id="adminTermoEspaco" style="display:none" aria-hidden="true">
                     <option value="teatro">Teatro Carmen Fossari</option>
                     <option value="igrejinha">Igrejinha da UFSC</option>
                 </select>
             </div>
+            <div class="form-field">
+                <label>2. Evento a ser realizado</label>
+                <input id="adminTermoEvento" class="form-input" type="text">
+            </div>
             <div class="form-field full">
-                <label>Datas e horários</label>
+                <label>3. Data e horário (incluindo ensaio e montagem se aplicável)</label>
                 <textarea id="adminTermoDatas" class="form-input"></textarea>
+            </div>
+            <div class="form-field full">
+                <label>4. Outras informações</label>
+                <textarea id="adminTermoOutras" class="form-input"></textarea>
+            </div>
+            <div class="form-section-label full">II — Partes Envolvidas</div>
+            <div class="form-field">
+                <label>Nome completo</label>
+                <input id="adminTermoNome" class="form-input" type="text">
             </div>
             <div class="form-field">
                 <label>CPF/CNPJ</label>
@@ -666,8 +685,8 @@
                 <input id="adminTermoTelefone" class="form-input" type="text">
             </div>
             <div class="form-field">
-                <label>Cidade</label>
-                <input id="adminTermoCidade" class="form-input" type="text">
+                <label>E-mail original <span style="color:#aaa;font-weight:400">(não editável)</span></label>
+                <input id="adminTermoEmail" class="form-input" type="email" readonly style="background:#f5f5f5;color:#777">
             </div>
             <div class="form-field">
                 <label>Endereço</label>
@@ -678,26 +697,32 @@
                 <input id="adminTermoNumero" class="form-input" type="text">
             </div>
             <div class="form-field">
-                <label>Apartamento</label>
+                <label>Apartamento / Complemento</label>
                 <input id="adminTermoApartamento" class="form-input" type="text">
             </div>
             <div class="form-field">
                 <label>Bairro</label>
                 <input id="adminTermoBairro" class="form-input" type="text">
             </div>
-            <div class="form-field full">
-                <label>Outras informações</label>
-                <textarea id="adminTermoOutras" class="form-input"></textarea>
+            <div class="form-field">
+                <label>Cidade</label>
+                <input id="adminTermoCidade" class="form-input" type="text">
             </div>
         </div>
         <div id="adminTermoStatus" style="font-size:13px;min-height:18px;margin-top:12px"></div>
         <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
             <button class="btn-close-modal" onclick="closeModal('modalEditarTermo')">Cancelar</button>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
-                <button id="btnReenviarTermoEdicao" class="btn-save-modal" style="background:#d97706" onclick="reenviarTermoParaProponente()">
-                    <i class="fas fa-paper-plane"></i> Reenviar para editar
+                <button id="btnGerarPDFTermo" class="btn-save-modal" style="background:#dc2626" onclick="gerarPDFTermoAdmin()">
+                    <i class="far fa-file-pdf"></i> Gerar PDF
                 </button>
-                <button id="btnSalvarTermoAdmin" class="btn-save-modal" style="background:#16a34a" onclick="salvarEdicaoTermoAdmin()">
+                <button id="btnReenviarTermoEdicao" class="btn-save-modal" style="background:#d97706" onclick="reenviarTermoParaProponente()">
+                    <i class="fas fa-paper-plane"></i> Reenviar para o proponente
+                </button>
+                <button id="btnEditarTermoAdmin" class="btn-save-modal" style="background:#764ba2" onclick="ativarEdicaoTermoAdmin()">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+                <button id="btnSalvarTermoAdmin" class="btn-save-modal" style="background:#16a34a;display:none" onclick="salvarEdicaoTermoAdmin()">
                     <i class="fas fa-save"></i> Salvar alterações
                 </button>
             </div>
@@ -976,13 +1001,13 @@ function renderTabela() {
         const termoAssinado = p.termoAssinado === true || p.termoAssinado === 'true';
         const termoColor = termoAssinado ? '#16a34a' : '#f59e0b';
         const termoTitle = termoAssinado
-            ? 'Termo concluído — cláusulas aceitas'
+            ? 'Visualizar dados do termo concluído'
             : 'Abrir termo pré-preenchido e enviar link ao proponente';
         const termoEditLink = termoAssinado && userRole === 'admin'
             ? `<button class="termo-editar-link" onclick="abrirEditorTermo(${originalIndex})" title="Editar dados do termo concluído"><i class="fas fa-edit"></i> editar termo</button>`
             : '';
         const termoAceite = termoAssinado
-            ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> cláusulas aceitas${termoEditLink}</div>`
+            ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> termo concluído${termoEditLink}</div>`
             : '';
         const termoClick = termoAssinado ? `abrirEditorTermo(${originalIndex})` : `abrirTermoDigital(${originalIndex})`;
 
@@ -1077,6 +1102,7 @@ function abrirEditorTermo(idx) {
     document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
     document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
     document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
+    atualizarPillsEspacoAdmin();
     document.getElementById('adminTermoCpf').value = value('cpfCnpj');
     document.getElementById('adminTermoRg').value = value('rg');
     document.getElementById('adminTermoTelefone').value = value('telefone', p.telefone);
@@ -1087,7 +1113,55 @@ function abrirEditorTermo(idx) {
     document.getElementById('adminTermoBairro').value = value('bairro');
     document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
     document.getElementById('adminTermoStatus').textContent = '';
+    setModoEdicaoTermoAdmin(false);
     openModal('modalEditarTermo');
+}
+
+function atualizarPillsEspacoAdmin() {
+    const valor = document.getElementById('adminTermoEspaco')?.value;
+    document.getElementById('adminPillTeatro')?.classList.toggle('active', valor === 'teatro');
+    document.getElementById('adminPillIgreja')?.classList.toggle('active', valor === 'igrejinha');
+}
+
+function selecionarEspacoAdmin(valor) {
+    if (document.getElementById('adminTermoEspaco')?.disabled) return;
+    document.getElementById('adminTermoEspaco').value = valor;
+    atualizarPillsEspacoAdmin();
+}
+
+function setModoEdicaoTermoAdmin(editando) {
+    const ids = [
+        'adminTermoEspaco', 'adminTermoEvento', 'adminTermoDatas', 'adminTermoOutras',
+        'adminTermoNome', 'adminTermoCpf', 'adminTermoRg', 'adminTermoTelefone',
+        'adminTermoEndereco', 'adminTermoNumero', 'adminTermoApartamento',
+        'adminTermoBairro', 'adminTermoCidade'
+    ];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !editando;
+    });
+    ['adminPillTeatro', 'adminPillIgreja'].forEach(id => {
+        const pill = document.getElementById(id);
+        if (pill) pill.disabled = !editando;
+    });
+    const email = document.getElementById('adminTermoEmail');
+    if (email) email.disabled = true;
+
+    const btnEditar = document.getElementById('btnEditarTermoAdmin');
+    const btnSalvar = document.getElementById('btnSalvarTermoAdmin');
+    if (btnEditar) btnEditar.style.display = editando ? 'none' : 'inline-flex';
+    if (btnSalvar) btnSalvar.style.display = editando ? 'inline-flex' : 'none';
+    const modal = document.getElementById('modalEditarTermo');
+    if (modal) modal.dataset.editando = editando ? 'true' : 'false';
+}
+
+function ativarEdicaoTermoAdmin() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    setModoEdicaoTermoAdmin(true);
+    const status = document.getElementById('adminTermoStatus');
+    status.style.color = '#764ba2';
+    status.textContent = 'Modo de edição ativado. Faça as correções e clique em “Salvar alterações”.';
+    document.getElementById('adminTermoNome')?.focus();
 }
 
 function coletarEdicaoTermoAdmin() {
@@ -1110,7 +1184,7 @@ function coletarEdicaoTermoAdmin() {
     };
 }
 
-async function salvarEdicaoTermoAdmin(fechar = true) {
+async function salvarEdicaoTermoAdmin() {
     if (userRole !== 'admin' || termoEditorIndex === null) return false;
     const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
     if (!p?.id) return false;
@@ -1137,11 +1211,9 @@ async function salvarEdicaoTermoAdmin(fechar = true) {
         p.evento = termoDados.nomeEvento || p.evento;
         p.localNome = termoDados.espacoIgreja ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
         status.style.color = '#15803d';
-        status.textContent = 'Alterações salvas. O termo continua marcado como concluído.';
+        status.textContent = 'Alterações salvas. O termo continua marcado como concluído. Os dados estão congelados novamente.';
         renderTabela();
-        if (fechar) {
-            setTimeout(() => closeModal('modalEditarTermo'), 450);
-        }
+        setModoEdicaoTermoAdmin(false);
         return true;
     } catch (e) {
         status.style.color = '#b91c1c';
@@ -1153,13 +1225,25 @@ async function salvarEdicaoTermoAdmin(fechar = true) {
     }
 }
 
+function gerarPDFTermoAdmin() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p?.id) {
+        alert('Esta inscrição não possui identificador para gerar o PDF.');
+        return;
+    }
+    const url = `/termo?id=${encodeURIComponent(p.id)}&adminPdf=1`;
+    const win = window.open(url, '_blank');
+    if (!win) {
+        alert('Permita pop-ups deste site para gerar o PDF do termo.');
+    }
+}
+
 async function reenviarTermoParaProponente() {
     if (userRole !== 'admin' || termoEditorIndex === null) return;
     const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
     if (!p?.email) return;
     if (!confirm(`Reenviar o link do termo para ${p.email}?\n\nO proponente poderá revisar os dados, reaprová-los e enviar uma nova versão.`)) return;
-    const salvo = await salvarEdicaoTermoAdmin(false);
-    if (!salvo) return;
     const status = document.getElementById('adminTermoStatus');
     const btn = document.getElementById('btnReenviarTermoEdicao');
     const original = btn.innerHTML;

@@ -507,7 +507,22 @@ async function carregarInscricao() {
 
     $('loadingState').style.display = 'none';
     $('formState').style.display = 'block';
+    const adminPdfMode = params.get('adminPdf') === '1' && data.termoAssinado === true;
+    if (adminPdfMode) {
+      state.clausulasAuth = CLAUSULAS.map(() => true);
+      state.clausulasOpen = CLAUSULAS.map(() => false);
+      $('confirmacaoFinal').checked = true;
+    }
     renderClausulas();
+    if (adminPdfMode) {
+      setTimeout(() => {
+        const pdf = criarPDF();
+        if (!pdf) return;
+        pdf.doc.save(pdf.fileName);
+        document.title = 'PDF gerado — Termo de Autorização DAC/UFSC';
+        showToast('PDF do termo gerado e baixado.', 'success');
+      }, 150);
+    }
   } catch (e) {
     $('loadingState').style.display = 'none';
     $('errorState').style.display = 'block';

@@ -1767,6 +1767,54 @@ async function saveTermoLegada(id, dados) {
     }
 }
 
+app.post('/api/admin/atualizar-termo', async (req, res) => {
+    const { id, termoDados } = req.body || {};
+    if (!id || !termoDados || typeof termoDados !== 'object' || Array.isArray(termoDados)) {
+        return res.status(400).json({ error: 'ID e dados do termo são obrigatórios.' });
+    }
+
+    const camposPermitidos = [
+        'espacoTeatro', 'espacoIgreja', 'nomeEvento', 'dataHorarioEvento',
+        'outrasInformacoes', 'nomeCompleto', 'cpfCnpj', 'rg', 'telefone',
+        'email', 'endereco', 'numero', 'apartamento', 'bairro', 'cidade'
+    ];
+    const dadosLimpos = {};
+    camposPermitidos.forEach(campo => {
+        const valor = termoDados[campo];
+        if (typeof valor === 'boolean' || typeof valor === 'string') {
+            dadosLimpos[campo] = typeof valor === 'string' ? valor.trim() : valor;
+        }
+    });
+
+    try {
+        if (String(id).startsWith('forms_')) {
+            const termos = await getTermosLegadas();
+            const anterior = termos[String(id)] || {};
+            const success = await saveTermoLegada(String(id), {
+                ...anterior,
+                termoAssinado: true,
+                termoDados: dadosLimpos
+            });
+            if (!success) return res.status(500).json({ error: 'Não foi possível salvar o termo legado.' });
+            return res.json({ success: true });
+        }
+
+        const agendamentos = await getAgendamentos();
+        const agendamento = agendamentos.find(item => String(item.id) === String(id));
+        if (!agendamento) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+
+        const success = await updateAgendamento(id, {
+            termoAssinado: true,
+            termoDados: dadosLimpos
+        });
+        if (!success) return res.status(500).json({ error: 'Não foi possível salvar o termo.' });
+        return res.json({ success: true });
+    } catch (e) {
+        console.error('❌ [/api/admin/atualizar-termo] erro:', e.message);
+        return res.status(500).json({ error: 'Erro interno ao salvar o termo.' });
+    }
+});
+
 app.post('/api/admin/atualizar-etapas', async (req, res) => {
     const { id, ...campos } = req.body;
     if (!id || Object.keys(campos).length === 0) {
