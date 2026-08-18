@@ -2173,9 +2173,9 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
 });
 
 app.post('/api/enviar-links-termo', async (req, res) => {
-    const { emails, observacao, baseUrl } = req.body;
-    if (!Array.isArray(emails) || emails.length === 0) {
-        return res.status(400).json({ error: 'Nenhum e-mail informado.' });
+    const { emails, observacao, baseUrl, id: requestedId } = req.body || {};
+    if ((!Array.isArray(emails) || emails.length === 0) && !requestedId) {
+        return res.status(400).json({ error: 'Nenhum e-mail ou inscrição informada.' });
     }
     const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
     const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
@@ -2188,18 +2188,31 @@ app.post('/api/enviar-links-termo', async (req, res) => {
     const naoEncontrados = [];
     const detalhes = [];
 
-    for (const rawEmail of emails) {
-        const email = rawEmail.trim().toLowerCase();
-        if (!email) continue;
-        const insc = inscricoes.find(p => (p.email || '').trim().toLowerCase() === email)
-            || await buscarInscricaoFormsPorEmail(email);
+    const destinatarios = requestedId
+        ? [{ id: String(requestedId), email: '' }]
+        : emails.map(email => ({ id: '', email }));
+
+    for (const destinatario of destinatarios) {
+        const email = String(destinatario.email || '').trim().toLowerCase();
+        const idSolicitado = String(destinatario.id || '').trim();
+        if (!email && !idSolicitado) continue;
+        const insc = idSolicitado
+            ? (inscricoes.find(p => String(p.id) === idSolicitado) || await buscarDadosInscricaoForms(idSolicitado))
+            : inscricoes.find(p => (p.email || '').trim().toLowerCase() === email)
+                || await buscarInscricaoFormsPorEmail(email);
         if (!insc) {
-            naoEncontrados.push(email);
-            detalhes.push({ email, status: 'nao_encontrado' });
+            naoEncontrados.push(email || idSolicitado);
+            detalhes.push({ email: email || null, id: idSolicitado || null, status: 'nao_encontrado' });
             continue;
         }
 
         const { nome, evento, localNome, local, id } = insc;
+        const emailDestino = String(insc.email || email).trim().toLowerCase();
+        if (!emailDestino) {
+            naoEncontrados.push(id);
+            detalhes.push({ email: null, id, status: 'sem_email' });
+            continue;
+        }
         const localExibir = localNome || (local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
         const termoUrl = `${origin}/termo?id=${encodeURIComponent(id)}`;
 
@@ -2248,23 +2261,23 @@ app.post('/api/enviar-links-termo', async (req, res) => {
         try {
             await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: 'DAC - UFSC', email: senderEmail },
-                to: [{ email: insc.email, name: nome || insc.email }],
+                to: [{ email: emailDestino, name: nome || emailDestino }],
                 cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
                 replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
                 subject: `✍️ Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
                 htmlContent
             }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
             enviados++;
-            detalhes.push({ email: insc.email, nome, evento, status: 'enviado' });
-            console.log(`✅ Link do termo enviado para ${insc.email}`);
+            detalhes.push({ email: emailDestino, id, nome, evento, status: 'enviado' });
+            console.log(`✅ Link do termo enviado para ${emailDestino} (inscrição ${id})`);
         } catch (e) {
             erros++;
-            detalhes.push({ email: insc.email, nome, evento, status: 'erro', msg: e.response?.data?.message || e.message });
-            console.error(`❌ Erro ao enviar link para ${insc.email}:`, e.response?.data || e.message);
+            detalhes.push({ email: emailDestino, id, nome, evento, status: 'erro', msg: e.response?.data?.message || e.message });
+            console.error(`❌ Erro ao enviar link para ${emailDestino}:`, e.response?.data || e.message);
         }
     }
 
-    res.json({ success: true, enviados, erros, naoEncontrados, detalhes, total: emails.length });
+    res.json({ success: true, enviados, erros, naoEncontrados, detalhes, total: destinatarios.length });
 });
 
 module.exports = app;

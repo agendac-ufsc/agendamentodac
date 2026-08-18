@@ -738,6 +738,7 @@ let allUnificados = [];
 let criterios = [];
 let avaliadores = [];
 let datasBloqueadas = [];
+let adminDataRefreshTimer = null;
 let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
 let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
@@ -819,6 +820,7 @@ function initApp() {
     buildTopActions();
     buildTabs();
     loadData();
+    if (userRole === 'admin') iniciarAtualizacaoAutomaticaTermos();
     loadCriteria();
     if (userRole === 'admin') loadAvaliadores();
 }
@@ -872,15 +874,17 @@ function switchTab(name) {
 // ══════════════════════════════════════════════════
 // INSCRIÇÕES
 // ══════════════════════════════════════════════════
-async function loadData() {
-    showInscricoesState('loading');
+async function loadData(silencioso = false) {
+    if (!silencioso) showInscricoesState('loading');
     try {
         const r = await fetch('/api/admin/dados-unificados?_=' + Date.now());
         const data = await r.json();
         if (data.error) throw new Error(data.error);
         allUnificados = Array.isArray(data) ? data : [];
         renderTabela();
+        sincronizarTermoAdminAberto();
     } catch (err) {
+        if (silencioso) return;
         document.getElementById('inscricoesError').textContent = 'Erro ao carregar dados: ' + err.message;
         showInscricoesState('error');
     }
@@ -889,10 +893,50 @@ async function loadData() {
 window.addEventListener('message', (event) => {
     if (event.origin !== window.location.origin || event.data?.type !== 'termo-assinado') return;
     const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(event.data.id));
-    if (!item) return;
-    item.primeiraEtapa.termoAssinado = true;
-    renderTabela();
+    if (item) {
+        item.primeiraEtapa.termoAssinado = true;
+        if (event.data.termoDados) item.primeiraEtapa.termoDados = event.data.termoDados;
+        renderTabela();
+    }
+    // Rebusca os dados completos, inclusive quando o proponente está em
+    // outro navegador e não pode enviar postMessage para esta janela.
+    loadData(true);
 });
+
+function iniciarAtualizacaoAutomaticaTermos() {
+    if (adminDataRefreshTimer) clearInterval(adminDataRefreshTimer);
+    adminDataRefreshTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') loadData(true);
+    }, 10000);
+}
+
+function sincronizarTermoAdminAberto() {
+    const modal = document.getElementById('modalEditarTermo');
+    if (!modal?.classList.contains('open') || termoEditorIndex === null || modal.dataset.editando === 'true') return;
+
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p) return;
+    const saved = p.termoDados || {};
+    const assinaturaAtual = JSON.stringify(saved);
+    if (modal.dataset.termoDadosHash === assinaturaAtual) return;
+    modal.dataset.termoDadosHash = assinaturaAtual;
+    const value = (key, fallback = '') => saved[key] ?? fallback ?? '';
+    document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
+    document.getElementById('adminTermoEmail').value = value('email', p.email);
+    document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
+    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
+    document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
+    atualizarPillsEspacoAdmin();
+    document.getElementById('adminTermoCpf').value = value('cpfCnpj');
+    document.getElementById('adminTermoRg').value = value('rg');
+    document.getElementById('adminTermoTelefone').value = value('telefone', p.telefone);
+    document.getElementById('adminTermoCidade').value = value('cidade');
+    document.getElementById('adminTermoEndereco').value = value('endereco');
+    document.getElementById('adminTermoNumero').value = value('numero');
+    document.getElementById('adminTermoApartamento').value = value('apartamento');
+    document.getElementById('adminTermoBairro').value = value('bairro');
+    document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
+}
 
 function showInscricoesState(state) {
     document.getElementById('inscricoesLoading').style.display = state === 'loading' ? 'block' : 'none';
@@ -1256,6 +1300,7 @@ async function reenviarTermoParaProponente() {
             body: JSON.stringify({
                 emails: [p.email],
                 baseUrl: window.location.origin,
+                id: p.id,
                 observacao: 'Seu Termo Digital foi reaberto para revisão. Confira os dados, aprove novamente todas as cláusulas e envie uma nova versão.'
             })
         });

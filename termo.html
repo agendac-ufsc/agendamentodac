@@ -879,7 +879,11 @@ function criarPDF() {
      } else {
        showToast('PDF enviado ao proponente e ao DAC.', 'success');
        if (window.opener && !window.opener.closed) {
-         window.opener.postMessage({ type: 'termo-assinado', id: state.inscricaoId }, window.location.origin);
+          window.opener.postMessage({
+            type: 'termo-assinado',
+            id: state.inscricaoId,
+            termoDados: pdf.form
+          }, window.location.origin);
        }
      }
    } catch (e) {
