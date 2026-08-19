@@ -60,6 +60,8 @@
   .clausula.open .clausula-body { display: block; }
   .clausula-body p { font-size: 13.5px; line-height: 1.65; color: #4b5563; margin: 8px 0; text-align: justify; }
   .clausula-body p.indent { padding-left: 16px; }
+  .clausula.readonly .clausula-head, .clausula.readonly .auth-btn { cursor: default; }
+  .clausula.readonly .clausula-head:hover { background: #fff; }
   .auth-btn {
     display: flex; align-items: flex-start; gap: 10px; width: 100%;
     text-align: left; padding-top: 14px; margin-top: 12px;
@@ -101,6 +103,8 @@
   .btn-email { background: #16a34a; color: #fff; }
   .btn-email:hover:not(:disabled) { background: #15803d; }
   .btn-email:disabled { background: #e5e7eb; color: #9ca3af; cursor: not-allowed; }
+  input:disabled, textarea:disabled { opacity: 1; color: #374151; background: #f8fafc; border-color: #e5e7eb; cursor: default; }
+  .pill:disabled { opacity: 1; cursor: default; }
   @media (max-width: 560px) { .actions { flex-direction: column; } }
   .err { color: #ef4444; font-size: 12px; margin-top: 4px; }
   .err-input { border-color: #fca5a5 !important; background: #fef2f2; }
@@ -120,6 +124,15 @@
   .toast.show { opacity: 1; }
   .toast.error { background: #b91c1c; }
   .toast.success { background: #15803d; }
+  .completion-notice { display:none; margin: 0 0 12px; padding: 11px 13px; border: 1px solid #bbf7d0; border-radius: 7px; background: #f0fdf4; color: #166534; font-size: 12px; line-height: 1.5; }
+  .completion-notice.show { display:block; }
+  .completion-modal { display:none; position:fixed; inset:0; z-index:1000; align-items:center; justify-content:center; padding:20px; background:rgba(15,23,42,.52); }
+  .completion-modal.open { display:flex; }
+  .completion-dialog { width:min(100%, 500px); background:#fff; border-radius:12px; padding:26px 28px; box-shadow:0 15px 45px rgba(0,0,0,.25); text-align:center; }
+  .completion-icon { width:52px; height:52px; margin:0 auto 12px; display:flex; align-items:center; justify-content:center; border-radius:50%; background:#dcfce7; color:#16a34a; font-size:27px; }
+  .completion-dialog h2 { margin:0 0 10px; color:#166534; font-size:20px; }
+  .completion-dialog p { margin:0; color:#4b5563; font-size:14px; line-height:1.65; }
+  .completion-dialog button { margin-top:20px; min-width:110px; padding:10px 22px; border:0; border-radius:7px; background:#16a34a; color:#fff; font:600 14px inherit; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -212,7 +225,7 @@
     </div>
     <div id="clausulasContainer"></div>
     <div class="progress" id="progressBar">
-      Cláusulas aprovadas: <strong><span id="progNum">0</span> de 9</strong> — o botão de gerar PDF será liberado após aprovar todas.
+      Cláusulas aprovadas: <strong><span id="progNum">0</span> de 9</strong> — o botão de concluir será liberado após aprovar todas.
     </div>
   </div>
 
@@ -232,12 +245,12 @@
   <!-- Buttons -->
   <div class="card">
     <div class="card-body">
+      <div id="completionNotice" class="completion-notice">
+        <strong>Termo já concluído.</strong> Você pode fechar esta aba/janela se não tiver mais nada a fazer. Para corrigir alguma informação, clique em <strong>Editar termo</strong>.
+      </div>
       <div class="actions">
-        <button type="button" id="btnEnviarPDF" class="btn btn-email" disabled onclick="enviarPDF()">
-          ✉ Enviar PDF para o e-mail
-        </button>
-        <button type="button" id="btnPDF" class="btn btn-primary" disabled onclick="gerarPDF()">
-          ⬇ Gerar PDF do Termo Assinado
+        <button type="button" id="btnEnviarPDF" class="btn btn-email" disabled onclick="acaoBotaoTermo()">
+          ✓ Concluir termo
         </button>
       </div>
     </div>
@@ -247,6 +260,15 @@
 </div>
 
 <div id="toast" class="toast"></div>
+
+<div id="completionModal" class="completion-modal" role="dialog" aria-modal="true" aria-labelledby="completionTitle">
+  <div class="completion-dialog">
+    <div class="completion-icon">✓</div>
+    <h2 id="completionTitle">Termo preenchido com sucesso!</h2>
+    <p>As cópias em PDF foram enviadas para o e-mail do proponente e para o DAC. Você já pode fechar esta aba ou janela se não tiver mais nada a fazer.</p>
+    <button type="button" onclick="fecharModalConclusao()">OK</button>
+  </div>
+</div>
 
 <script>
 // === CLÁUSULAS DO TERMO ===
@@ -355,6 +377,9 @@ const state = {
   espacoIgreja: false,
   clausulasOpen: CLAUSULAS.map(() => false),
   clausulasAuth: CLAUSULAS.map(() => false),
+  termoConcluido: false,
+  modoEdicao: false,
+  adminPdfMode: false,
   responsavelNome: "Andréa Búrigo Ventura",
   cpfAutorizadora: "",
   editalTitle: "Este documento é parte integrante do Edital Mais Arte - N° 002/2026/DAC/SeCArtE"
@@ -370,6 +395,7 @@ function showToast(msg, type) {
 }
 
 function toggleEspaco(which) {
+  if (state.termoConcluido && !state.modoEdicao) return;
   if (which === 'teatro') {
     state.espacoTeatro = !state.espacoTeatro;
     if (state.espacoTeatro) state.espacoIgreja = false;
@@ -391,7 +417,8 @@ function renderClausulas() {
     const auth = state.clausulasAuth[idx];
 
     const div = document.createElement('div');
-    div.className = 'clausula' + (enabled ? '' : ' disabled') + (open ? ' open' : '') + (auth ? ' authorized' : '');
+    const somenteLeitura = state.termoConcluido && !state.modoEdicao;
+    div.className = 'clausula' + (enabled ? '' : ' disabled') + (open ? ' open' : '') + (auth ? ' authorized' : '') + (somenteLeitura ? ' readonly' : '');
 
     const paragHtml = cl.paragrafos.map(p => {
       const isItem = /^([a-z]\)|I{1,3}V?\s—|Parágrafo)/i.test(p.trim());
@@ -417,6 +444,7 @@ function renderClausulas() {
 }
 
 function toggleClausula(idx) {
+  if (state.termoConcluido && !state.modoEdicao) return;
   const enabled = idx === 0 || state.clausulasAuth[idx - 1];
   if (!enabled) return;
   state.clausulasOpen[idx] = !state.clausulasOpen[idx];
@@ -424,6 +452,7 @@ function toggleClausula(idx) {
 }
 
 function authClausula(idx) {
+  if (state.termoConcluido && !state.modoEdicao) return;
   state.clausulasAuth[idx] = !state.clausulasAuth[idx];
   // Se desautorizou, desautoriza todas as próximas também
   if (!state.clausulasAuth[idx]) {
@@ -441,11 +470,11 @@ function updateProgress() {
   const bar = $('progressBar');
   if (n === CLAUSULAS.length) {
     bar.classList.add('complete');
-    bar.innerHTML = '✓ Todas as cláusulas aprovadas — <strong>confirme a declaração final abaixo para liberar as ações</strong>';
+    bar.innerHTML = '✓ Todas as cláusulas aprovadas — <strong>confirme a declaração final abaixo para liberar a conclusão</strong>';
     $('confirmacaoFinal').disabled = false;
   } else {
     bar.classList.remove('complete');
-    bar.innerHTML = `Cláusulas aprovadas: <strong><span id="progNum">${n}</span> de ${CLAUSULAS.length}</strong> — as ações serão liberadas após aprovar todas e confirmar a declaração final.`;
+    bar.innerHTML = `Cláusulas aprovadas: <strong><span id="progNum">${n}</span> de ${CLAUSULAS.length}</strong> — a conclusão será liberada após aprovar todas e confirmar a declaração final.`;
     $('confirmacaoFinal').checked = false;
     $('confirmacaoFinal').disabled = true;
   }
@@ -472,6 +501,10 @@ async function carregarInscricao() {
       throw new Error(j.error || 'Inscrição não encontrada');
     }
     const data = await r.json();
+    const adminPdfMode = params.get('adminPdf') === '1' && data.termoAssinado === true;
+    state.adminPdfMode = adminPdfMode;
+    state.termoConcluido = data.termoAssinado === true && !adminPdfMode;
+    state.modoEdicao = false;
 
     const termo = data.termoDados || {};
     $('nomeCompleto').value = termo.nomeCompleto || data.nome || '';
@@ -507,13 +540,13 @@ async function carregarInscricao() {
 
     $('loadingState').style.display = 'none';
     $('formState').style.display = 'block';
-    const adminPdfMode = params.get('adminPdf') === '1' && data.termoAssinado === true;
-    if (adminPdfMode) {
+    if (data.termoAssinado === true) {
       state.clausulasAuth = CLAUSULAS.map(() => true);
       state.clausulasOpen = CLAUSULAS.map(() => false);
       $('confirmacaoFinal').checked = true;
     }
     renderClausulas();
+    aplicarModoTermo();
     if (adminPdfMode) {
       setTimeout(() => {
         const pdf = criarPDF();
@@ -602,8 +635,49 @@ function atualizarAutorizacaoFinal() {
 
 function atualizarBotoes() {
   const pronto = termoPronto();
-  $('btnPDF').disabled = !pronto;
-  $('btnEnviarPDF').disabled = !pronto;
+  const btn = $('btnEnviarPDF');
+  if (state.termoConcluido && !state.modoEdicao) {
+    btn.disabled = false;
+    btn.innerHTML = '✎ Editar termo';
+  } else {
+    btn.disabled = !pronto;
+    btn.innerHTML = '✓ Concluir termo';
+  }
+}
+
+function aplicarModoTermo() {
+  const bloqueado = state.termoConcluido && !state.modoEdicao;
+  document.querySelectorAll('#formState input[type="text"], #formState input[type="email"], #formState textarea').forEach(el => {
+    el.disabled = bloqueado;
+  });
+  document.querySelectorAll('#formState .pill').forEach(el => {
+    el.disabled = bloqueado;
+  });
+  $('confirmacaoFinal').disabled = bloqueado || !state.clausulasAuth.every(Boolean);
+  $('completionNotice').classList.toggle('show', bloqueado);
+  atualizarBotoes();
+}
+
+function acaoBotaoTermo() {
+  if (state.termoConcluido && !state.modoEdicao) {
+    state.modoEdicao = true;
+    state.clausulasAuth = CLAUSULAS.map(() => false);
+    state.clausulasOpen = CLAUSULAS.map(() => false);
+    $('confirmacaoFinal').checked = false;
+    renderClausulas();
+    aplicarModoTermo();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+  enviarPDF();
+}
+
+function mostrarModalConclusao() {
+  $('completionModal').classList.add('open');
+}
+
+function fecharModalConclusao() {
+  $('completionModal').classList.remove('open');
 }
 
 // === GERAÇÃO DE PDF (estilo do modelo oficial) ===
@@ -877,6 +951,13 @@ function criarPDF() {
      if (result.statusSaved === false) {
        showToast('PDF enviado, mas não foi possível atualizar o status no painel.', 'error');
      } else {
+        state.termoConcluido = true;
+        state.modoEdicao = false;
+        state.clausulasAuth = CLAUSULAS.map(() => true);
+        state.clausulasOpen = CLAUSULAS.map(() => false);
+        $('confirmacaoFinal').checked = true;
+        renderClausulas();
+        aplicarModoTermo();
        showToast('PDF enviado ao proponente e ao DAC.', 'success');
        if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
@@ -885,6 +966,7 @@ function criarPDF() {
             termoDados: pdf.form
           }, window.location.origin);
        }
+        mostrarModalConclusao();
      }
    } catch (e) {
      showToast('Erro ao enviar o PDF: ' + e.message, 'error');
