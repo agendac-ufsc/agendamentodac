@@ -730,6 +730,37 @@
     </div>
 </div>
 
+<!-- ═══════════════ MODAL TERMO INCOMPLETO (admin only) ═══ -->
+<div class="modal" id="modalTermoPendente">
+    <div class="modal-box" style="max-width:620px;border-top:4px solid #f59e0b">
+        <h3 style="display:flex;align-items:center;gap:8px">
+            <i class="fas fa-file-signature" style="color:#d97706"></i>
+            Termo incompleto
+        </h3>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:15px 16px;color:#92400e;font-size:13px;line-height:1.6">
+            <strong>Este termo ainda não foi concluído pelo proponente.</strong><br>
+            Envie o link abaixo para que ele preencha os dados restantes, leia e aprove as cláusulas e encaminhe o PDF assinado. Esse procedimento registra e oficializa o evento junto ao DAC/UFSC.
+        </div>
+        <div style="margin-top:18px;display:grid;gap:10px;font-size:13px">
+            <div><strong>Proponente:</strong> <span id="termoPendenteNome">—</span></div>
+            <div><strong>E-mail:</strong> <span id="termoPendenteEmail">—</span></div>
+            <div><strong>Evento:</strong> <span id="termoPendenteEvento">—</span></div>
+        </div>
+        <div id="termoPendenteStatus" style="font-size:13px;min-height:18px;margin-top:14px"></div>
+        <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
+            <button class="btn-close-modal" onclick="closeModal('modalTermoPendente')">Cancelar</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn-save-modal" style="background:#667eea" onclick="abrirTermoPendenteEmNovaAba()">
+                    <i class="fas fa-external-link-alt"></i> Abrir termo
+                </button>
+                <button id="btnEnviarLinkTermoPendente" class="btn-save-modal" style="background:#d97706" onclick="enviarLinkTermoPendente()">
+                    <i class="fas fa-paper-plane"></i> Enviar link para o e-mail
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // ESTADO GLOBAL
@@ -743,6 +774,7 @@ let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
 let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
 let termoEditorIndex = null;
+let termoPendenteIndex = null;
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -1046,7 +1078,7 @@ function renderTabela() {
         const termoColor = termoAssinado ? '#16a34a' : '#f59e0b';
         const termoTitle = termoAssinado
             ? 'Visualizar dados do termo concluído'
-            : 'Abrir termo pré-preenchido e enviar link ao proponente';
+            : 'Abrir termo incompleto e enviar link ao proponente';
         const termoEditLink = termoAssinado && userRole === 'admin'
             ? `<button class="termo-editar-link" onclick="abrirEditorTermo(${originalIndex})" title="Editar dados do termo concluído"><i class="fas fa-edit"></i> editar termo</button>`
             : '';
@@ -1102,34 +1134,65 @@ function toggleCheckAll() {
 async function abrirTermoDigital(idx) {
     const p = allUnificados[idx]?.primeiraEtapa;
     if (!p || !p.id) { alert('Inscrição sem identificador — não é possível gerar o link.'); return; }
-    if (!p.email) { alert('Esta inscrição não possui e-mail para receber o link.'); return; }
+    termoPendenteIndex = idx;
+    document.getElementById('termoPendenteNome').textContent = p.nome || '—';
+    document.getElementById('termoPendenteEmail').textContent = p.email || 'E-mail não informado';
+    document.getElementById('termoPendenteEvento').textContent = p.evento || '—';
+    document.getElementById('termoPendenteStatus').textContent = '';
+    document.getElementById('termoPendenteStatus').style.color = '#666';
+    const btn = document.getElementById('btnEnviarLinkTermoPendente');
+    btn.disabled = !p.email;
+    btn.title = p.email ? '' : 'Esta inscrição não possui e-mail cadastrado';
+    openModal('modalTermoPendente');
+}
 
-    const termoUrl = `${window.location.origin}/termo?id=${encodeURIComponent(p.id)}`;
-    const confirmar = confirm(
-        `Abrir o termo pré-preenchido e enviar o link para ${p.email}?\n\n` +
-        `O proponente poderá completar os dados, aprovar as cláusulas e enviar o PDF assinado.`
-    );
-    if (!confirmar) return;
+function abrirTermoPendenteEmNovaAba() {
+    if (termoPendenteIndex === null) return;
+    const p = allUnificados[termoPendenteIndex]?.primeiraEtapa;
+    if (!p?.id) return;
+    const termoWindow = window.open(`/termo?id=${encodeURIComponent(p.id)}`, '_blank');
+    if (!termoWindow) alert('Permita pop-ups deste site para abrir o termo.');
+}
 
-    const termoWindow = window.open(termoUrl, '_blank');
-    if (!termoWindow) {
-        alert('Permita pop-ups deste site para abrir o termo.');
+async function enviarLinkTermoPendente() {
+    if (userRole !== 'admin' || termoPendenteIndex === null) return;
+    const p = allUnificados[termoPendenteIndex]?.primeiraEtapa;
+    if (!p?.id || !p.email) {
+        alert('Esta inscrição não possui e-mail para receber o link.');
         return;
     }
+
+    const status = document.getElementById('termoPendenteStatus');
+    const btn = document.getElementById('btnEnviarLinkTermoPendente');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    status.style.color = '#666';
+    status.textContent = 'Enviando o link e as instruções ao proponente...';
 
     try {
         const r = await fetch('/api/enviar-links-termo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ emails: [p.email], baseUrl: window.location.origin })
+            body: JSON.stringify({
+                id: p.id,
+                emails: [p.email],
+                baseUrl: window.location.origin,
+                observacao: 'Para registrar e oficializar seu evento junto ao DAC/UFSC, preencha os dados restantes do Termo Digital, leia e aprove todas as cláusulas e envie o PDF assinado pelo próprio formulário.'
+            })
         });
-        const data = await r.json();
+        const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.success || data.enviados !== 1) {
             throw new Error(data.error || 'O link não foi enviado.');
         }
-        alert(`✅ Termo aberto e link enviado para ${p.email}.`);
+        status.style.color = '#15803d';
+        status.textContent = `Link enviado para ${p.email}.`;
     } catch (e) {
-        alert('O termo foi aberto, mas não foi possível enviar o link: ' + e.message);
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
     }
 }
 
