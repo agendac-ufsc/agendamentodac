@@ -466,7 +466,8 @@ function authClausula(idx) {
 
 function updateProgress() {
   const n = state.clausulasAuth.filter(Boolean).length;
-  $('progNum').textContent = n;
+  const progNum = $('progNum');
+  if (progNum) progNum.textContent = n;
   const bar = $('progressBar');
   if (n === CLAUSULAS.length) {
     bar.classList.add('complete');
