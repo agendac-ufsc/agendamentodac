@@ -278,6 +278,23 @@
                 Cole abaixo os e-mails dos proponentes (um por linha, ou separados por vírgula/ponto-e-vírgula). O sistema irá buscar a inscrição de cada e-mail e enviar o link individual do Termo Digital.
             </p>
 
+            <div style="background:#f8f5fc;border:1px solid #e5d9f0;border-radius:10px;padding:14px 16px;margin-bottom:20px">
+                <label class="form-label" style="font-weight:600;color:#444;margin-top:0">
+                    Nome da representante da Secretaria de Cultura
+                </label>
+                <p style="font-size:12px;color:#777;margin:0 0 8px">
+                    Este nome será exibido nos próximos PDFs gerados do Termo de Autorização.
+                </p>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <input type="text" id="termoResponsavelNome" class="form-input" maxlength="150"
+                        placeholder="Nome completo da representante" style="flex:1;min-width:240px">
+                    <button class="btn-top btn-purple" onclick="salvarNomeResponsavelTermo()">
+                        <i class="fas fa-save"></i> Salvar nome
+                    </button>
+                </div>
+                <div id="termoResponsavelStatus" style="font-size:12px;min-height:16px;margin-top:7px"></div>
+            </div>
+
             <label class="form-label" style="font-weight:600;color:#444">E-mails dos proponentes</label>
             <textarea id="termosEmailsInput" rows="7"
                 style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;outline:none;transition:.2s"
@@ -2130,6 +2147,8 @@ async function loadConfigs() {
         const c = await r.json();
         document.getElementById('cfgFormsLink').value = c.formsLink || '';
         document.getElementById('cfgSheetId').value = c.spreadsheetId || '';
+        const responsavel = document.getElementById('termoResponsavelNome');
+        if (responsavel) responsavel.value = c.responsavelTermoNome || 'Andréa Búrigo Ventura';
         const tt = document.getElementById('cfgTituloPagina');
         if (tt) tt.value = c.tituloPaginaAgendamento || 'Inscrição de Projeto';
         const an = document.getElementById('cfgAvaliacoesNecessarias');
@@ -2187,6 +2206,7 @@ async function saveConfigs() {
         spreadsheetId: document.getElementById('cfgSheetId').value,
         tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
+        responsavelTermoNome: (document.getElementById('termoResponsavelNome')?.value || '').trim() || 'Andréa Búrigo Ventura',
         mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',
         botoesHome: {
             interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno', dataInicio: (document.getElementById('cfgBtnInternoDataInicio')?.value || '') || null },
@@ -2208,6 +2228,34 @@ async function saveConfigs() {
         if (r.ok && d.success) alert('Configurações salvas!');
         else alert('Erro ao salvar: ' + (d.error || 'Falha desconhecida. Verifique o console.'));
     } catch(e) { alert('Erro de conexão: ' + e.message); }
+}
+
+async function salvarNomeResponsavelTermo() {
+    const input = document.getElementById('termoResponsavelNome');
+    const status = document.getElementById('termoResponsavelStatus');
+    const nome = (input?.value || '').trim();
+    if (!nome) {
+        status.style.color = '#b91c1c';
+        status.textContent = 'Informe o nome completo da representante.';
+        return;
+    }
+    try {
+        status.style.color = '#666';
+        status.textContent = 'Salvando...';
+        const atual = await fetch('/api/config').then(r => r.json());
+        const r = await fetch('/api/admin/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...atual, responsavelTermoNome: nome })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o nome.');
+        status.style.color = '#15803d';
+        status.textContent = 'Nome salvo. Os próximos PDFs usarão esta informação.';
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+    }
 }
 
 function toggleBloqueioData() {

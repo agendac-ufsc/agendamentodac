@@ -483,7 +483,22 @@ function updateProgress() {
 }
 
 // === CARREGAR INSCRIÇÃO ===
+async function carregarNomeResponsavel() {
+  try {
+    const r = await fetch('/api/config');
+    if (!r.ok) return;
+    const config = await r.json();
+    const nome = typeof config.responsavelTermoNome === 'string'
+      ? config.responsavelTermoNome.trim()
+      : '';
+    if (nome) state.responsavelNome = nome;
+  } catch (e) {
+    // Mantém o nome padrão caso a configuração não esteja disponível.
+  }
+}
+
 async function carregarInscricao() {
+  await carregarNomeResponsavel();
   const params = new URLSearchParams(window.location.search);
   const id = params.get('id');
   state.inscricaoId = id;

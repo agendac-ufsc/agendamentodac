@@ -285,6 +285,7 @@ let HORARIOS_LIMITES = {
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 let AVALIACOES_NECESSARIAS = 3;
+let RESPONSAVEL_TERMO_NOME = 'Andréa Búrigo Ventura';
 let BOTOES_HOME = {
     interno: { ativo: false, texto: 'Edital Interno' },
     externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
@@ -316,6 +317,9 @@ const getConfigs = async (caller = 'unknown') => {
                     const n = parseInt(configs.avaliacoesNecessarias, 10);
                     if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
                 }
+                if (typeof configs.responsavelTermoNome === 'string' && configs.responsavelTermoNome.trim()) {
+                    RESPONSAVEL_TERMO_NOME = configs.responsavelTermoNome.trim();
+                }
                 if (configs.botoesHome && typeof configs.botoesHome === 'object') {
                     BOTOES_HOME = {
                         interno: { ...BOTOES_HOME.interno, ...(configs.botoesHome.interno || {}) },
@@ -340,6 +344,7 @@ const getConfigs = async (caller = 'unknown') => {
                     datasBloqueadas: DATAS_BLOQUEADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+                    responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                     botoesHome: BOTOES_HOME,
                     mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
                 };
@@ -362,6 +367,7 @@ const getConfigs = async (caller = 'unknown') => {
         datasBloqueadas: DATAS_BLOQUEADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+        responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
         botoesHome: BOTOES_HOME,
         mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
     };
@@ -413,6 +419,10 @@ const saveConfigs = async (configs) => {
             const n = parseInt(configs.avaliacoesNecessarias, 10);
             if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
         }
+        if (configs.responsavelTermoNome !== undefined) {
+            const nome = String(configs.responsavelTermoNome || '').trim();
+            if (nome) RESPONSAVEL_TERMO_NOME = nome;
+        }
         if (configs.botoesHome && typeof configs.botoesHome === 'object') {
             const norm = (b, padraoTexto) => ({
                 ativo: !!(b && b.ativo),
@@ -439,6 +449,7 @@ const saveConfigs = async (configs) => {
                 datasBloqueadas: DATAS_BLOQUEADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+                responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                 botoesHome: BOTOES_HOME,
                 mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
             };
@@ -541,12 +552,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
