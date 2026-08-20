@@ -1123,7 +1123,7 @@ function renderTabela() {
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
-            <button class="btn-action" title="Copiar link do Termo" onclick="copiarLinkTermo(${originalIndex})" style="color:#2563eb"><i class="fas fa-link"></i></button>
+            <button class="btn-action" title="Enviar formulário de atividades ao proponente" aria-label="Enviar formulário de atividades ao proponente" onclick="abrirEmailFormularioAtividades(${originalIndex})" style="color:#2563eb"><i class="fas fa-clipboard-list"></i></button>
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
 
@@ -1666,6 +1666,63 @@ function openEmailRapido(email, nome, evento) {
     document.getElementById('emailRapidoMensagem').value = '';
     document.getElementById('emailRapidoStatus').textContent = '';
     closeModal('modalContato');
+    openModal('modalEmailRapido');
+}
+
+function adicionarDiasUteis(dataInicial, quantidade) {
+    const data = new Date(dataInicial);
+    let adicionados = 0;
+    while (adicionados < quantidade) {
+        data.setDate(data.getDate() + 1);
+        const dia = data.getDay();
+        if (dia !== 0 && dia !== 6) adicionados++;
+    }
+    return data;
+}
+
+function formatarDataBrasileira(data) {
+    return data.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+function abrirEmailFormularioAtividades(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p?.email) {
+        alert('Esta inscrição não possui um e-mail válido para envio.');
+        return;
+    }
+
+    const formularioUrl = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
+    const prazo = formatarDataBrasileira(adicionarDiasUteis(new Date(), 5));
+    const mensagem = `Olá, prezados(as),
+
+Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
+
+As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:
+
+Formulário Atividades DAC 2026
+${formularioUrl}
+
+Pedimos que o formulário seja preenchido até o dia ${prazo}.
+
+Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já, pela colaboração.
+
+Atenciosamente,
+
+--
+Comissão de Pauta
+Departamento Artístico Cultural
+Secretaria de Cultura, Arte e Esporte
+Universidade Federal de Santa Catarina`;
+
+    _emailRapidoData = { email: p.email, nome: p.nome || '', evento: p.evento || '' };
+    document.getElementById('emailRapidoPara').value = p.email;
+    document.getElementById('emailRapidoAssunto').value = 'Formulário Atividades DAC 2026';
+    document.getElementById('emailRapidoMensagem').value = mensagem;
+    document.getElementById('emailRapidoStatus').textContent = '';
     openModal('modalEmailRapido');
 }
 
