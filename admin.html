@@ -728,8 +728,16 @@
         </div>
         <div id="adminTermoStatus" style="font-size:13px;min-height:18px;margin-top:12px"></div>
         <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
-            <button class="btn-close-modal" onclick="closeModal('modalEditarTermo')">Cancelar</button>
             <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn-close-modal" onclick="closeModal('modalEditarTermo')">Cancelar</button>
+                <button class="btn-close-modal" style="background:#e5e7eb" onclick="closeModal('modalEditarTermo')">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button id="btnAtualizarInformacoesTermo" class="btn-save-modal" style="background:#16a34a;display:none" onclick="atualizarInformacoesTermoAdmin()">
+                    <i class="fas fa-check-circle"></i> Atualizar informações
+                </button>
                 <button id="btnGerarPDFTermo" class="btn-save-modal" style="background:#dc2626" onclick="gerarPDFTermoAdmin()">
                     <i class="far fa-file-pdf"></i> Gerar PDF
                 </button>
@@ -792,6 +800,7 @@ let viewerEmail = null;
 let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
 let termoEditorIndex = null;
 let termoEditorCompleto = false;
+let termoAdminAlteracoesSalvas = false;
 let termoPendenteIndex = null;
 
 // ══════════════════════════════════════════════════
@@ -1221,6 +1230,7 @@ function abrirEditorTermo(idx) {
 
     termoEditorIndex = idx;
     termoEditorCompleto = p.termoAssinado === true || p.termoAssinado === 'true';
+    termoAdminAlteracoesSalvas = false;
     const saved = p.termoDados || {};
     const value = (key, fallback = '') => saved[key] ?? fallback ?? '';
     document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
@@ -1239,6 +1249,19 @@ function abrirEditorTermo(idx) {
     document.getElementById('adminTermoBairro').value = value('bairro');
     document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
     document.getElementById('adminTermoStatus').textContent = '';
+    [
+        'adminTermoEspaco', 'adminTermoEvento', 'adminTermoDatas', 'adminTermoNome',
+        'adminTermoCpf', 'adminTermoRg', 'adminTermoTelefone', 'adminTermoEndereco',
+        'adminTermoNumero', 'adminTermoBairro', 'adminTermoCidade'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.oninput = () => {
+                termoAdminAlteracoesSalvas = false;
+                atualizarBotaoAtualizarInformacoesTermo();
+            };
+        }
+    });
     const titulo = document.getElementById('adminTermoTitulo');
     const nota = document.getElementById('adminTermoNota');
     const pdfBtn = document.getElementById('btnGerarPDFTermo');
@@ -1256,8 +1279,27 @@ function abrirEditorTermo(idx) {
             : '<strong><i class="fas fa-exclamation-triangle"></i> Termo ainda não concluído.</strong><br>Os dados já disponíveis podem ser consultados ou corrigidos pelo administrador. O PDF permanece bloqueado até o proponente concluir o termo.';
     }
     if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
+    atualizarBotaoAtualizarInformacoesTermo();
     setModoEdicaoTermoAdmin(false);
     openModal('modalEditarTermo');
+}
+
+function termoAdminTemTodosDados() {
+    const f = coletarEdicaoTermoAdmin();
+    const obrigatorios = [
+        f.nomeEvento, f.dataHorarioEvento, f.nomeCompleto, f.cpfCnpj,
+        f.rg, f.telefone, f.email, f.endereco, f.numero, f.bairro, f.cidade
+    ];
+    return Boolean(f.espacoTeatro || f.espacoIgreja) && obrigatorios.every(Boolean)
+        && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email);
+}
+
+function atualizarBotaoAtualizarInformacoesTermo() {
+    const btn = document.getElementById('btnAtualizarInformacoesTermo');
+    if (!btn) return;
+    btn.style.display = !termoEditorCompleto && termoAdminAlteracoesSalvas && termoAdminTemTodosDados()
+        ? 'inline-flex'
+        : 'none';
 }
 
 function atualizarPillsEspacoAdmin() {
@@ -1296,6 +1338,7 @@ function setModoEdicaoTermoAdmin(editando) {
     if (btnSalvar) btnSalvar.style.display = editando ? 'inline-flex' : 'none';
     const modal = document.getElementById('modalEditarTermo');
     if (modal) modal.dataset.editando = editando ? 'true' : 'false';
+    atualizarBotaoAtualizarInformacoesTermo();
 }
 
 function ativarEdicaoTermoAdmin() {
@@ -1327,7 +1370,7 @@ function coletarEdicaoTermoAdmin() {
     };
 }
 
-async function salvarEdicaoTermoAdmin() {
+async function salvarEdicaoTermoAdmin(marcarConcluido = termoEditorCompleto) {
     if (userRole !== 'admin' || termoEditorIndex === null) return false;
     const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
     if (!p?.id) return false;
@@ -1343,7 +1386,7 @@ async function salvarEdicaoTermoAdmin() {
         const r = await fetch('/api/admin/atualizar-termo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: p.id, termoDados, marcarConcluido: termoEditorCompleto })
+            body: JSON.stringify({ id: p.id, termoDados, marcarConcluido })
         });
         const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o termo.');
@@ -1354,10 +1397,15 @@ async function salvarEdicaoTermoAdmin() {
         p.evento = termoDados.nomeEvento || p.evento;
         p.localNome = termoDados.espacoIgreja ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
         status.style.color = '#15803d';
+        termoEditorCompleto = marcarConcluido === true;
+        termoAdminAlteracoesSalvas = !termoEditorCompleto;
         status.textContent = termoEditorCompleto
             ? 'Alterações salvas. O termo continua marcado como concluído. Os dados estão congelados novamente.'
             : 'Alterações salvas no painel. O termo continua aguardando a conclusão do proponente.';
         p.termoAssinado = termoEditorCompleto;
+        const pdfBtn = document.getElementById('btnGerarPDFTermo');
+        if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
+        atualizarBotaoAtualizarInformacoesTermo();
         renderTabela();
         setModoEdicaoTermoAdmin(false);
         return true;
@@ -1369,6 +1417,17 @@ async function salvarEdicaoTermoAdmin() {
         btn.disabled = false;
         btn.innerHTML = original;
     }
+}
+
+async function atualizarInformacoesTermoAdmin() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    if (!termoAdminTemTodosDados()) {
+        const status = document.getElementById('adminTermoStatus');
+        status.style.color = '#b91c1c';
+        status.textContent = 'Preencha todos os campos obrigatórios antes de atualizar as informações.';
+        return;
+    }
+    await salvarEdicaoTermoAdmin(true);
 }
 
 function gerarPDFTermoAdmin() {
