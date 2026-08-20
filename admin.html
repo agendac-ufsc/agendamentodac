@@ -1427,7 +1427,10 @@ async function atualizarInformacoesTermoAdmin() {
         status.textContent = 'Preencha todos os campos obrigatórios antes de atualizar as informações.';
         return;
     }
-    await salvarEdicaoTermoAdmin(true);
+    const salvo = await salvarEdicaoTermoAdmin(true);
+    if (salvo) {
+        closeModal('modalEditarTermo');
+    }
 }
 
 function gerarPDFTermoAdmin() {
