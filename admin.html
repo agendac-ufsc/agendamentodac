@@ -1334,8 +1334,10 @@ function setModoEdicaoTermoAdmin(editando) {
 
     const btnEditar = document.getElementById('btnEditarTermoAdmin');
     const btnSalvar = document.getElementById('btnSalvarTermoAdmin');
+    const btnReenviar = document.getElementById('btnReenviarTermoEdicao');
     if (btnEditar) btnEditar.style.display = editando ? 'none' : 'inline-flex';
     if (btnSalvar) btnSalvar.style.display = editando ? 'inline-flex' : 'none';
+    if (btnReenviar) btnReenviar.style.display = editando ? 'none' : 'inline-flex';
     const modal = document.getElementById('modalEditarTermo');
     if (modal) modal.dataset.editando = editando ? 'true' : 'false';
     atualizarBotaoAtualizarInformacoesTermo();
