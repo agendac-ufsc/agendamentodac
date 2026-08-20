@@ -1815,7 +1815,7 @@ async function saveTermoLegada(id, dados) {
 }
 
 app.post('/api/admin/atualizar-termo', async (req, res) => {
-    const { id, termoDados } = req.body || {};
+    const { id, termoDados, marcarConcluido = true } = req.body || {};
     if (!id || !termoDados || typeof termoDados !== 'object' || Array.isArray(termoDados)) {
         return res.status(400).json({ error: 'ID e dados do termo são obrigatórios.' });
     }
@@ -1839,11 +1839,11 @@ app.post('/api/admin/atualizar-termo', async (req, res) => {
             const anterior = termos[String(id)] || {};
             const success = await saveTermoLegada(String(id), {
                 ...anterior,
-                termoAssinado: true,
+                termoAssinado: marcarConcluido === true,
                 termoDados: dadosLimpos
             });
             if (!success) return res.status(500).json({ error: 'Não foi possível salvar o termo legado.' });
-            return res.json({ success: true });
+            return res.json({ success: true, termoAssinado: marcarConcluido === true });
         }
 
         const agendamentos = await getAgendamentos();
@@ -1851,11 +1851,11 @@ app.post('/api/admin/atualizar-termo', async (req, res) => {
         if (!agendamento) return res.status(404).json({ error: 'Inscrição não encontrada.' });
 
         const success = await updateAgendamento(id, {
-            termoAssinado: true,
+            termoAssinado: marcarConcluido === true,
             termoDados: dadosLimpos
         });
         if (!success) return res.status(500).json({ error: 'Não foi possível salvar o termo.' });
-        return res.json({ success: true });
+        return res.json({ success: true, termoAssinado: marcarConcluido === true });
     } catch (e) {
         console.error('❌ [/api/admin/atualizar-termo] erro:', e.message);
         return res.status(500).json({ error: 'Erro interno ao salvar o termo.' });

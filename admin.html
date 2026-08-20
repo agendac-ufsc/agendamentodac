@@ -647,11 +647,11 @@
 <!-- ═══════════════ MODAL VISUALIZAR TERMO CONCLUÍDO (admin only) ═══ -->
 <div class="modal" id="modalEditarTermo">
     <div class="modal-box" style="max-width:720px;border-top:4px solid #16a34a">
-        <h3 style="display:flex;align-items:center;gap:8px">
+        <h3 id="adminTermoTitulo" style="display:flex;align-items:center;gap:8px">
             <i class="fas fa-file-signature" style="color:#16a34a"></i>
             Visualizar termo concluído
         </h3>
-        <div class="termo-edit-note">
+        <div id="adminTermoNota" class="termo-edit-note">
             <strong><i class="fas fa-check-circle"></i> Termo concluído e enviado.</strong><br>
             Os dados abaixo estão congelados para consulta. As cláusulas não são exibidas nesta versão.
             Para corrigir alguma informação, clique em <strong>Editar</strong> no rodapé.
@@ -791,6 +791,7 @@ let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
 let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
 let termoEditorIndex = null;
+let termoEditorCompleto = false;
 let termoPendenteIndex = null;
 
 // ══════════════════════════════════════════════════
@@ -1102,7 +1103,7 @@ function renderTabela() {
         const termoAceite = termoAssinado
             ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> termo concluído${termoEditLink}</div>`
             : '';
-        const termoClick = termoAssinado ? `abrirEditorTermo(${originalIndex})` : `abrirTermoDigital(${originalIndex})`;
+        const termoClick = `abrirEditorTermo(${originalIndex})`;
 
         let stClass = 'st-pendente', stText = 'Pendente';
         if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
@@ -1216,9 +1217,10 @@ async function enviarLinkTermoPendente() {
 function abrirEditorTermo(idx) {
     if (userRole !== 'admin') return;
     const p = allUnificados[idx]?.primeiraEtapa;
-    if (!p || !(p.termoAssinado === true || p.termoAssinado === 'true')) return;
+    if (!p || !p.id) return;
 
     termoEditorIndex = idx;
+    termoEditorCompleto = p.termoAssinado === true || p.termoAssinado === 'true';
     const saved = p.termoDados || {};
     const value = (key, fallback = '') => saved[key] ?? fallback ?? '';
     document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
@@ -1237,6 +1239,23 @@ function abrirEditorTermo(idx) {
     document.getElementById('adminTermoBairro').value = value('bairro');
     document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
     document.getElementById('adminTermoStatus').textContent = '';
+    const titulo = document.getElementById('adminTermoTitulo');
+    const nota = document.getElementById('adminTermoNota');
+    const pdfBtn = document.getElementById('btnGerarPDFTermo');
+    if (titulo) {
+        titulo.innerHTML = termoEditorCompleto
+            ? '<i class="fas fa-file-signature" style="color:#16a34a"></i> Visualizar termo concluído'
+            : '<i class="fas fa-file-signature" style="color:#d97706"></i> Visualizar termo incompleto';
+    }
+    if (nota) {
+        nota.style.background = termoEditorCompleto ? '#f0fdf4' : '#fffbeb';
+        nota.style.borderColor = termoEditorCompleto ? '#bbf7d0' : '#fde68a';
+        nota.style.color = termoEditorCompleto ? '#666' : '#92400e';
+        nota.innerHTML = termoEditorCompleto
+            ? '<strong><i class="fas fa-check-circle"></i> Termo concluído e enviado.</strong><br>Os dados abaixo estão congelados para consulta. Para corrigir alguma informação, clique em <strong>Editar</strong> no rodapé.'
+            : '<strong><i class="fas fa-exclamation-triangle"></i> Termo ainda não concluído.</strong><br>Os dados já disponíveis podem ser consultados ou corrigidos pelo administrador. O PDF permanece bloqueado até o proponente concluir o termo.';
+    }
+    if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
     setModoEdicaoTermoAdmin(false);
     openModal('modalEditarTermo');
 }
@@ -1324,7 +1343,7 @@ async function salvarEdicaoTermoAdmin() {
         const r = await fetch('/api/admin/atualizar-termo', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: p.id, termoDados })
+            body: JSON.stringify({ id: p.id, termoDados, marcarConcluido: termoEditorCompleto })
         });
         const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o termo.');
@@ -1335,7 +1354,10 @@ async function salvarEdicaoTermoAdmin() {
         p.evento = termoDados.nomeEvento || p.evento;
         p.localNome = termoDados.espacoIgreja ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
         status.style.color = '#15803d';
-        status.textContent = 'Alterações salvas. O termo continua marcado como concluído. Os dados estão congelados novamente.';
+        status.textContent = termoEditorCompleto
+            ? 'Alterações salvas. O termo continua marcado como concluído. Os dados estão congelados novamente.'
+            : 'Alterações salvas no painel. O termo continua aguardando a conclusão do proponente.';
+        p.termoAssinado = termoEditorCompleto;
         renderTabela();
         setModoEdicaoTermoAdmin(false);
         return true;
