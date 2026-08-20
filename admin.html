@@ -1697,14 +1697,11 @@ function abrirEmailFormularioAtividades(idx) {
 
     const formularioUrl = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
     const prazo = formatarDataBrasileira(adicionarDiasUteis(new Date(), 5));
-    const mensagem = `Olá, prezados(as),
-
-Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
+    const mensagem = `Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
 
 As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:
 
 Formulário Atividades DAC 2026
-${formularioUrl}
 
 Pedimos que o formulário seja preenchido até o dia ${prazo}.
 
@@ -1718,7 +1715,13 @@ Departamento Artístico Cultural
 Secretaria de Cultura, Arte e Esporte
 Universidade Federal de Santa Catarina`;
 
-    _emailRapidoData = { email: p.email, nome: p.nome || '', evento: p.evento || '' };
+    _emailRapidoData = {
+        email: p.email,
+        nome: p.nome || '',
+        evento: p.evento || '',
+        linkLabel: 'Formulário Atividades DAC 2026',
+        linkUrl: formularioUrl
+    };
     document.getElementById('emailRapidoPara').value = p.email;
     document.getElementById('emailRapidoAssunto').value = 'Formulário Atividades DAC 2026';
     document.getElementById('emailRapidoMensagem').value = mensagem;
@@ -1739,7 +1742,14 @@ async function sendEmailRapido() {
         const r = await fetch('/api/admin/email-rapido', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: _emailRapidoData.email, nome: _emailRapidoData.nome, assunto, mensagem })
+            body: JSON.stringify({
+                to: _emailRapidoData.email,
+                nome: _emailRapidoData.nome,
+                assunto,
+                mensagem,
+                linkLabel: _emailRapidoData.linkLabel,
+                linkUrl: _emailRapidoData.linkUrl
+            })
         });
         const data = await r.json();
         if (data.success) {

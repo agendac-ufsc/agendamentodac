@@ -1987,13 +1987,21 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
 // ============================================================
 
 app.post('/api/admin/email-rapido', async (req, res) => {
-    const { to, nome, assunto, mensagem } = req.body;
+    const { to, nome, assunto, mensagem, linkLabel, linkUrl } = req.body;
     if (!to || !assunto || !mensagem) {
         return res.status(400).json({ error: 'Destinatário, assunto e mensagem são obrigatórios.' });
     }
     const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
     const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
     if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
+
+    const mensagemEscapada = escapeHtml(mensagem).replace(/\n/g, '<br>');
+    const mensagemHtml = linkLabel && linkUrl
+        ? mensagemEscapada.replace(
+            escapeHtml(linkLabel),
+            `<a href="${escapeHtml(linkUrl)}" style="color:#2563eb;font-weight:600;text-decoration:underline" target="_blank" rel="noopener noreferrer">${escapeHtml(linkLabel)}</a>`
+        )
+        : mensagemEscapada;
 
     const htmlContent = `
     <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
@@ -2003,7 +2011,7 @@ app.post('/api/admin/email-rapido', async (req, res) => {
         </div>
         <div style="padding:28px">
             <p style="font-size:15px">Olá, <strong>${nome || 'Proponente'}</strong>!</p>
-            <div style="font-size:14px;color:#444;line-height:1.8;margin:18px 0;white-space:pre-wrap">${mensagem.replace(/\n/g, '<br>')}</div>
+            <div style="font-size:14px;color:#444;line-height:1.8;margin:18px 0;white-space:pre-wrap">${mensagemHtml}</div>
             <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
             <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato diretamente com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p>
             <p style="font-size:11px;color:#aaa;margin-top:20px">
