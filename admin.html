@@ -2242,11 +2242,10 @@ async function salvarNomeResponsavelTermo() {
     try {
         status.style.color = '#666';
         status.textContent = 'Salvando...';
-        const atual = await fetch('/api/config').then(r => r.json());
-        const r = await fetch('/api/admin/config', {
+        const r = await fetch('/api/admin/termo-responsavel', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...atual, responsavelTermoNome: nome })
+            body: JSON.stringify({ responsavelTermoNome: nome })
         });
         const data = await r.json().catch(() => ({}));
         if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o nome.');

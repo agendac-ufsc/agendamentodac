@@ -285,7 +285,8 @@ let HORARIOS_LIMITES = {
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 let AVALIACOES_NECESSARIAS = 3;
-let RESPONSAVEL_TERMO_NOME = 'Andréa Búrigo Ventura';
+const RESPONSAVEL_TERMO_NOME_PADRAO = 'Andréa Búrigo Ventura';
+let RESPONSAVEL_TERMO_NOME = RESPONSAVEL_TERMO_NOME_PADRAO;
 let BOTOES_HOME = {
     interno: { ativo: false, texto: 'Edital Interno' },
     externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
@@ -344,7 +345,7 @@ const getConfigs = async (caller = 'unknown') => {
                     datasBloqueadas: DATAS_BLOQUEADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
-                    responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
+                    responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
                     botoesHome: BOTOES_HOME,
                     mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
                 };
@@ -367,7 +368,7 @@ const getConfigs = async (caller = 'unknown') => {
         datasBloqueadas: DATAS_BLOQUEADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
-        responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
+        responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
         botoesHome: BOTOES_HOME,
         mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
     };
@@ -560,6 +561,41 @@ app.post('/api/admin/config', async (req, res) => {
     const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
+});
+
+// Salva somente o nome da representante, sem depender dos demais campos do painel.
+// Isso evita que uma configuração antiga ou incompleta sobrescreva este valor.
+app.post('/api/admin/termo-responsavel', async (req, res) => {
+    const nome = String(req.body?.responsavelTermoNome || '').trim();
+    if (!nome) {
+        return res.status(400).json({ error: 'Informe o nome completo da representante.' });
+    }
+
+    try {
+        RESPONSAVEL_TERMO_NOME = nome;
+        if (!redis) {
+            return res.status(500).json({ success: false, error: 'Redis indisponível; o nome não pôde ser persistido.' });
+        }
+
+        const atualRaw = await redis.get(CONFIG_KEY);
+        const atual = parseRedisValue(atualRaw) || {};
+        const configToSave = {
+            ...atual,
+            responsavelTermoNome: nome
+        };
+        await redis.set(CONFIG_KEY, configToSave);
+
+        const verificado = parseRedisValue(await redis.get(CONFIG_KEY)) || {};
+        if (String(verificado.responsavelTermoNome || '').trim() !== nome) {
+            return res.status(500).json({ success: false, error: 'O nome não foi confirmado no armazenamento.' });
+        }
+
+        console.log(`[termo-responsavel] ✅ Nome persistido: ${nome}`);
+        return res.json({ success: true, responsavelTermoNome: nome });
+    } catch (error) {
+        console.error('[termo-responsavel] ❌ Erro ao salvar:', error.message);
+        return res.status(500).json({ success: false, error: 'Falha ao persistir o nome da representante.' });
+    }
 });
 
 app.get('/api/disponibilidade', async (req, res) => {
