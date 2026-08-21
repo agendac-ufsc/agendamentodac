@@ -761,6 +761,9 @@
 
             const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
             const fromMins = n => Math.floor(n / 60) * 100 + (n % 60);
+            const agora = new Date();
+            const hojeStr = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+            const agoraEmMinutos = agora.getHours() * 60 + agora.getMinutes();
 
             // Intervalos já confirmados por todas as etapas desta inscrição no mesmo dia
             // Inclui a própria etapa para que slots já confirmados apareçam ao adicionar um segundo
@@ -793,6 +796,23 @@
                     const slot = document.createElement('div');
                     slot.className = 'time-slot';
                     slot.textContent = time;
+
+                    const minutosDoHorario = toMins(timeVal);
+                    const horarioPassado = dateStr === hojeStr && (
+                        sel.start && !sel.end
+                            ? minutosDoHorario <= agoraEmMinutos
+                            : minutosDoHorario < agoraEmMinutos
+                    );
+                    if (horarioPassado) {
+                        slot.classList.add('past');
+                        slot.style.opacity = '0.45';
+                        slot.style.cursor = 'not-allowed';
+                        slot.title = sel.start && !sel.end
+                            ? 'Este horário de início já passou'
+                            : 'Este horário de término já passou';
+                        container.appendChild(slot);
+                        continue;
+                    }
 
                     const overlaps = (e) => {
                         if (!e.start.includes('T')) return false;
