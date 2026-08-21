@@ -795,24 +795,14 @@ async function verificarEnviosAutomaticosFormulario() {
     try {
         const agora = new Date();
         const agendamentos = await getAgendamentos();
-        const ultimosEventosPorEmail = new Map();
         for (const agendamento of agendamentos) {
             const email = String(agendamento.email || '').trim().toLowerCase();
             if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
             const ultimoEvento = obterFimDoUltimoEvento(agendamento);
             if (!ultimoEvento) continue;
-            const atual = ultimosEventosPorEmail.get(email);
-            if (!atual || ultimoEvento.fimDate > atual.ultimoEvento.fimDate) {
-                ultimosEventosPorEmail.set(email, { agendamento, ultimoEvento });
-            }
-        }
+            if (agora < ultimoEvento.fimDate) continue;
 
-        for (const [email, dados] of ultimosEventosPorEmail) {
-            const { agendamento, ultimoEvento } = dados;
-            const envioApartir = new Date(ultimoEvento.fimDate.getTime() + 60 * 60 * 1000);
-            if (agora < envioApartir) continue;
-
-            const chaveEnvio = `${ATIVIDADES_ENVIADAS_PREFIX}${encodeURIComponent(email)}:${ultimoEvento.fimDate.toISOString()}`;
+            const chaveEnvio = `${ATIVIDADES_ENVIADAS_PREFIX}${agendamento.id}:${ultimoEvento.fimDate.toISOString()}`;
             if (await redis.get(chaveEnvio)) continue;
 
             const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
@@ -826,7 +816,7 @@ async function verificarEnviosAutomaticosFormulario() {
                     enviadoEm: agora.toISOString(),
                     ultimoEvento: ultimoEvento.fimDate.toISOString()
                 });
-                console.log(`✅ [Atividades] Formulário enviado automaticamente para ${email} após o último evento.`);
+                console.log(`✅ [Atividades] Formulário enviado automaticamente para ${email} no fim da inscrição ${agendamento.id}.`);
             } else {
                 console.error(`❌ [Atividades] Falha ao enviar formulário automático para ${email}.`);
             }
