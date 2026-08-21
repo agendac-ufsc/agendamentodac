@@ -700,6 +700,142 @@ const escapeHtml = (value) => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
+const ATIVIDADES_FORMULARIO_URL = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
+const ATIVIDADES_FORMULARIO_LABEL = 'Formulário Atividades DAC 2026';
+const ATIVIDADES_ENVIADAS_PREFIX = 'atividades_formulario_enviado:';
+
+function adicionarDiasUteisServidor(dataInicial, quantidade) {
+    const data = new Date(dataInicial);
+    let adicionados = 0;
+    while (adicionados < quantidade) {
+        data.setDate(data.getDate() + 1);
+        const dia = data.getDay();
+        if (dia !== 0 && dia !== 6) adicionados++;
+    }
+    return data;
+}
+
+function formatarDataBrasileiraServidor(data) {
+    return new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    }).format(data);
+}
+
+function obterFimDoUltimoEvento(agendamento) {
+    const eventos = Array.isArray(agendamento?.etapas?.evento)
+        ? agendamento.etapas.evento
+        : agendamento?.etapas?.evento
+            ? [agendamento.etapas.evento]
+            : [];
+    const candidatos = eventos.map(item => {
+        const data = String(item?.data || '');
+        const horario = String(item?.horario || '');
+        const dataMatch = data.match(/^(\d{4})-(\d{2})-(\d{2})$/) || data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        const horaMatch = horario.match(/(\d{1,2}:\d{2})\s*(?:às|a|-)\s*(\d{1,2}:\d{2})/i);
+        if (!dataMatch || !horaMatch) return null;
+        const ano = dataMatch[1].length === 4 ? dataMatch[1] : dataMatch[3];
+        const mes = dataMatch[1].length === 4 ? dataMatch[2] : dataMatch[2];
+        const dia = dataMatch[1].length === 4 ? dataMatch[3] : dataMatch[1];
+        const fim = horaMatch[2];
+        const fimIso = `${ano}-${mes}-${dia}T${fim}:00-03:00`;
+        const fimDate = new Date(fimIso);
+        return Number.isNaN(fimDate.getTime()) ? null : { fimDate, data, horario };
+    }).filter(Boolean);
+    return candidatos.sort((a, b) => a.fimDate - b.fimDate).at(-1) || null;
+}
+
+function criarMensagemFormularioAtividades(prazo) {
+    return `Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
+
+As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:
+
+${ATIVIDADES_FORMULARIO_LABEL}
+
+Pedimos que o formulário seja preenchido até o dia ${prazo}.
+
+Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já, pela colaboração.
+
+Atenciosamente,
+
+--
+Comissão de Pauta
+Departamento Artístico Cultural
+Secretaria de Cultura, Arte e Esporte
+Universidade Federal de Santa Catarina`;
+}
+
+function criarHtmlFormularioAtividades(nome, mensagem) {
+    const mensagemHtml = escapeHtml(mensagem)
+        .replace(/\n/g, '<br>')
+        .replace(
+            escapeHtml(ATIVIDADES_FORMULARIO_LABEL),
+            `<a href="${escapeHtml(ATIVIDADES_FORMULARIO_URL)}" style="color:#2563eb;font-weight:600;text-decoration:underline" target="_blank" rel="noopener noreferrer">${escapeHtml(ATIVIDADES_FORMULARIO_LABEL)}</a>`
+        );
+    return `
+    <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
+            <h2 style="margin:0;color:#fff;font-size:18px">DAC — Departamento Artístico Cultural</h2>
+            <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">UFSC — Secretaria de Cultura, Arte e Esporte</p>
+        </div>
+        <div style="padding:28px">
+            <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>!</p>
+            <div style="font-size:14px;color:#444;line-height:1.8;margin:18px 0;white-space:pre-wrap">${mensagemHtml}</div>
+            <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+            <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato diretamente com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p>
+            <p style="font-size:11px;color:#aaa;margin-top:20px">UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC</p>
+        </div>
+    </div>`;
+}
+
+async function verificarEnviosAutomaticosFormulario() {
+    if (!redis || !process.env.BREVO_API_KEY) return;
+    try {
+        const agora = new Date();
+        const agendamentos = await getAgendamentos();
+        const ultimosEventosPorEmail = new Map();
+        for (const agendamento of agendamentos) {
+            const email = String(agendamento.email || '').trim().toLowerCase();
+            if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+            const ultimoEvento = obterFimDoUltimoEvento(agendamento);
+            if (!ultimoEvento) continue;
+            const atual = ultimosEventosPorEmail.get(email);
+            if (!atual || ultimoEvento.fimDate > atual.ultimoEvento.fimDate) {
+                ultimosEventosPorEmail.set(email, { agendamento, ultimoEvento });
+            }
+        }
+
+        for (const [email, dados] of ultimosEventosPorEmail) {
+            const { agendamento, ultimoEvento } = dados;
+            const envioApartir = new Date(ultimoEvento.fimDate.getTime() + 60 * 60 * 1000);
+            if (agora < envioApartir) continue;
+
+            const chaveEnvio = `${ATIVIDADES_ENVIADAS_PREFIX}${encodeURIComponent(email)}:${ultimoEvento.fimDate.toISOString()}`;
+            if (await redis.get(chaveEnvio)) continue;
+
+            const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
+            const resultado = await sendEmail(
+                email,
+                'Formulário Atividades DAC 2026',
+                criarHtmlFormularioAtividades(agendamento.nome, criarMensagemFormularioAtividades(prazo))
+            );
+            if (resultado) {
+                await redis.set(chaveEnvio, {
+                    enviadoEm: agora.toISOString(),
+                    ultimoEvento: ultimoEvento.fimDate.toISOString()
+                });
+                console.log(`✅ [Atividades] Formulário enviado automaticamente para ${email} após o último evento.`);
+            } else {
+                console.error(`❌ [Atividades] Falha ao enviar formulário automático para ${email}.`);
+            }
+        }
+    } catch (error) {
+        console.error('❌ [Atividades] Erro na verificação automática:', error.message);
+    }
+}
+
 app.post('/api/agendar', async (req, res) => {
     try {
         const { nome, email, telefone, evento, etapas, local } = req.body;
@@ -2339,5 +2475,9 @@ module.exports = app;
 
 if (require.main === module) {
     const PORT = process.env.PORT || 5000;
-    app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando em http://localhost:${PORT}`));
+    app.listen(PORT, '0.0.0.0', () => {
+        console.log(`Servidor rodando em http://localhost:${PORT}`);
+        verificarEnviosAutomaticosFormulario();
+        setInterval(verificarEnviosAutomaticosFormulario, 60 * 1000);
+    });
 }
