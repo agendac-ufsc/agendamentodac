@@ -689,18 +689,41 @@
                         if (isUserSelected) d.classList.add('user-selected');
 
                         const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
-                        const manualEventsOnDay = eventsOnDay.filter(e => e.source !== 'sistema');
-                        const systemEventsOnDay = eventsOnDay.filter(e => e.source === 'sistema');
-                        let dayBlocked = false;
+                        const toMinutes = value => {
+                            const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
+                            return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+                        };
+                        const intervalosBloqueados = eventsOnDay.map(e => ({
+                            inicio: toMinutes(e.start.split('T')[1]),
+                            fim: toMinutes(e.end?.split('T')[1])
+                        })).filter(e => e.inicio !== null && e.fim !== null);
+                        const limiteHorario = horariosLimites[step] || { fim: '21:00' };
+                        const inicioMinutos = 8 * 60;
+                        const fimMinutos = toMinutes(limiteHorario.fim) || 21 * 60;
+                        const agoraCalendario = new Date();
+                        const hojeCalendario = `${agoraCalendario.getFullYear()}-${String(agoraCalendario.getMonth() + 1).padStart(2, '0')}-${String(agoraCalendario.getDate()).padStart(2, '0')}`;
+                        const agoraMinutos = agoraCalendario.getHours() * 60 + agoraCalendario.getMinutes();
+                        const bloqueiaIntervalo = (inicio, fim) => intervalosBloqueados.some(intervalo => {
+                            const bloqueadoPorDisputa = intervalo.inicio < fim && intervalo.fim > inicio;
+                            const eventoDoSistema = eventsOnDay.find(e =>
+                                toMinutes(e.start.split('T')[1]) === intervalo.inicio &&
+                                toMinutes(e.end?.split('T')[1]) === intervalo.fim
+                            )?.source === 'sistema';
+                            return bloqueadoPorDisputa && (!eventoDoSistema || !permitirDisputa);
+                        });
+                        const existeHorarioLivre = Array.from(
+                            { length: Math.max(0, Math.floor((fimMinutos - inicioMinutos - 60) / 30) + 1) },
+                            (_, index) => inicioMinutos + index * 30
+                        ).some(inicio => {
+                            const fim = inicio + 60;
+                            if (dateStr === hojeCalendario && fim <= agoraMinutos) return false;
+                            return !bloqueiaIntervalo(inicio, fim);
+                        });
+                        const dayBlocked = !existeHorarioLivre;
                         if (eventsOnDay.length > 0) {
-                            // Dia fica vermelho só se sistema lotado (>=15 inscrições); eventos manuais/externos ficam amarelo
-                            if (systemEventsOnDay.length >= 15) d.classList.add('busy-full');
-                            else d.classList.add('busy-partial');
-                            // Bloqueia clique no dia apenas se disputa desligada E sistema lotado
-                            if (!permitirDisputa && systemEventsOnDay.length >= 15) {
-                                dayBlocked = true;
-                                d.style.cursor = 'not-allowed';
-                            }
+                            // Amarelo indica ocupação parcial; vermelho só quando nenhum intervalo de 1h está livre.
+                            d.classList.add(dayBlocked ? 'busy-full' : 'busy-partial');
+                            if (dayBlocked) d.style.cursor = 'not-allowed';
                         }
 
                         if (ensaioFimDeSemanasBloqueado) {
