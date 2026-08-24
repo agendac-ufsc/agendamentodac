@@ -134,6 +134,39 @@
             color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
         }
         .btn-next-step:disabled { opacity: .5; cursor: not-allowed; }
+        .full-page-step {
+            display: none; background: #fff; border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+            max-width: 800px; width: 100%; padding: 40px;
+        }
+        .full-page-step h2 { color: #333; text-align: center; font-size: 24px; margin-bottom: 10px; }
+        .full-page-step .step-description {
+            color: #666; text-align: center; font-size: 14px; line-height: 1.6; margin-bottom: 28px;
+        }
+        .person-type-page-options { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; max-width: 560px; margin: 0 auto 24px; }
+        .person-type-page-option {
+            display: flex; align-items: center; gap: 12px; padding: 18px;
+            border: 2px solid #e0e0e0; border-radius: 12px; color: #444;
+            cursor: pointer; transition: border-color .2s, background .2s;
+        }
+        .person-type-page-option:hover { border-color: #667eea; background: #f8f9ff; }
+        .person-type-page-option input { width: auto; margin: 0; accent-color: #667eea; }
+        .person-type-page-option:has(input:checked) { border-color: #667eea; background: #f0f4ff; font-weight: 600; }
+        .proponente-fields { display: grid; gap: 18px; }
+        .proponente-fields .form-group { margin-bottom: 0; }
+        .proponente-fields input[type="file"] { padding: 10px; font-size: 13px; background: #fafafa; }
+        .file-help { color: #777; display: block; font-size: 12px; line-height: 1.5; margin-top: 6px; }
+        .step-actions { display: flex; gap: 12px; justify-content: space-between; margin-top: 30px; }
+        .step-actions button { flex: 1; margin-top: 0 !important; }
+        .btn-back-step {
+            padding: 13px 24px; border: 2px solid #ddd; border-radius: 10px;
+            background: #fff; color: #555; font-size: 15px; font-weight: 700; cursor: pointer;
+        }
+        @media (max-width: 600px) {
+            .full-page-step { padding: 28px 20px; }
+            .person-type-page-options { grid-template-columns: 1fr; }
+            .step-actions { flex-direction: column-reverse; }
+        }
         .test-banner {
             position: fixed; top: 0; left: 0; right: 0; z-index: 3000;
             padding: 8px 14px; background: #fff3cd; color: #856404;
@@ -378,22 +411,60 @@
         </div>
     </div>
 
-    <div id="modalSegundaEtapa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
-        <div style="background:#fff;border-radius:16px;padding:36px 28px;max-width:420px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
-            <div style="font-size:44px;margin-bottom:14px">📋</div>
-            <h2 style="color:#764ba2;font-size:20px;margin:0 0 12px">Qual é o tipo de proponente?</h2>
-            <p style="color:#555;font-size:14px;line-height:1.6;margin:0">Selecione uma opção para continuar para a segunda etapa.</p>
-            <div class="person-type-choice">
-                <label class="person-type-option">
-                    <input type="radio" name="tipoProponenteTeste" value="Pessoa Física" onchange="atualizarBotaoAvancarTeste()">
-                    <span>Pessoa Física</span>
-                </label>
-                <label class="person-type-option">
-                    <input type="radio" name="tipoProponenteTeste" value="Pessoa Jurídica" onchange="atualizarBotaoAvancarTeste()">
-                    <span>Pessoa Jurídica</span>
-                </label>
+    <div class="full-page-step" id="tipoProponenteSection">
+        <h2>Tipo de proponente</h2>
+        <p class="step-description">Selecione uma opção para continuar o preenchimento da inscrição.</p>
+        <div class="person-type-page-options">
+            <label class="person-type-page-option">
+                <input type="radio" name="tipoProponenteTeste" value="Pessoa Física" onchange="atualizarBotaoAvancarTeste()">
+                <span>👤 Pessoa Física</span>
+            </label>
+            <label class="person-type-page-option">
+                <input type="radio" name="tipoProponenteTeste" value="Pessoa Jurídica" onchange="atualizarBotaoAvancarTeste()">
+                <span>🏢 Pessoa Jurídica</span>
+            </label>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaAgendamentoTeste()">← Voltar</button>
+            <button type="button" id="btnAvancarFormularioTeste" class="btn-next-step" disabled onclick="avancarDoTipoProponenteTeste()">Avançar →</button>
+        </div>
+    </div>
+
+    <div class="full-page-step" id="pessoaFisicaSection">
+        <h2>Proponente Pessoa Física</h2>
+        <p class="step-description">Preencha as informações abaixo para continuar para o formulário complementar.</p>
+        <div class="proponente-fields">
+            <div class="form-group">
+                <label for="testeNomePessoaFisica">Nome Completo *</label>
+                <input type="text" id="testeNomePessoaFisica" placeholder="Sua resposta" required>
             </div>
-            <button type="button" id="btnAvancarFormularioTeste" class="btn-next-step" disabled onclick="avancarParaFormularioTeste()">Avançar</button>
+            <div class="form-group">
+                <label for="testeCpfPessoaFisica">CPF *</label>
+                <input type="text" id="testeCpfPessoaFisica" placeholder="Sua resposta" inputmode="numeric" required>
+            </div>
+            <div class="form-group">
+                <label for="testeCelularPessoaFisica">Celular (DDD + número) *</label>
+                <input type="tel" id="testeCelularPessoaFisica" placeholder="Sua resposta" required>
+            </div>
+            <div class="form-group">
+                <label for="testeCepPessoaFisica">CEP Residencial *</label>
+                <input type="text" id="testeCepPessoaFisica" placeholder="Sua resposta" inputmode="numeric" required>
+            </div>
+            <div class="form-group">
+                <label for="testeCurriculoPessoaFisica">Currículo do (a) Proponente *</label>
+                <input type="file" id="testeCurriculoPessoaFisica" accept=".pdf,image/*" required>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF ou imagem. O tamanho máximo é de 10 MB.</small>
+            </div>
+            <div class="form-group">
+                <label for="testeDocumentoPessoaFisica">Cópia simples de documento oficial *</label>
+                <p class="file-help" style="margin:0 0 6px">Digitalização ou print de documento oficial com foto contendo nome e CPF de forma legível.</p>
+                <input type="file" id="testeDocumentoPessoaFisica" accept=".pdf,image/*" multiple required>
+                <small class="file-help">Faça upload de até 5 arquivos aceitos: PDF ou imagem. O tamanho máximo é de 10 MB por item.</small>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaTipoProponenteTeste()">← Voltar</button>
+            <button type="button" id="btnAvancarPessoaFisicaTeste" class="btn-next-step" onclick="avancarPessoaFisicaTeste()">Avançar →</button>
         </div>
     </div>
 
@@ -1134,8 +1205,7 @@
 
                     document.querySelectorAll('input[name="tipoProponenteTeste"]').forEach(input => input.checked = false);
                     atualizarBotaoAvancarTeste();
-                    const m = document.getElementById('modalSegundaEtapa');
-                    m.style.display = 'flex';
+                    mostrarTelaTeste('tipoProponenteSection');
                 } else {
                     const result = await res.json();
                     msg.textContent = '❌ Erro: ' + result.error;
@@ -1159,10 +1229,58 @@
             if (btn) btn.disabled = !selecionado;
         }
 
-        function avancarParaFormularioTeste() {
+        function mostrarTelaTeste(id) {
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection']
+                .forEach(telaId => {
+                    const tela = document.getElementById(telaId);
+                    if (tela) tela.style.display = 'none';
+                });
+            const tela = document.getElementById(id);
+            if (tela) tela.style.display = id === 'homeContainer' ? 'flex' : 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function voltarParaAgendamentoTeste() {
+            mostrarTelaTeste('mainFormContainer');
+        }
+
+        function voltarParaTipoProponenteTeste() {
+            mostrarTelaTeste('tipoProponenteSection');
+        }
+
+        function avancarDoTipoProponenteTeste() {
             const selecionado = document.querySelector('input[name="tipoProponenteTeste"]:checked');
-            if (!selecionado || !formsLinkProximaEtapaTeste) return;
-            document.getElementById('modalSegundaEtapa').style.display = 'none';
+            if (!selecionado) return;
+            if (selecionado.value === 'Pessoa Física') {
+                mostrarTelaTeste('pessoaFisicaSection');
+            } else {
+                abrirFormularioTeste();
+            }
+        }
+
+        function avancarPessoaFisicaTeste() {
+            const campos = ['testeNomePessoaFisica', 'testeCpfPessoaFisica', 'testeCelularPessoaFisica', 'testeCepPessoaFisica'];
+            if (campos.some(id => !document.getElementById(id).value.trim())) {
+                alert('Preencha todos os campos obrigatórios.');
+                return;
+            }
+            const curriculo = document.getElementById('testeCurriculoPessoaFisica').files;
+            const documentos = document.getElementById('testeDocumentoPessoaFisica').files;
+            const limite = 10 * 1024 * 1024;
+            const tiposAceitos = file => file.type === 'application/pdf' || file.type.startsWith('image/');
+            if (curriculo.length !== 1 || !tiposAceitos(curriculo[0]) || curriculo[0].size > limite) {
+                alert('Selecione 1 currículo em PDF ou imagem com tamanho máximo de 10 MB.');
+                return;
+            }
+            if (documentos.length < 1 || documentos.length > 5 || Array.from(documentos).some(file => !tiposAceitos(file) || file.size > limite)) {
+                alert('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.');
+                return;
+            }
+            abrirFormularioTeste();
+        }
+
+        function abrirFormularioTeste() {
+            if (!formsLinkProximaEtapaTeste) return;
             window.open(formsLinkProximaEtapaTeste, '_blank', 'noopener');
             setTimeout(() => location.reload(), 800);
         }
