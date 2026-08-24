@@ -223,14 +223,25 @@
         }
         .proposal-card > label:first-child::after { content: ' *'; color: #c0392b; }
         .proposal-card.optional > label:first-child::after { content: ''; }
-        .proposal-options { display: grid; gap: 13px; }
+        .proposal-options { display: grid; gap: 10px; }
         .proposal-option {
-            display: flex; align-items: center; gap: 10px; color: #333;
-            font-size: 15px; cursor: pointer; margin: 0;
+            display: flex; align-items: flex-start; gap: 10px; color: #333;
+            font-size: 15px; cursor: pointer; margin: 0; padding: 12px 14px;
+            border: 1.5px solid #e5e7eb; border-radius: 10px;
+            background: #fff; transition: border-color .2s, background .2s, box-shadow .2s;
+        }
+        .proposal-option:hover { border-color: #a78bfa; background: #faf8ff; }
+        .proposal-option:has(input:checked) {
+            border-color: #764ba2; background: #f3effb;
+            box-shadow: 0 2px 6px rgba(118, 75, 162, .12);
+            color: #4c1d95; font-weight: 600;
         }
         .proposal-option input {
-            width: 20px; height: 20px; margin: 0; accent-color: #667eea;
+            width: 19px; height: 19px; margin: 0; flex: 0 0 auto;
+            accent-color: #764ba2;
         }
+        .area-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .finalidade-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
         .proposal-card textarea {
             width: 100%; min-height: 105px; padding: 12px; border: 2px solid #e0e0e0;
             border-radius: 8px; font: inherit; font-size: 15px; resize: vertical;
@@ -241,6 +252,10 @@
             border-radius: 8px; font-size: 13px; background: #fafafa;
         }
         .proposal-card input[type="file"]:focus { outline: none; border-color: #667eea; }
+        @media (max-width: 600px) {
+            .area-options, .finalidade-options { grid-template-columns: 1fr; }
+            .proposal-option { padding: 13px 12px; }
+        }
         @media (max-width: 600px) {
             .full-page-step { padding: 28px 20px; }
             .person-type-page-options { grid-template-columns: 1fr; }
@@ -652,7 +667,7 @@
         <div class="proposal-fields">
             <div class="proposal-card">
                 <label>Área/Segmento</label>
-                <div class="proposal-options">
+                <div class="proposal-options area-options">
                     <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Teatro"><span>Teatro</span></label>
                     <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Dança"><span>Dança</span></label>
                     <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Artes Circenses"><span>Artes Circenses</span></label>
@@ -666,7 +681,7 @@
 
             <div class="proposal-card">
                 <label>Finalidade da atividade artístico-cultural</label>
-                <div class="proposal-options">
+                <div class="proposal-options finalidade-options">
                     <label class="proposal-option"><input type="radio" name="finalidadeAtividadeTeste" value="Apresentação"><span>Apresentação</span></label>
                     <label class="proposal-option"><input type="radio" name="finalidadeAtividadeTeste" value="Gravação"><span>Gravação</span></label>
                     <label class="proposal-option"><input type="radio" name="finalidadeAtividadeTeste" value="Debate/Congresso na área Artístico-cultural"><span>Debate/Congresso na área Artístico-cultural</span></label>
