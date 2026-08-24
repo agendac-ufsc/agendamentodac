@@ -170,6 +170,36 @@
             padding: 13px 24px; border: 2px solid #ddd; border-radius: 10px;
             background: #fff; color: #555; font-size: 15px; font-weight: 700; cursor: pointer;
         }
+        .category-explanation {
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            overflow: hidden; margin-bottom: 16px;
+        }
+        .category-explanation h3 {
+            background: #9f2f23; color: #fff; padding: 15px 22px;
+            font-size: 16px; margin: 0;
+        }
+        .category-explanation-body {
+            padding: 22px; color: #333; font-size: 15px; line-height: 1.6;
+        }
+        .category-explanation-body p { margin: 0 0 18px; }
+        .category-explanation-body p:last-child { margin-bottom: 0; }
+        .ufsc-link-card {
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 24px 22px;
+        }
+        .ufsc-link-label {
+            display: block; color: #333; font-size: 16px; font-weight: 500;
+            margin-bottom: 18px;
+        }
+        .ufsc-link-label::after { content: ' *'; color: #c0392b; }
+        .ufsc-link-options { display: flex; gap: 28px; flex-wrap: wrap; }
+        .ufsc-link-option {
+            display: flex; align-items: center; gap: 10px; color: #333;
+            font-size: 15px; cursor: pointer; margin: 0;
+        }
+        .ufsc-link-option input {
+            width: 20px; height: 20px; margin: 0; accent-color: #667eea;
+        }
         @media (max-width: 600px) {
             .full-page-step { padding: 28px 20px; }
             .person-type-page-options { grid-template-columns: 1fr; }
@@ -520,6 +550,36 @@
         </div>
     </div>
 
+    <div class="full-page-step" id="categoriaPropostaSection">
+        <h2>Categoria da Proposta</h2>
+        <div class="category-explanation">
+            <h3>Categoria da Proposta</h3>
+            <div class="category-explanation-body">
+                <p>Para os fins deste edital, de acordo com a Resolução Normativa nº 32/2024/CC, o vínculo da proposta com a UFSC será considerado:</p>
+                <p>I - promoção do evento, quando a sua organização estiver vinculada a órgão integrante da Administração Superior ou das unidades universitárias; e<br>
+                II – copromoção do evento, quando a sua organização estiver desvinculada dos órgãos a que se refere o inciso I, limitando-se a participação da Universidade a algum tipo de apoio institucional previamente definido.</p>
+                <p>Nos casos em que a atividade não se enquadrar numa das situações previstas nos itens acima, esta será considerada como externa.</p>
+            </div>
+        </div>
+        <div class="ufsc-link-card">
+            <label class="ufsc-link-label">A proposta possui vínculo com a UFSC</label>
+            <div class="ufsc-link-options">
+                <label class="ufsc-link-option">
+                    <input type="radio" name="vinculoUfscTeste" value="SIM">
+                    <span>SIM</span>
+                </label>
+                <label class="ufsc-link-option">
+                    <input type="radio" name="vinculoUfscTeste" value="NÃO">
+                    <span>NÃO</span>
+                </label>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaPessoaAnteriorTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="avancarCategoriaPropostaTeste()">Avançar →</button>
+        </div>
+    </div>
+
     <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
@@ -612,6 +672,7 @@
         let somenteFinaisDeSemana = false; // Se true, bloqueia seg/ter/qua no calendário
         let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
         let formsLinkProximaEtapaTeste = '';
+        let tipoPessoaTesteAtual = null;
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -1282,7 +1343,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1308,8 +1369,10 @@
             const selecionado = document.querySelector('input[name="tipoProponenteTeste"]:checked');
             if (!selecionado) return;
             if (selecionado.value === 'Pessoa Física') {
+                tipoPessoaTesteAtual = 'Pessoa Física';
                 mostrarTelaTeste('pessoaFisicaSection');
             } else {
+                tipoPessoaTesteAtual = 'Pessoa Jurídica';
                 mostrarTelaTeste('pessoaJuridicaSection');
             }
         }
@@ -1330,6 +1393,19 @@
             }
             if (documentos.length < 1 || documentos.length > 5 || Array.from(documentos).some(file => !tiposAceitos(file) || file.size > limite)) {
                 alert('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.');
+                return;
+            }
+            mostrarTelaTeste('categoriaPropostaSection');
+        }
+
+        function voltarParaPessoaAnteriorTeste() {
+            mostrarTelaTeste(tipoPessoaTesteAtual === 'Pessoa Jurídica' ? 'pessoaJuridicaSection' : 'pessoaFisicaSection');
+        }
+
+        function avancarCategoriaPropostaTeste() {
+            const vinculo = document.querySelector('input[name="vinculoUfscTeste"]:checked');
+            if (!vinculo) {
+                alert('Selecione se a proposta possui vínculo com a UFSC.');
                 return;
             }
             abrirFormularioTeste();
@@ -1380,7 +1456,7 @@
                 alert('Selecione 1 documento do CNPJ em PDF com tamanho máximo de 10 MB.');
                 return;
             }
-            abrirFormularioTeste();
+            mostrarTelaTeste('categoriaPropostaSection');
         }
 
         function abrirFormularioTeste() {
