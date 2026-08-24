@@ -828,7 +828,7 @@ async function verificarEnviosAutomaticosFormulario() {
 
 app.post('/api/agendar', async (req, res) => {
     try {
-        const { nome, email, telefone, evento, etapas, local } = req.body;
+        const { nome, email, telefone, evento, etapas, local, modoTeste = false } = req.body;
         if (!nome || !email || !telefone || !evento || !etapas) {
             return res.status(400).json({ error: 'Todos os campos são obrigatórios' });
         }
@@ -912,8 +912,19 @@ app.post('/api/agendar', async (req, res) => {
         const idAgendamento = Date.now().toString();
 
         // Salvar no Redis ANTES dos e-mails — garante que a inscrição não se perde se o e-mail falhar
-        // calendarSynced: false — eventos no Google Calendar só serão criados quando a etapa 2 (Forms) for detectada
-        await saveAgendamento({ id: idAgendamento, nome, email, telefone, evento, etapas, local: localKey, localNome, calendarId: calId, timestamp: new Date().toLocaleString('pt-BR'), calendarSynced: false });
+        // No ambiente de teste, esta chamada cria apenas um rascunho: e-mails,
+        // painel e Google Calendar só são acionados na conclusão da inscrição.
+        await saveAgendamento({
+            id: idAgendamento, nome, email, telefone, evento, etapas,
+            local: localKey, localNome, calendarId: calId,
+            timestamp: new Date().toLocaleString('pt-BR'),
+            calendarSynced: false,
+            inscricaoTeste: modoTeste === true
+        });
+
+        if (modoTeste === true) {
+            return res.json({ success: true, id: idAgendamento, rascunho: true });
+        }
 
         // Enviar e-mails de forma independente — erro de e-mail não cancela a inscrição já salva
         const formsLinkEmail = FORMS_LINK || '';
@@ -995,11 +1006,38 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
             concluidaEm: new Date().toISOString()
         };
         const jaConcluida = agendamento.inscricaoTesteConcluida === true;
+
+        // A agenda só recebe os eventos quando a inscrição estiver 100% concluída.
+        // Isso evita marcar horários apenas porque a primeira etapa foi iniciada.
+        if (!jaConcluida && agendamento.calendarSynced !== true) {
+            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+            const calendarId = agendamento.calendarId || CALENDAR_IDS[(agendamento.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
+            for (const [tipo, valores] of Object.entries(dados.etapas)) {
+                const itens = Array.isArray(valores) ? valores : [valores];
+                for (let index = 0; index < itens.length; index++) {
+                    const item = itens[index];
+                    if (!item?.data || !item?.horario) continue;
+                    const label = itens.length > 1 ? `${nomesEtapas[tipo] || tipo} ${index + 1}` : (nomesEtapas[tipo] || tipo);
+                    const eventoCalendario = await createCalendarEvent(
+                        `${label}: ${dados.evento}`,
+                        `Inscrição validada pelo sistema de teste.\nProponente: ${dados.nome}\nE-mail: ${email}\nLocal: ${agendamento.localNome || agendamento.local || 'Teatro Carmen Fossari'}`,
+                        item.data,
+                        item.horario,
+                        calendarId
+                    );
+                    if (!eventoCalendario) {
+                        return res.status(502).json({ error: 'A inscrição foi salva, mas não foi possível registrá-la no Google Calendar.' });
+                    }
+                }
+            }
+        }
+
         const atualizada = await updateAgendamento(id, {
             email,
             inscricaoTesteConcluida: true,
             segundaEtapaTeste,
-            statusInscricao: 'Validada'
+            statusInscricao: 'Validada',
+            calendarSynced: true
         });
         if (!atualizada) return res.status(500).json({ error: 'Não foi possível validar a inscrição.' });
 
