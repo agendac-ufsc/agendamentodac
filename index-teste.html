@@ -119,6 +119,21 @@
         .btn-modal { padding: 10px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-yes { background: #28a745; color: white; }
         .btn-no { background: #6c757d; color: white; }
+        .person-type-choice { display: flex; flex-direction: column; gap: 10px; text-align: left; margin: 20px 0; }
+        .person-type-option {
+            display: flex; align-items: center; gap: 10px; padding: 14px 16px;
+            border: 2px solid #e0e0e0; border-radius: 10px; color: #444;
+            cursor: pointer; transition: border-color .2s, background .2s;
+        }
+        .person-type-option:hover { border-color: #667eea; background: #f8f9ff; }
+        .person-type-option input { width: auto; margin: 0; accent-color: #667eea; }
+        .person-type-option:has(input:checked) { border-color: #667eea; background: #f0f4ff; color: #333; font-weight: 600; }
+        .btn-next-step {
+            width: 100%; padding: 13px 24px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+        }
+        .btn-next-step:disabled { opacity: .5; cursor: not-allowed; }
         .test-banner {
             position: fixed; top: 0; left: 0; right: 0; z-index: 3000;
             padding: 8px 14px; background: #fff3cd; color: #856404;
@@ -366,10 +381,19 @@
     <div id="modalSegundaEtapa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
         <div style="background:#fff;border-radius:16px;padding:36px 28px;max-width:420px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
             <div style="font-size:44px;margin-bottom:14px">📋</div>
-            <h2 style="color:#28a745;font-size:20px;margin:0 0 12px">Primeira etapa concluída!</h2>
-            <p style="color:#333;font-size:15px;line-height:1.6;margin:0 0 8px">Sua inscrição foi salva com sucesso.</p>
-            <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px">Agora você será direcionado para a <strong>segunda etapa</strong> — um formulário complementar que deve ser preenchido para que sua inscrição seja considerada completa.</p>
-            <a id="btnModalSegundaEtapa" href="#" target="_blank" style="display:block;background:linear-gradient(135deg,#28a745 0%,#218838 100%);color:#fff;text-decoration:none;padding:13px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" onclick="document.getElementById('modalSegundaEtapa').style.display='none';setTimeout(()=>location.reload(),800)">OK — Ir para a Segunda Etapa</a>
+            <h2 style="color:#764ba2;font-size:20px;margin:0 0 12px">Qual é o tipo de proponente?</h2>
+            <p style="color:#555;font-size:14px;line-height:1.6;margin:0">Selecione uma opção para continuar para a segunda etapa.</p>
+            <div class="person-type-choice">
+                <label class="person-type-option">
+                    <input type="radio" name="tipoProponenteTeste" value="Pessoa Física" onchange="atualizarBotaoAvancarTeste()">
+                    <span>Pessoa Física</span>
+                </label>
+                <label class="person-type-option">
+                    <input type="radio" name="tipoProponenteTeste" value="Pessoa Jurídica" onchange="atualizarBotaoAvancarTeste()">
+                    <span>Pessoa Jurídica</span>
+                </label>
+            </div>
+            <button type="button" id="btnAvancarFormularioTeste" class="btn-next-step" disabled onclick="avancarParaFormularioTeste()">Avançar</button>
         </div>
     </div>
 
@@ -439,7 +463,7 @@
                 </div>
                 <div class="loading" id="loading">Processando agendamento...</div>
                 <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
-                <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar 1ª Etapa da Inscrição</button>
+                <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Próxima etapa</button>
                 <div class="message" id="message"></div>
             </div>
         </form>
@@ -464,6 +488,7 @@
         let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
         let somenteFinaisDeSemana = false; // Se true, bloqueia seg/ter/qua no calendário
         let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
+        let formsLinkProximaEtapaTeste = '';
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -1098,16 +1123,17 @@
                     msg.className = 'message success';
                     submitBtn.style.display = 'none';
 
-                    let formsLink = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+                    formsLinkProximaEtapaTeste = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
                     try {
                         const configRes = await fetch('/api/config');
                         const config = await configRes.json();
-                        if (config.formsLink) formsLink = config.formsLink;
+                        if (config.formsLink) formsLinkProximaEtapaTeste = config.formsLink;
                     } catch (e) {
                         console.error('Erro ao buscar link do forms:', e);
                     }
 
-                    document.getElementById('btnModalSegundaEtapa').href = formsLink;
+                    document.querySelectorAll('input[name="tipoProponenteTeste"]').forEach(input => input.checked = false);
+                    atualizarBotaoAvancarTeste();
                     const m = document.getElementById('modalSegundaEtapa');
                     m.style.display = 'flex';
                 } else {
@@ -1123,8 +1149,22 @@
                 submitBtn.removeAttribute('data-submitting');
                 submitBtn.classList.remove('btn-blocked');
                 submitBtn.style.opacity = '';
-                submitBtn.textContent = 'Finalizar 1ª Etapa da Inscrição';
+                submitBtn.textContent = 'Próxima etapa';
             }
+        }
+
+        function atualizarBotaoAvancarTeste() {
+            const selecionado = document.querySelector('input[name="tipoProponenteTeste"]:checked');
+            const btn = document.getElementById('btnAvancarFormularioTeste');
+            if (btn) btn.disabled = !selecionado;
+        }
+
+        function avancarParaFormularioTeste() {
+            const selecionado = document.querySelector('input[name="tipoProponenteTeste"]:checked');
+            if (!selecionado || !formsLinkProximaEtapaTeste) return;
+            document.getElementById('modalSegundaEtapa').style.display = 'none';
+            window.open(formsLinkProximaEtapaTeste, '_blank', 'noopener');
+            setTimeout(() => location.reload(), 800);
         }
 
         // ── SELEÇÃO DE LOCAL ──────────────────────────────────
