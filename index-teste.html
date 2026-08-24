@@ -212,6 +212,35 @@
         }
         .institutional-upload ul { margin: 10px 0 18px 22px; color: #444; line-height: 1.6; }
         .institutional-upload input[type="file"] { padding: 10px; font-size: 13px; background: #fff; }
+        .proposal-fields { display: grid; gap: 16px; }
+        .proposal-card {
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            padding: 22px;
+        }
+        .proposal-card > label:first-child {
+            display: block; color: #333; font-size: 16px; font-weight: 500;
+            margin-bottom: 16px;
+        }
+        .proposal-card > label:first-child::after { content: ' *'; color: #c0392b; }
+        .proposal-card.optional > label:first-child::after { content: ''; }
+        .proposal-options { display: grid; gap: 13px; }
+        .proposal-option {
+            display: flex; align-items: center; gap: 10px; color: #333;
+            font-size: 15px; cursor: pointer; margin: 0;
+        }
+        .proposal-option input {
+            width: 20px; height: 20px; margin: 0; accent-color: #667eea;
+        }
+        .proposal-card textarea {
+            width: 100%; min-height: 105px; padding: 12px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font: inherit; font-size: 15px; resize: vertical;
+        }
+        .proposal-card textarea:focus { outline: none; border-color: #667eea; }
+        .proposal-card input[type="file"] {
+            width: 100%; padding: 10px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font-size: 13px; background: #fafafa;
+        }
+        .proposal-card input[type="file"]:focus { outline: none; border-color: #667eea; }
         @media (max-width: 600px) {
             .full-page-step { padding: 28px 20px; }
             .person-type-page-options { grid-template-columns: 1fr; }
@@ -614,6 +643,80 @@
         <div class="step-actions">
             <button type="button" class="btn-back-step" onclick="voltarParaCategoriaPropostaTeste()">← Voltar</button>
             <button type="button" class="btn-next-step" onclick="avancarVinculoInstitucionalTeste()">Avançar →</button>
+        </div>
+    </div>
+
+    <div class="full-page-step" id="dadosPropostaSection">
+        <h2>Dados da Proposta</h2>
+        <p class="step-description">Preencha as informações da proposta artístico-cultural.</p>
+        <div class="proposal-fields">
+            <div class="proposal-card">
+                <label>Área/Segmento</label>
+                <div class="proposal-options">
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Teatro"><span>Teatro</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Dança"><span>Dança</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Artes Circenses"><span>Artes Circenses</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Música"><span>Música</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Audiovisual"><span>Audiovisual</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Literatura"><span>Literatura</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Culturas Populares e Saberes Tradicionais"><span>Culturas Populares e Saberes Tradicionais</span></label>
+                    <label class="proposal-option"><input type="checkbox" name="areaSegmentoTeste" value="Políticas Culturais e Gestão da Cultura"><span>Políticas Culturais e Gestão da Cultura</span></label>
+                </div>
+            </div>
+
+            <div class="proposal-card">
+                <label>Finalidade da atividade artístico-cultural</label>
+                <div class="proposal-options">
+                    <label class="proposal-option"><input type="radio" name="finalidadeAtividadeTeste" value="Apresentação"><span>Apresentação</span></label>
+                    <label class="proposal-option"><input type="radio" name="finalidadeAtividadeTeste" value="Gravação"><span>Gravação</span></label>
+                    <label class="proposal-option"><input type="radio" name="finalidadeAtividadeTeste" value="Debate/Congresso na área Artístico-cultural"><span>Debate/Congresso na área Artístico-cultural</span></label>
+                </div>
+            </div>
+
+            <div class="proposal-card">
+                <label for="testeSinopseProposta">Sinopse ou breve descrição da proposta</label>
+                <textarea id="testeSinopseProposta" placeholder="Sua resposta"></textarea>
+            </div>
+
+            <div class="proposal-card">
+                <label for="testeFichaTecnicaProposta">Ficha Técnica</label>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF. O tamanho máximo é de 10 MB.</small>
+                <input type="file" id="testeFichaTecnicaProposta" accept=".pdf,application/pdf">
+            </div>
+
+            <div class="proposal-card optional">
+                <label for="testeEspecificacoesTecnicasProposta">Demais especificações técnicas para a realização da proposta</label>
+                <textarea id="testeEspecificacoesTecnicasProposta" placeholder="Sua resposta"></textarea>
+            </div>
+
+            <div class="proposal-card optional">
+                <label for="testeLinksVideoProposta">Link de acesso a vídeo ou fotos da proposta (em caso de já realizada previamente)</label>
+                <small class="file-help">Faça upload de até 5 arquivos aceitos. O tamanho máximo é de 10 MB por item.</small>
+                <input type="file" id="testeLinksVideoProposta" accept=".pdf,image/*" multiple>
+            </div>
+
+            <div class="proposal-card optional">
+                <label for="testeOutrosLinksProposta">Links com outras informações (site, blog, fotos e etc.) que possam ser úteis para qualificar a proposta.</label>
+                <small class="file-help">Faça upload de 1 arquivo aceito. O tamanho máximo é de 10 MB.</small>
+                <input type="file" id="testeOutrosLinksProposta" accept=".pdf,image/*">
+            </div>
+
+            <div class="proposal-card">
+                <label for="testeRelevanciaProposta">Breve descrição sobre a relevância cultural e impacto social da proposta</label>
+                <textarea id="testeRelevanciaProposta" placeholder="Sua resposta"></textarea>
+            </div>
+
+            <div class="proposal-card">
+                <label>O evento disponibiliza recursos de acessibilidade comunicacional?</label>
+                <div class="proposal-options">
+                    <label class="proposal-option"><input type="radio" name="acessibilidadeComunicacionalTeste" value="SIM"><span>SIM</span></label>
+                    <label class="proposal-option"><input type="radio" name="acessibilidadeComunicacionalTeste" value="NÃO"><span>NÃO</span></label>
+                </div>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaEtapaAnteriorPropostaTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="avancarDadosPropostaTeste()">Avançar →</button>
         </div>
     </div>
 
@@ -1380,7 +1483,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1448,7 +1551,7 @@
             if (vinculo.value === 'SIM') {
                 mostrarTelaTeste('vinculoInstitucionalSection');
             } else {
-                abrirFormularioTeste();
+                mostrarTelaTeste('dadosPropostaSection');
             }
         }
 
@@ -1466,6 +1569,46 @@
             }
             if (comprovante.length !== 1 || !arquivo || !arquivo.name.toLowerCase().endsWith('.pdf') || arquivo.type !== 'application/pdf' || arquivo.size > 10 * 1024 * 1024) {
                 alert('Selecione 1 comprovante em PDF com tamanho máximo de 10 MB.');
+                return;
+            }
+            mostrarTelaTeste('dadosPropostaSection');
+        }
+
+        function voltarParaEtapaAnteriorPropostaTeste() {
+            const vinculo = document.querySelector('input[name="vinculoUfscTeste"]:checked');
+            mostrarTelaTeste(vinculo?.value === 'SIM' ? 'vinculoInstitucionalSection' : 'categoriaPropostaSection');
+        }
+
+        function avancarDadosPropostaTeste() {
+            const areas = document.querySelectorAll('input[name="areaSegmentoTeste"]:checked');
+            const finalidade = document.querySelector('input[name="finalidadeAtividadeTeste"]:checked');
+            const sinopse = document.getElementById('testeSinopseProposta').value.trim();
+            const ficha = document.getElementById('testeFichaTecnicaProposta').files;
+            const relevancia = document.getElementById('testeRelevanciaProposta').value.trim();
+            const acessibilidade = document.querySelector('input[name="acessibilidadeComunicacionalTeste"]:checked');
+            const linksVideo = document.getElementById('testeLinksVideoProposta').files;
+            const outrosLinks = document.getElementById('testeOutrosLinksProposta').files;
+            const arquivoPdfValido = file => file && file.name.toLowerCase().endsWith('.pdf') && file.size <= 10 * 1024 * 1024;
+            const arquivosAceitos = file => file && (arquivoPdfValido(file) || file.type.startsWith('image/')) && file.size <= 10 * 1024 * 1024;
+
+            if (!areas.length) {
+                alert('Selecione pelo menos uma área/segmento.');
+                return;
+            }
+            if (!finalidade || !sinopse || !relevancia || !acessibilidade) {
+                alert('Preencha todos os campos obrigatórios.');
+                return;
+            }
+            if (ficha.length !== 1 || !arquivoPdfValido(ficha[0])) {
+                alert('Selecione 1 ficha técnica em PDF com tamanho máximo de 10 MB.');
+                return;
+            }
+            if (linksVideo.length > 5 || Array.from(linksVideo).some(file => !arquivosAceitos(file))) {
+                alert('Selecione até 5 arquivos de vídeo/fotos, com tamanho máximo de 10 MB por arquivo.');
+                return;
+            }
+            if (outrosLinks.length > 1 || (outrosLinks.length === 1 && !arquivosAceitos(outrosLinks[0]))) {
+                alert('Selecione no máximo 1 arquivo válido, com tamanho máximo de 10 MB.');
                 return;
             }
             abrirFormularioTeste();
