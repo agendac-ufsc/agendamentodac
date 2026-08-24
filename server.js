@@ -214,14 +214,32 @@ const deleteAgendamentoById = async (id) => {
                     if (!item?.data || !item?.horario) continue;
                     const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
                     const [horaInicio] = String(item.horario).split(' às ');
-                    const matches = eventos.filter(event => {
+                    const sameSlot = event => {
                         const inicio = horaDoEvento(event);
                         return event.summary === `${label}: ${agendamentoAExcluir.evento}`
-                            && event.description
-                            && event.description.includes(agendamentoAExcluir.email || '')
                             && inicio.data === item.data
                             && inicio.hora === horaInicio;
+                    };
+                    const matchesWithId = eventos.filter(event => {
+                        if (!sameSlot(event)) return false;
+                        const privateProps = event.extendedProperties?.private || {};
+                        return String(privateProps.dac_inscricao_id || '') === String(agendamentoAExcluir.id);
                     });
+                    const legacyMatches = eventos.filter(event => {
+                        if (!sameSlot(event)) return false;
+                        const privateProps = event.extendedProperties?.private || {};
+                        if (privateProps.dac_inscricao_id) return false;
+                        return event.description?.includes(agendamentoAExcluir.email || '')
+                            || (privateProps.dac_source === 'sistema'
+                                && event.description?.startsWith('Em análise\nLocal:'));
+                    });
+                    // Eventos novos são identificados pelo ID. Para eventos
+                    // antigos, só usamos o fallback quando há uma única
+                    // correspondência, evitando apagar o horário de outra
+                    // inscrição com o mesmo nome e horário.
+                    const matches = matchesWithId.length > 0
+                        ? matchesWithId
+                        : legacyMatches.length === 1 ? legacyMatches : [];
                     for (const event of matches) {
                         try {
                             await calendar.events.delete({ auth: googleAuthClient, calendarId, eventId: event.id });
@@ -491,7 +509,7 @@ const saveConfigs = async (configs) => {
 // Carregar configurações iniciais
 getConfigs('startup').catch(err => console.error('❌ [startup] Erro ao carregar configs:', err.message));
 
-const createCalendarEvent = async (summary, description, date, timeRange, calendarId = CALENDAR_IDS.teatro) => {
+const createCalendarEvent = async (summary, description, date, timeRange, calendarId = CALENDAR_IDS.teatro, inscriptionId = null) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
         const [startTime, endTime] = timeRange.split(' às ');
@@ -502,7 +520,12 @@ const createCalendarEvent = async (summary, description, date, timeRange, calend
             description: description,
             start: { dateTime: startDateTimeStr, timeZone: 'America/Sao_Paulo' },
             end: { dateTime: endDateTimeStr, timeZone: 'America/Sao_Paulo' },
-            extendedProperties: { private: { dac_source: 'sistema' } }
+            extendedProperties: {
+                private: {
+                    dac_source: 'sistema',
+                    ...(inscriptionId ? { dac_inscricao_id: String(inscriptionId) } : {})
+                }
+            }
         };
         const response = await calendar.events.insert({
             auth: googleAuthClient,
@@ -1040,7 +1063,8 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
                         `Inscrição validada pelo sistema de teste.\nProponente: ${dados.nome}\nE-mail: ${email}\nLocal: ${agendamento.localNome || agendamento.local || 'Teatro Carmen Fossari'}`,
                         item.data,
                         item.horario,
-                        calendarId
+                        calendarId,
+                        agendamento.id
                     );
                     if (!eventoCalendario) {
                         return res.status(502).json({ error: 'A inscrição foi salva, mas não foi possível registrá-la no Google Calendar.' });
@@ -1427,7 +1451,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                                 await createCalendarEvent(
                                     `${label}: ${p.evento}`,
                                     `Em análise\nLocal: ${localNomeResolvido}`,
-                                    item.data, item.horario, calIdInscricao
+                                    item.data, item.horario, calIdInscricao, p.id
                                 );
                                 const [ano, mes, dia] = (item.data || '').split('-');
                                 const dataFormatada = ano ? `${dia}/${mes}/${ano}` : item.data;
