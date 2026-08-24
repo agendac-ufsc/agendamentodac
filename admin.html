@@ -225,6 +225,11 @@
                 <option value="Pendente">Pendente</option>
                 <option value="Cancelado">Cancelado</option>
             </select>
+            <select id="filterTermo" class="filter-sel" onchange="renderTabela()">
+                <option value="">Todos os Termos</option>
+                <option value="completo">Termo digital completo</option>
+                <option value="incompleto">Termo digital incompleto</option>
+            </select>
             <button class="btn-top btn-orange" id="btnEnviarTermos" onclick="enviarTermosSelecionados()" style="display:none">
                 <i class="fas fa-paper-plane"></i> Enviar Termos (<span id="countSelecionados">0</span>)
             </button>
@@ -1014,6 +1019,7 @@ function renderTabela() {
     const q = (document.getElementById('searchInput').value || '').toLowerCase();
     const filterLocal = document.getElementById('filterLocal').value;
     const filterStatus = document.getElementById('filterStatus').value;
+    const filterTermo = document.getElementById('filterTermo').value;
     const nomesEtapas = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
 
     const parseTs = ts => {
@@ -1036,7 +1042,11 @@ function renderTabela() {
             || matchTel;
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
         const matchStatus = !filterStatus || (item.status||'').toLowerCase().includes(filterStatus.toLowerCase());
-        return matchQ && matchLocal && matchStatus;
+        const termoCompleto = p.termoAssinado === true || p.termoAssinado === 'true';
+        const matchTermo = !filterTermo
+            || (filterTermo === 'completo' && termoCompleto)
+            || (filterTermo === 'incompleto' && !termoCompleto);
+        return matchQ && matchLocal && matchStatus && matchTermo;
     });
 
     filtered.sort((a, b) => {
