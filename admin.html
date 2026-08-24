@@ -605,8 +605,8 @@
 <!-- ═══════════════ MODAL EXCLUIR TUDO (confirmação dupla) ═══ -->
 <div class="modal" id="modalExcluirTudo">
     <div class="modal-box" style="max-width:520px;border-top:4px solid #dc2626">
-        <h3 style="color:#dc2626"><i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições</h3>
-        <p style="font-size:14px;color:#444;line-height:1.5">
+        <h3 id="tituloExcluirTudo" style="color:#dc2626"><i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições</h3>
+        <p id="textoExcluirTudo" style="font-size:14px;color:#444;line-height:1.5">
             Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os
             <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.
         </p>
@@ -807,6 +807,7 @@ let termoEditorIndex = null;
 let termoEditorCompleto = false;
 let termoAdminAlteracoesSalvas = false;
 let termoPendenteIndex = null;
+let exclusaoSelecionados = [];
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -895,7 +896,7 @@ function buildTopActions() {
         el.innerHTML = `
             <button class="btn-top btn-refresh" onclick="loadData()"><i class="fas fa-sync-alt"></i> Atualizar</button>
             <button class="btn-top btn-success" onclick="downloadAllPDFs()"><i class="fas fa-download"></i> Baixar PDFs</button>
-            <button class="btn-top btn-danger" onclick="deleteAllInscricoes()"><i class="fas fa-trash"></i> Excluir Tudo</button>
+            <button class="btn-top btn-danger" id="btnExcluirInscricoes" onclick="deleteAllInscricoes()"><i class="fas fa-trash"></i> Excluir Tudo</button>
             <button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
         `;
     } else {
@@ -1160,6 +1161,12 @@ function updateSelCount() {
     const checked = document.querySelectorAll('.insc-check:checked').length;
     document.getElementById('countSelecionados').textContent = checked;
     document.getElementById('btnEnviarTermos').style.display = checked > 0 && userRole === 'admin' ? 'flex' : 'none';
+    const btnExcluir = document.getElementById('btnExcluirInscricoes');
+    if (btnExcluir && userRole === 'admin') {
+        btnExcluir.innerHTML = checked > 0
+            ? `<i class="fas fa-trash"></i> Excluir somente os selecionados (${checked})`
+            : '<i class="fas fa-trash"></i> Excluir Tudo';
+    }
 }
 
 function toggleCheckAll() {
@@ -1802,6 +1809,19 @@ async function deleteInscricao(id) {
 }
 
 function deleteAllInscricoes() {
+    exclusaoSelecionados = [...document.querySelectorAll('.insc-check:checked')]
+        .map(c => allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa?.id)
+        .filter(id => id && id !== 'undefined' && id !== 'null')
+        .map(String);
+    const titulo = document.getElementById('tituloExcluirTudo');
+    const texto = document.getElementById('textoExcluirTudo');
+    if (exclusaoSelecionados.length > 0) {
+        if (titulo) titulo.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Excluir ${exclusaoSelecionados.length} inscrição(ões) selecionada(s)`;
+        if (texto) texto.innerHTML = `Esta ação vai apagar somente as <strong>${exclusaoSelecionados.length} inscrição(ões) selecionada(s)</strong> e seus <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.`;
+    } else {
+        if (titulo) titulo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições';
+        if (texto) texto.innerHTML = 'Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.';
+    }
     const input = document.getElementById('excluirTudoConfirmInput');
     if (input) input.value = '';
     const btn = document.getElementById('btnConfirmExcluirTudo');
@@ -1820,6 +1840,11 @@ function closeExcluirTudoModal() {
         btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
     }
     onExcluirTudoInputChange();
+    exclusaoSelecionados = [];
+    const titulo = document.getElementById('tituloExcluirTudo');
+    const texto = document.getElementById('textoExcluirTudo');
+    if (titulo) titulo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições';
+    if (texto) texto.innerHTML = 'Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.';
 }
 
 function onExcluirTudoInputChange() {
@@ -1841,10 +1866,23 @@ async function confirmDeleteAllInscricoes() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
     }
     try {
-        const r = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        closeExcluirTudoModal();
-        alert('Limpeza iniciada. Atualize em alguns segundos.');
+        if (exclusaoSelecionados.length > 0) {
+            const quantidadeExcluida = exclusaoSelecionados.length;
+            const falhas = [];
+            for (const id of exclusaoSelecionados) {
+                const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                const body = await r.json().catch(() => ({}));
+                if (!r.ok || body.success === false) falhas.push(id);
+            }
+            if (falhas.length > 0) throw new Error(`${falhas.length} inscrição(ões) não puderam ser excluídas.`);
+            closeExcluirTudoModal();
+            alert(`${quantidadeExcluida} inscrição(ão) selecionada(s) excluída(s) com sucesso.`);
+        } else {
+            const r = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            closeExcluirTudoModal();
+            alert('Limpeza iniciada. Atualize em alguns segundos.');
+        }
         loadData();
     } catch (e) {
         alert('Erro ao iniciar exclusão: ' + e.message);
