@@ -252,6 +252,31 @@
             border-radius: 8px; font-size: 13px; background: #fafafa;
         }
         .proposal-card input[type="file"]:focus { outline: none; border-color: #667eea; }
+        .accessibility-fields { display: grid; gap: 18px; }
+        .accessibility-options { display: grid; gap: 10px; }
+        .accessibility-option {
+            display: flex; align-items: center; gap: 10px; color: #333;
+            font-size: 15px; cursor: pointer; margin: 0; padding: 12px 14px;
+            border: 1.5px solid #e5e7eb; border-radius: 10px;
+            background: #fff; transition: border-color .2s, background .2s, box-shadow .2s;
+        }
+        .accessibility-option:hover { border-color: #a78bfa; background: #faf8ff; }
+        .accessibility-option:has(input:checked) {
+            border-color: #764ba2; background: #f3effb;
+            box-shadow: 0 2px 6px rgba(118, 75, 162, .12);
+            color: #4c1d95; font-weight: 600;
+        }
+        .accessibility-option input {
+            width: 19px; height: 19px; margin: 0; flex: 0 0 auto; accent-color: #764ba2;
+        }
+        .accessibility-other {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        .accessibility-other input[type="text"] {
+            flex: 1; min-width: 180px; border: none; border-bottom: 1.5px solid #d1d5db;
+            border-radius: 0; padding: 8px 4px; font: inherit; font-size: 15px;
+        }
+        .accessibility-other input[type="text"]:focus { outline: none; border-bottom-color: #764ba2; }
         @media (max-width: 600px) {
             .area-options, .finalidade-options { grid-template-columns: 1fr; }
             .proposal-option { padding: 13px 12px; }
@@ -732,6 +757,41 @@
         <div class="step-actions">
             <button type="button" class="btn-back-step" onclick="voltarParaEtapaAnteriorPropostaTeste()">← Voltar</button>
             <button type="button" class="btn-next-step" onclick="avancarDadosPropostaTeste()">Avançar →</button>
+        </div>
+    </div>
+
+    <div class="full-page-step" id="acessibilidadeComunicacionalSection">
+        <h2>Acessibilidade Comunicacional</h2>
+        <p class="step-description">Informe quais recursos de acessibilidade comunicacional serão utilizados no evento.</p>
+        <div class="accessibility-fields">
+            <div class="proposal-card">
+                <label style="display:block;color:#333;font-size:16px;font-weight:500;margin-bottom:16px;">
+                    Quais recursos de acessibilidade comunicacional serão utilizados?
+                </label>
+                <div class="accessibility-options">
+                    <label class="accessibility-option">
+                        <input type="checkbox" name="recursosAcessibilidadeTeste" value="Intérprete de libras">
+                        <span>Intérprete de libras</span>
+                    </label>
+                    <label class="accessibility-option">
+                        <input type="checkbox" name="recursosAcessibilidadeTeste" value="Audiodescrição">
+                        <span>Audiodescrição</span>
+                    </label>
+                    <label class="accessibility-option">
+                        <input type="checkbox" name="recursosAcessibilidadeTeste" value="Legendas">
+                        <span>Legendas</span>
+                    </label>
+                    <label class="accessibility-option accessibility-other">
+                        <input type="checkbox" id="testeOutroRecursoAcessibilidade" name="recursosAcessibilidadeTeste" value="Outro">
+                        <span>Outro:</span>
+                        <input type="text" id="testeDescricaoOutroRecursoAcessibilidade" placeholder="Especifique">
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaDadosPropostaTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="avancarAcessibilidadeTeste()">Avançar →</button>
         </div>
     </div>
 
@@ -1498,7 +1558,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1624,6 +1684,30 @@
             }
             if (outrosLinks.length > 1 || (outrosLinks.length === 1 && !arquivosAceitos(outrosLinks[0]))) {
                 alert('Selecione no máximo 1 arquivo válido, com tamanho máximo de 10 MB.');
+                return;
+            }
+            const usaAcessibilidade = acessibilidade.value === 'SIM';
+            if (usaAcessibilidade) {
+                mostrarTelaTeste('acessibilidadeComunicacionalSection');
+            } else {
+                abrirFormularioTeste();
+            }
+        }
+
+        function voltarParaDadosPropostaTeste() {
+            mostrarTelaTeste('dadosPropostaSection');
+        }
+
+        function avancarAcessibilidadeTeste() {
+            const recursos = document.querySelectorAll('input[name="recursosAcessibilidadeTeste"]:checked');
+            const outroSelecionado = document.getElementById('testeOutroRecursoAcessibilidade').checked;
+            const outroTexto = document.getElementById('testeDescricaoOutroRecursoAcessibilidade').value.trim();
+            if (!recursos.length) {
+                alert('Selecione pelo menos um recurso de acessibilidade comunicacional.');
+                return;
+            }
+            if (outroSelecionado && !outroTexto) {
+                alert('Especifique o outro recurso de acessibilidade comunicacional.');
                 return;
             }
             abrirFormularioTeste();
