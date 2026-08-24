@@ -795,6 +795,30 @@
         </div>
     </div>
 
+    <div class="full-page-step" id="gratuidadeEventoSection">
+        <h2>Gratuidade do Evento</h2>
+        <p class="step-description">Informe se haverá cobrança de ingresso ou outra forma de pagamento para participar do evento.</p>
+        <div class="proposal-card">
+            <label style="display:block;color:#333;font-size:16px;font-weight:500;margin-bottom:16px;">
+                O evento será gratuito?
+            </label>
+            <div class="proposal-options">
+                <label class="proposal-option">
+                    <input type="radio" name="gratuidadeEventoTeste" value="SIM">
+                    <span>SIM</span>
+                </label>
+                <label class="proposal-option">
+                    <input type="radio" name="gratuidadeEventoTeste" value="NÃO">
+                    <span>NÃO</span>
+                </label>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaAcessibilidadeOuDadosTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="avancarGratuidadeEventoTeste()">Avançar →</button>
+        </div>
+    </div>
+
     <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
@@ -1558,7 +1582,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1690,7 +1714,7 @@
             if (usaAcessibilidade) {
                 mostrarTelaTeste('acessibilidadeComunicacionalSection');
             } else {
-                abrirFormularioTeste();
+                mostrarTelaTeste('gratuidadeEventoSection');
             }
         }
 
@@ -1708,6 +1732,20 @@
             }
             if (outroSelecionado && !outroTexto) {
                 alert('Especifique o outro recurso de acessibilidade comunicacional.');
+                return;
+            }
+            mostrarTelaTeste('gratuidadeEventoSection');
+        }
+
+        function voltarParaAcessibilidadeOuDadosTeste() {
+            const acessibilidade = document.querySelector('input[name="acessibilidadeComunicacionalTeste"]:checked');
+            mostrarTelaTeste(acessibilidade?.value === 'SIM' ? 'acessibilidadeComunicacionalSection' : 'dadosPropostaSection');
+        }
+
+        function avancarGratuidadeEventoTeste() {
+            const gratuidade = document.querySelector('input[name="gratuidadeEventoTeste"]:checked');
+            if (!gratuidade) {
+                alert('Informe se o evento será gratuito.');
                 return;
             }
             abrirFormularioTeste();
