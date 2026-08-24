@@ -183,6 +183,22 @@
         }
         .category-explanation-body p { margin: 0 0 18px; }
         .category-explanation-body p:last-child { margin-bottom: 0; }
+        .rental-fee-explanation {
+            background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
+            overflow: hidden; margin-bottom: 16px;
+        }
+        .rental-fee-explanation h3 {
+            background: #a33124; color: #fff; padding: 15px 22px;
+            font-size: 16px; margin: 0;
+        }
+        .rental-fee-body {
+            padding: 22px; color: #333; font-size: 15px; line-height: 1.5;
+        }
+        .rental-fee-body p { margin: 0 0 18px; }
+        .rental-fee-body p:last-child { margin-bottom: 0; }
+        .rental-fee-body ul { margin: 0 0 18px 22px; padding: 0; }
+        .rental-fee-body li { margin-bottom: 5px; }
+        .rental-fee-body .fee-important { font-weight: 700; margin-bottom: 10px; }
         .ufsc-link-card {
             background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
             padding: 24px 22px;
@@ -822,6 +838,38 @@
         <div class="step-actions">
             <button type="button" class="btn-back-step" onclick="voltarParaAcessibilidadeOuDadosTeste()">← Voltar</button>
             <button type="button" class="btn-next-step" onclick="avancarGratuidadeEventoTeste()">Avançar →</button>
+        </div>
+    </div>
+
+    <div class="full-page-step" id="taxaLocacaoSection">
+        <h2>Taxa de Locação</h2>
+        <div class="rental-fee-explanation">
+            <h3>Taxa de Locação dos Espaços do DAC</h3>
+            <div class="rental-fee-body">
+                <p>De acordo com o item 11 do edital, os eventos com cobrança de ingresso estão sujeitos ao pagamento da taxa de locação dos espaços do DAC, conforme estabelecido pela Resolução Normativa nº 32/2024/CC e suas alterações posteriores.</p>
+
+                <p>Os valores de locação vigentes são:</p>
+                <ul>
+                    <li><strong>Teatro Carmen Fossari</strong> é de R$433,16 (quatrocentos e trinta e três reais e dezesseis centavos) por turno.</li>
+                    <li><strong>Igrejinha da UFSC</strong> é R$323,86 (trezentos e vinte e três reais e oitenta e seis centavos) por turno.</li>
+                </ul>
+
+                <p>Os turnos são definidos da seguintes forma:</p>
+                <p>a) Turno matutino: das 7h às 13h;</p>
+                <p>b) Turno vespertino: das 13h às 18h;</p>
+                <p>c) Turno noturno: das 18h às 22h.</p>
+
+                <p class="fee-important">Importante:</p>
+                <ul>
+                    <li>Os turnos destinados a ensaios, montagem e desmontagem também estão sujeitos ao pagamento de taxa de locação, uma vez que essas reservas indisponibilizam a utilização do espaço para a realização de outros eventos ou atividades.</li>
+                    <li>A taxa de locação deverá ser paga por meio da Guia de Recolhimento da União (GRU), que será encaminhada ao e-mail informado no ato da inscrição. A GRU terá vencimento para um mês antes da realização do evento.</li>
+                    <li>Para os eventos previstos para ocorrer após o mês de setembro, a GRU terá vencimento no mês de setembro, em razão do encerramento do exercício financeiro da Universidade.</li>
+                </ul>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaGratuidadeComTaxaTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="concluirInscricaoComTaxaTeste()">Concluir inscrição</button>
         </div>
     </div>
 
@@ -1630,7 +1678,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'projetosDacSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'taxaLocacaoSection', 'projetosDacSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1799,12 +1847,20 @@
             if (gratuidade.value === 'SIM') {
                 mostrarTelaTeste('projetosDacSection');
             } else {
-                abrirFormularioTeste();
+                mostrarTelaTeste('taxaLocacaoSection');
             }
         }
 
         function voltarParaGratuidadeTeste() {
             mostrarTelaTeste('gratuidadeEventoSection');
+        }
+
+        function voltarParaGratuidadeComTaxaTeste() {
+            mostrarTelaTeste('gratuidadeEventoSection');
+        }
+
+        function concluirInscricaoComTaxaTeste() {
+            abrirFormularioTeste();
         }
 
         function concluirInscricaoTeste() {
