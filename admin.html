@@ -1134,7 +1134,7 @@ function renderTabela() {
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="Enviar formulário de atividades ao proponente" aria-label="Enviar formulário de atividades ao proponente" onclick="abrirEmailFormularioAtividades(${originalIndex})" style="color:#2563eb"><i class="fas fa-clipboard-list"></i></button>
-            <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id||p.email}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
+            <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
 
         const row = document.createElement('tr');
@@ -1782,6 +1782,10 @@ async function sendEmailRapido() {
 }
 
 async function deleteInscricao(id) {
+    if (!id || id === 'undefined' || id === 'null') {
+        alert('Não foi possível excluir: esta inscrição não possui um ID individual.');
+        return;
+    }
     if (!confirm('Excluir esta inscrição?')) return;
     try {
         const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });

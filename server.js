@@ -1496,11 +1496,17 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 const nomeEventoSheet = (idxNomeEventoSheet >= 0 ? s[idxNomeEventoSheet] : 'Evento (Forms)') || 'Evento (Forms)';
                 const nomeProponenteSheet = (idxNomeProponenteSheet >= 0 ? s[idxNomeProponenteSheet] : 'Inscrição Forms') || 'Inscrição Forms';
 
-                const deterministicId = `forms_${(emailSheet || 'noemail')}_${nomeEventoSheet.trim().toLowerCase()}`.replace(/\s+/g, '_');
+                const legacyId = `forms_${(emailSheet || 'noemail')}_${nomeEventoSheet.trim().toLowerCase()}`.replace(/\s+/g, '_');
+                // A mesma pessoa pode enviar mais de uma resposta com o mesmo
+                // e-mail e nome de evento. O índice da linha torna o ID
+                // individual, sem depender do e-mail para identificar uma
+                // inscrição.
+                const deterministicId = `${legacyId}_${idx}`;
 
                 unificados.push({
                     primeiraEtapa: { 
                         id: deterministicId,
+                        legacyId,
                         nome: nomeProponenteSheet,
                         email: emailSheet || 'N/A',
                         telefone: (indicesTelefone.length > 0 ? s[indicesTelefone[0]] : 'N/A') || 'N/A',
@@ -1629,7 +1635,10 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const blacklist = await getBlacklist();
         const unificadosFiltrados = unificados.filter(u => {
             const id = u.primeiraEtapa.id;
-            return id && !blacklist.includes(id);
+            // Aceita também o ID antigo para não reexibir registros legados
+            // que já haviam sido ocultados antes da geração individual.
+            const legacyId = u.primeiraEtapa.legacyId;
+            return id && !blacklist.includes(id) && (!legacyId || !blacklist.includes(legacyId));
         });
         
         console.log(`[DEBUG] Gerados ${unificados.length} registros unificados. ${blacklist.length} filtrados pela Blacklist.`);
@@ -1670,7 +1679,10 @@ app.delete('/api/agendamentos/:id', async (req, res) => {
         }
 
         const agendamentos = await getAgendamentos();
-        const agendamento = agendamentos.find(a => a.id === id);
+        // Parâmetros de URL são strings; comparar de forma normalizada evita
+        // tratar uma inscrição válida como Forms-only quando o ID foi salvo
+        // como número no Redis.
+        const agendamento = agendamentos.find(a => String(a.id) === String(id));
 
         if (agendamento) {
             const resultado = await deleteAgendamentoById(agendamento.id);
