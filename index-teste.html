@@ -242,6 +242,12 @@
         }
         .area-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .finalidade-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .projeto-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .projeto-option { min-height: 58px; align-items: center; }
+        .projeto-info-link {
+            color: #2563eb; text-decoration: underline; font-weight: 600;
+        }
+        .projeto-info-link:hover { color: #764ba2; }
         .proposal-card textarea {
             width: 100%; min-height: 105px; padding: 12px; border: 2px solid #e0e0e0;
             border-radius: 8px; font: inherit; font-size: 15px; resize: vertical;
@@ -278,7 +284,7 @@
         }
         .accessibility-other input[type="text"]:focus { outline: none; border-bottom-color: #764ba2; }
         @media (max-width: 600px) {
-            .area-options, .finalidade-options { grid-template-columns: 1fr; }
+            .area-options, .finalidade-options, .projeto-options { grid-template-columns: 1fr; }
             .proposal-option { padding: 13px 12px; }
         }
         @media (max-width: 600px) {
@@ -816,6 +822,48 @@
         <div class="step-actions">
             <button type="button" class="btn-back-step" onclick="voltarParaAcessibilidadeOuDadosTeste()">← Voltar</button>
             <button type="button" class="btn-next-step" onclick="avancarGratuidadeEventoTeste()">Avançar →</button>
+        </div>
+    </div>
+
+    <div class="full-page-step" id="projetosDacSection">
+        <h2>Projetos do DAC</h2>
+        <div class="category-explanation">
+            <div class="category-explanation-body">
+                <p>No caso de propostas externas de apresentações públicas gratuitas, poderá ser concedida isenção da taxa de locação mediante a vinculação do evento a um dos projetos de extensão do DAC.</p>
+                <p>Caso tenha interesse nessa modalidade, escolha um dos projetos de extensão apresentados abaixo.</p>
+                <p>Os projetos de extensão do DAC contam com uma equipe do setor responsável pela coordenação das atividades e pela produção geral das ações. Dessa forma, o próprio DAC atua como proponente e presta apoio à produção da atividade.</p>
+                <p>Para conhecer melhor cada projeto, clique nos links abaixo:</p>
+                <ul>
+                    <li><a class="projeto-info-link" href="https://dac.ufsc.br/" target="_blank" rel="noopener noreferrer">Em Cena - Carmen Fossari</a></li>
+                    <li><a class="projeto-info-link" href="https://dac.ufsc.br/" target="_blank" rel="noopener noreferrer">Projeto 12:30</a></li>
+                    <li><a class="projeto-info-link" href="https://dac.ufsc.br/" target="_blank" rel="noopener noreferrer">Projeto Igrejinha Musical</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="proposal-card">
+            <label>Tem interesse em inserir a proposta na programação de um dos projetos do DAC? Se sim, qual?</label>
+            <div class="proposal-options projeto-options">
+                <label class="proposal-option projeto-option">
+                    <input type="radio" name="projetoDacTeste" value="Em Cena - Carmen Fossari">
+                    <span>Em Cena - Carmen Fossari</span>
+                </label>
+                <label class="proposal-option projeto-option">
+                    <input type="radio" name="projetoDacTeste" value="Projeto 12:30">
+                    <span>Projeto 12:30</span>
+                </label>
+                <label class="proposal-option projeto-option">
+                    <input type="radio" name="projetoDacTeste" value="Projeto Igrejinha Musical">
+                    <span>Projeto Igrejinha Musical</span>
+                </label>
+                <label class="proposal-option projeto-option">
+                    <input type="radio" name="projetoDacTeste" value="Não, pretendo fazer com produção própria.">
+                    <span>Não, pretendo fazer com produção própria.</span>
+                </label>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaGratuidadeTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="concluirInscricaoTeste()">Concluir inscrição</button>
         </div>
     </div>
 
@@ -1582,7 +1630,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'projetosDacSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1746,6 +1794,23 @@
             const gratuidade = document.querySelector('input[name="gratuidadeEventoTeste"]:checked');
             if (!gratuidade) {
                 alert('Informe se o evento será gratuito.');
+                return;
+            }
+            if (gratuidade.value === 'SIM') {
+                mostrarTelaTeste('projetosDacSection');
+            } else {
+                abrirFormularioTeste();
+            }
+        }
+
+        function voltarParaGratuidadeTeste() {
+            mostrarTelaTeste('gratuidadeEventoSection');
+        }
+
+        function concluirInscricaoTeste() {
+            const projeto = document.querySelector('input[name="projetoDacTeste"]:checked');
+            if (!projeto) {
+                alert('Escolha uma opção sobre a programação dos projetos do DAC.');
                 return;
             }
             abrirFormularioTeste();
