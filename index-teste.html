@@ -468,6 +468,54 @@
         </div>
     </div>
 
+    <div class="full-page-step" id="pessoaJuridicaSection">
+        <h2>Proponente Pessoa Jurídica</h2>
+        <p class="step-description">Preencha as informações abaixo para continuar para o formulário complementar.</p>
+        <div class="proponente-fields">
+            <div class="form-group">
+                <label for="testeRepresentantePessoaJuridica">Nome Completo do (a) Representante Legal *</label>
+                <input type="text" id="testeRepresentantePessoaJuridica" placeholder="Sua resposta" required>
+            </div>
+            <div class="form-group">
+                <label for="testeRazaoSocialPessoaJuridica">Razão Social *</label>
+                <input type="text" id="testeRazaoSocialPessoaJuridica" placeholder="Sua resposta" required>
+            </div>
+            <div class="form-group">
+                <label for="testeCnpjPessoaJuridica">CNPJ *</label>
+                <input type="text" id="testeCnpjPessoaJuridica" placeholder="Sua resposta" inputmode="numeric" required>
+            </div>
+            <div class="form-group">
+                <label for="testeEnderecoPessoaJuridica">Endereço *</label>
+                <input type="text" id="testeEnderecoPessoaJuridica" placeholder="Sua resposta" required>
+            </div>
+            <div class="form-group">
+                <label for="testePortfolioPessoaJuridica">Portfólio *</label>
+                <input type="file" id="testePortfolioPessoaJuridica" accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation" required>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF, documento ou apresentação. O tamanho máximo é de 100 MB.</small>
+            </div>
+            <div class="form-group">
+                <label for="testeContratoPessoaJuridica">Cópia Simples do Contrato Social e sua última alteração *</label>
+                <input type="file" id="testeContratoPessoaJuridica" accept=".pdf,application/pdf" required>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF. O tamanho máximo é de 10 MB.</small>
+            </div>
+            <div class="form-group">
+                <label for="testeDocumentoRepresentantePessoaJuridica">Cópia simples de documento oficial do(a) representante legal *</label>
+                <p class="file-help" style="margin:0 0 6px">Digitalização ou print de documento oficial com foto contendo nome e CPF de forma legível.</p>
+                <input type="file" id="testeDocumentoRepresentantePessoaJuridica" accept=".pdf,image/*" required>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF ou imagem. O tamanho máximo é de 10 MB.</small>
+            </div>
+            <div class="form-group">
+                <label for="testeDocumentoCnpjPessoaJuridica">Cópia simples do documento Nacional de Pessoas Jurídicas - CNPJ *</label>
+                <input type="file" id="testeDocumentoCnpjPessoaJuridica" accept=".pdf,application/pdf" required>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF. O tamanho máximo é de 10 MB.</small>
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaTipoProponenteTeste()">← Voltar</button>
+            <button type="button" id="btnAvancarPessoaJuridicaTeste" class="btn-next-step" onclick="avancarPessoaJuridicaTeste()">Avançar →</button>
+        </div>
+    </div>
+
     <div class="container" id="localSelectionContainer" style="display: none;">
         <div style="text-align: center; margin-bottom: 30px;">
             <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
@@ -1230,7 +1278,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1254,7 +1302,7 @@
             if (selecionado.value === 'Pessoa Física') {
                 mostrarTelaTeste('pessoaFisicaSection');
             } else {
-                abrirFormularioTeste();
+                mostrarTelaTeste('pessoaJuridicaSection');
             }
         }
 
@@ -1274,6 +1322,54 @@
             }
             if (documentos.length < 1 || documentos.length > 5 || Array.from(documentos).some(file => !tiposAceitos(file) || file.size > limite)) {
                 alert('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.');
+                return;
+            }
+            abrirFormularioTeste();
+        }
+
+        function arquivoComExtensao(file, extensoes) {
+            return file && extensoes.some(ext => file.name.toLowerCase().endsWith(ext));
+        }
+
+        function avancarPessoaJuridicaTeste() {
+            const campos = [
+                'testeRepresentantePessoaJuridica',
+                'testeRazaoSocialPessoaJuridica',
+                'testeCnpjPessoaJuridica',
+                'testeEnderecoPessoaJuridica'
+            ];
+            if (campos.some(id => !document.getElementById(id).value.trim())) {
+                alert('Preencha todos os campos obrigatórios.');
+                return;
+            }
+
+            const portfolio = document.getElementById('testePortfolioPessoaJuridica').files;
+            const contrato = document.getElementById('testeContratoPessoaJuridica').files;
+            const documentoRepresentante = document.getElementById('testeDocumentoRepresentantePessoaJuridica').files;
+            const documentoCnpj = document.getElementById('testeDocumentoCnpjPessoaJuridica').files;
+            const limite10Mb = 10 * 1024 * 1024;
+            const limite100Mb = 100 * 1024 * 1024;
+            const pdf = file => file && (file.type === 'application/pdf' || arquivoComExtensao(file, ['.pdf']));
+            const pdfOuImagem = file => file && (pdf(file) || file.type.startsWith('image/') || arquivoComExtensao(file, ['.jpg', '.jpeg', '.png', '.gif', '.webp']));
+            const portfolioAceito = file => file && (
+                pdf(file) ||
+                ['.doc', '.docx', '.ppt', '.pptx'].some(ext => arquivoComExtensao(file, [ext]))
+            );
+
+            if (portfolio.length !== 1 || !portfolioAceito(portfolio[0]) || portfolio[0].size > limite100Mb) {
+                alert('Selecione 1 portfólio em PDF, documento ou apresentação com tamanho máximo de 100 MB.');
+                return;
+            }
+            if (contrato.length !== 1 || !pdf(contrato[0]) || contrato[0].size > limite10Mb) {
+                alert('Selecione 1 contrato social em PDF com tamanho máximo de 10 MB.');
+                return;
+            }
+            if (documentoRepresentante.length !== 1 || !pdfOuImagem(documentoRepresentante[0]) || documentoRepresentante[0].size > limite10Mb) {
+                alert('Selecione 1 documento oficial em PDF ou imagem com tamanho máximo de 10 MB.');
+                return;
+            }
+            if (documentoCnpj.length !== 1 || !pdf(documentoCnpj[0]) || documentoCnpj[0].size > limite10Mb) {
+                alert('Selecione 1 documento do CNPJ em PDF com tamanho máximo de 10 MB.');
                 return;
             }
             abrirFormularioTeste();
