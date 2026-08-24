@@ -242,8 +242,8 @@
         }
         .area-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .finalidade-options { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-        .projeto-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        .projeto-option { min-height: 58px; align-items: center; }
+        .gratuidade-projeto-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .gratuidade-projeto-options .proposal-option { min-height: 58px; align-items: center; }
         .projeto-info-link {
             color: #2563eb; text-decoration: underline; font-weight: 600;
         }
@@ -284,7 +284,7 @@
         }
         .accessibility-other input[type="text"]:focus { outline: none; border-bottom-color: #764ba2; }
         @media (max-width: 600px) {
-            .area-options, .finalidade-options, .projeto-options { grid-template-columns: 1fr; }
+            .area-options, .finalidade-options, .gratuidade-projeto-options { grid-template-columns: 1fr; }
             .proposal-option { padding: 13px 12px; }
         }
         @media (max-width: 600px) {
@@ -842,7 +842,7 @@
         </div>
         <div class="proposal-card">
             <label>Tem interesse em inserir a proposta na programação de um dos projetos do DAC? Se sim, qual?</label>
-            <div class="proposal-options projeto-options">
+            <div class="proposal-options gratuidade-projeto-options">
                 <label class="proposal-option projeto-option">
                     <input type="radio" name="projetoDacTeste" value="Em Cena - Carmen Fossari">
                     <span>Em Cena - Carmen Fossari</span>
