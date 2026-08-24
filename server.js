@@ -1814,20 +1814,41 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
                         const allEvents = listResp.data.items || [];
 
                         // Coletar APENAS os eventos que pertencem às inscrições do sistema.
-                        // Critério: summary começa com "Ensaio/Montagem/Evento/Desmontagem: <nome_do_evento>"
-                        //           E description contém o e-mail do proponente.
+                        // Eventos novos são vinculados pelo ID da inscrição. Para
+                        // eventos antigos, usamos uma correspondência legada
+                        // somente quando ela é segura.
                         const eventosADeletar = [];
                         for (const ag of ags) {
-                            if (!ag.etapas || !ag.email) continue;
+                            if (!ag.etapas) continue;
                             for (const key of Object.keys(ag.etapas)) {
                                 const itens = Array.isArray(ag.etapas[key]) ? ag.etapas[key] : [ag.etapas[key]];
-                                itens.forEach((_, i) => {
+                                itens.forEach((item, i) => {
+                                    if (!item?.data || !item?.horario) return;
                                     const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
                                     const eventSummary = `${label}: ${ag.evento}`;
-                                    const matches = allEvents.filter(e =>
-                                        e.summary === eventSummary &&
-                                        e.description && e.description.includes(ag.email)
-                                    );
+                                    const horaInicio = String(item.horario).split(' às ')[0];
+                                    const mesmoHorario = e => {
+                                        const inicio = e.start?.dateTime || '';
+                                        return e.summary === eventSummary
+                                            && inicio.slice(0, 10) === item.data
+                                            && inicio.includes('T')
+                                            && inicio.split('T')[1].slice(0, 5) === horaInicio;
+                                    };
+                                    const matchesComId = allEvents.filter(e => {
+                                        if (!mesmoHorario(e)) return false;
+                                        const props = e.extendedProperties?.private || {};
+                                        return String(props.dac_inscricao_id || '') === String(ag.id);
+                                    });
+                                    const matchesLegados = allEvents.filter(e => {
+                                        if (!mesmoHorario(e)) return false;
+                                        const props = e.extendedProperties?.private || {};
+                                        if (props.dac_inscricao_id || props.dac_source !== 'sistema') return false;
+                                        return (ag.email && e.description?.includes(ag.email))
+                                            || e.description?.startsWith('Em análise\nLocal:');
+                                    });
+                                    const matches = matchesComId.length > 0
+                                        ? matchesComId
+                                        : matchesLegados.length === 1 ? matchesLegados : [];
                                     eventosADeletar.push(...matches);
                                 });
                             }
