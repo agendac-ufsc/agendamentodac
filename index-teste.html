@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Agendamento DAC</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            padding: 40px;
+        }
+        h1 { color: #333; margin-bottom: 30px; text-align: center; font-size: 28px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #555; font-weight: 500; }
+        input {
+            width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px;
+            font-size: 16px; transition: border-color 0.3s;
+        }
+        input:focus { outline: none; border-color: #667eea; }
+
+        /* Accordion Styles */
+        .accordion { margin: 20px 0; border: 1px solid #e0e0e0; border-radius: 10px; overflow: hidden; }
+        .accordion-item { border-bottom: 1px solid #e0e0e0; }
+        .accordion-item:last-child { border-bottom: none; }
+        .accordion-header {
+            background: #fff; padding: 15px 20px; display: flex; justify-content: space-between;
+            align-items: center; cursor: pointer; transition: background 0.3s; user-select: none;
+        }
+        .accordion-header:hover { background: #f8f9fa; }
+        .accordion-header h3 { font-size: 16px; color: #333; font-weight: 600; }
+        .accordion-header .status-icon { font-size: 12px; color: #ccc; transition: transform 0.3s; }
+        .accordion-header.active .status-icon { transform: rotate(180deg); }
+        .accordion-header.completed h3::after { content: ' ✅'; font-size: 14px; }
+        .accordion-item.disabled { opacity: 0.5; cursor: not-allowed; background: #f5f5f5; }
+        .accordion-item.disabled .accordion-header { cursor: not-allowed; pointer-events: none; }
+
+        .accordion-content { display: none; padding: 20px; background: #fcfcfc; border-top: 1px solid #eee; }
+        .accordion-content.show { display: block; }
+
+        /* Calendar & Time Slots */
+        .calendar { margin-bottom: 20px; padding: 15px; background: #fff; border: 1px solid #eee; border-radius: 8px; }
+        .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .calendar-header button { background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: 12px; }
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+        .day-header { text-align: center; font-weight: bold; color: #667eea; font-size: 11px; padding-bottom: 5px; }
+        .day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border: 1px solid #eee; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .day:hover:not(.other-month) { background: #f0f4ff; border-color: #667eea; }
+        .day.selected { border: 3px solid #667eea !important; box-shadow: 0 0 8px rgba(102, 126, 234, 0.5); font-weight: bold; }
+        .day.other-month { color: #ccc; cursor: not-allowed; }
+        .day.busy-full { background: #ffb3b3 !important; color: #333 !important; border-color: #ff8080 !important; cursor: not-allowed; }
+        .day.busy-partial { background: #fff4cc !important; color: #333 !important; border-color: #ffe066 !important; }
+        .day.user-selected { background: #d4edda !important; border-color: #28a745 !important; color: #155724 !important; }
+        
+        .time-slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 15px; }
+        @media (min-width: 600px) { .time-slots { grid-template-columns: repeat(6, 1fr); } }
+        .time-slot { padding: 8px; border: 1px solid #ddd; border-radius: 4px; text-align: center; cursor: pointer; font-size: 12px; transition: all 0.2s; }
+        .time-slot:hover { background: #f0f4ff; border-color: #667eea; }
+        .time-slot.selected { background: #667eea; color: white; border-color: #667eea; }
+        .time-slot.busy { background: #eee; color: #bbb; border-color: #ddd; cursor: not-allowed; text-decoration: line-through; }
+        .time-slot.user-busy { background: #d4edda; color: #155724; border-color: #28a745; cursor: not-allowed; font-weight: bold; }
+        .time-slot.dispute { background: #fff4cc; color: #856404; border-color: #ffe066; text-decoration: none; }
+        .time-slot.dispute:hover { background: #ffe066; }
+        .time-slot.step-conflict { background: #fde8d8; color: #92400e; border-color: #f59e0b; cursor: not-allowed; font-size: 10px; }
+
+        /* Step Confirmation Button */
+        .btn-confirm-step {
+            width: 100%; padding: 10px; background: #28a745; color: white; border: none;
+            border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer;
+            margin-top: 15px; display: none;
+        }
+        .btn-confirm-step.show { display: block; }
+
+        /* Summary Styles */
+        .summary-section { margin-top: 30px; border-top: 2px solid #eee; padding-top: 20px; display: none; }
+        .summary-section.show { display: block; }
+        .summary-card {
+            background: #f0f4ff; border: 1px solid #667eea; border-radius: 10px;
+            padding: 15px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .summary-info h4 { font-size: 14px; color: #333; margin-bottom: 4px; }
+        .summary-info p { font-size: 13px; color: #666; }
+        .btn-delete { background: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+
+        button.submit {
+            width: 100%; padding: 14px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold;
+            cursor: pointer; transition: transform 0.2s; margin-top: 20px;
+        }
+        button.submit:disabled { opacity: 0.5; cursor: not-allowed; }
+        button.submit.btn-blocked { opacity: 0.5; cursor: not-allowed; }
+
+        /* Modal & Messages */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000;
+        }
+        .modal-content { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; }
+        .message { padding: 15px; border-radius: 8px; margin-top: 20px; display: none; text-align: center; }
+        .message.success { background: #d4edda; color: #155724; display: block; }
+        .message.error { background: #f8d7da; color: #721c24; display: block; }
+        .loading { display: none; text-align: center; margin-top: 20px; color: #667eea; }
+        .loading.show { display: block; }
+
+        .modal-actions { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .btn-modal { padding: 10px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+        .btn-yes { background: #28a745; color: white; }
+        .btn-no { background: #6c757d; color: white; }
+        .test-banner {
+            position: fixed; top: 0; left: 0; right: 0; z-index: 3000;
+            padding: 8px 14px; background: #fff3cd; color: #856404;
+            border-bottom: 1px solid #ffeeba; text-align: center;
+            font-size: 12px; font-weight: 700;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-banner">MODO DE TESTE — esta cópia usa as mesmas áreas e funcionalidades da etapa 1 oficial.</div>
+    <!-- Modal Orientação Início -->
+    <div class="modal-overlay" id="modalStart">
+        <div class="modal-content">
+            <h2 style="color: #764ba2; margin-bottom: 10px;">Início confirmado!</h2>
+            <p style="color: #333; margin-bottom: 20px; font-size: 18px; font-weight: bold;">Agora escolha o horário de término.</p>
+            <button type="button" class="btn-modal btn-yes" id="btnStartOk">OK</button>
+        </div>
+    </div>
+
+    <!-- Modal Aviso de Inscrição -->
+    <div class="modal-overlay" id="modalAvisoInscricao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9999; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:#fff; border-radius:16px; max-width:480px; width:100%; padding:36px 32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); text-align:center;">
+            <div style="font-size:48px; margin-bottom:16px;">⚠️</div>
+            <h2 style="color:#333; font-size:20px; margin-bottom:16px;">Antes de começar, leia com atenção</h2>
+            <div style="background:#fff8e1; border:1px solid #ffe082; border-radius:10px; padding:18px; text-align:left; margin-bottom:24px;">
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:14px; font-size:14px; color:#555; line-height:1.6;">
+                    <li style="background:#fff3cd; border:1px solid #ffc107; border-radius:8px; padding:12px 14px;">
+                        ⚠️ <strong>Atenção: a inscrição só será efetivada após a conclusão das duas etapas.</strong>
+                        <ol style="margin:10px 0 8px 18px; font-size:13px; color:#555; display:flex; flex-direction:column; gap:6px; line-height:1.5;">
+                            <li><strong>1ª etapa:</strong> registro dos dados pessoais, nome do evento e seleção da data e horário pretendido.</li>
+                            <li><strong>2ª etapa:</strong> envio da documentação e detalhamento da proposta.</li>
+                        </ol>
+                        <span style="font-size:13px; color:#b45309;">Caso as duas etapas não sejam concluídas, a inscrição não será realizada.</span>
+                    </li>
+                    <li>⏱️ <strong>Tempo estimado:</strong> a inscrição leva em média <strong>15 minutos</strong> para ser concluída.</li>
+                    <li>
+                        📄 <strong>Documentos:</strong> tenha todos os documentos necessários em mãos antes de começar.<br>
+                        <button type="button" onclick="abrirModalDocumentos()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">📋 Ver lista de documentos necessários</button>
+                    </li>
+                    <li style="margin-top:4px">
+                        💰 <strong>Taxa de locação:</strong> verifique se o seu evento está sujeito ao pagamento.<br>
+                        <button type="button" onclick="abrirModalTaxaLocacao()" style="margin-top:6px; background:none; border:none; color:#2563eb; font-size:13px; cursor:pointer; padding:0; text-decoration:underline;">💰 Ver informações sobre a taxa de locação</button>
+                    </li>
+                </ul>
+            </div>
+            <p style="font-size:13px; color:#888; margin-bottom:24px;">Você está pronto(a) para iniciar?</p>
+            <div style="display:flex; gap:12px; justify-content:center; flex-wrap:wrap;">
+                <button type="button" onclick="fecharAvisoInscricao()" style="padding:12px 28px; border-radius:8px; border:2px solid #ddd; background:#fff; color:#555; font-size:14px; font-weight:600; cursor:pointer;">Ainda não estou pronto(a)</button>
+                <button type="button" id="btnConfirmarInscricao" onclick="confirmarContinuar()" style="padding:12px 28px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Estou pronto(a), iniciar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Lista de Documentos -->
+    <div id="modalDocumentos" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:#fff; border-radius:16px; max-width:520px; width:100%; padding:32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#333; font-size:18px; margin:0;">📋 Documentos Necessários</h2>
+                <button type="button" onclick="fecharModalDocumentos()" style="background:#eee; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:14px; color:#555;">✕ Fechar</button>
+            </div>
+
+            <!-- Pessoa Física -->
+            <div style="margin-bottom:20px;">
+                <h3 style="font-size:15px; color:#2563eb; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                    👤 Pessoa Física
+                </h3>
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f0f7ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#2563eb; font-weight:700; flex-shrink:0;">•</span> RG (Registro Geral)
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f0f7ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#2563eb; font-weight:700; flex-shrink:0;">•</span> CPF (Cadastro de Pessoas Físicas)
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f0f7ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#2563eb; font-weight:700; flex-shrink:0;">•</span> Currículo
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f0f7ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#2563eb; font-weight:700; flex-shrink:0;">•</span> Ficha técnica do espetáculo
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#888; background:#f8faff; border:1px dashed #c7d8f5; padding:10px 12px; border-radius:8px; font-style:italic;">
+                        <span style="color:#93aed4; font-weight:700; flex-shrink:0;">◦</span> <span><strong style="color:#5a7ab5; font-style:normal;">Opcional:</strong> Links para fotos, vídeos, site ou blog sobre a proposta</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Pessoa Jurídica -->
+            <div style="margin-bottom:20px;">
+                <h3 style="font-size:15px; color:#7c3aed; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                    🏢 Pessoa Jurídica
+                </h3>
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> RG do representante legal
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> CPF do representante legal
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> Portfólio
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> Cópia simples do contrato social
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> Cópia simples do documento oficial do representante legal
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> Cópia simples do CNPJ
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#f5f0ff; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#7c3aed; font-weight:700; flex-shrink:0;">•</span> Ficha técnica do espetáculo
+                    </li>
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#888; background:#faf8ff; border:1px dashed #d4c5f5; padding:10px 12px; border-radius:8px; font-style:italic;">
+                        <span style="color:#b39de0; font-weight:700; flex-shrink:0;">◦</span> <span><strong style="color:#7c5ab5; font-style:normal;">Opcional:</strong> Links para fotos, vídeos, site ou blog sobre a proposta</span>
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Vínculo UFSC -->
+            <div style="margin-bottom:8px;">
+                <h3 style="font-size:15px; color:#047857; margin-bottom:10px; display:flex; align-items:center; gap:8px;">
+                    🎓 Propostas com vínculo com a UFSC
+                </h3>
+                <ul style="list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:8px;">
+                    <li style="display:flex; align-items:flex-start; gap:8px; font-size:14px; color:#555; background:#ecfdf5; border:1px solid #a7f3d0; padding:10px 12px; border-radius:8px;">
+                        <span style="color:#047857; font-weight:700; flex-shrink:0;">•</span>
+                        <span>Comprovante de cadastro do projeto no <strong>SIGPEX</strong>; <em>ou</em> declaração de servidor docente ou TAE que ateste a vinculação.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div style="margin-top:24px; text-align:center;">
+                <button type="button" onclick="fecharModalDocumentos()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="modalTaxaLocacao" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:10000; align-items:center; justify-content:center; padding:20px;">
+        <div style="background:#fff; border-radius:16px; max-width:480px; width:100%; padding:32px; box-shadow:0 20px 60px rgba(0,0,0,0.3); max-height:90vh; overflow-y:auto;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <h2 style="color:#333; font-size:18px; margin:0;">💰 Taxa de Locação dos Espaços do DAC</h2>
+                <button type="button" onclick="fecharModalTaxaLocacao()" style="background:#eee; border:none; border-radius:6px; padding:6px 12px; cursor:pointer; font-size:14px; color:#555;">✕ Fechar</button>
+            </div>
+            <div style="background:#fffbeb; border:1px solid #fcd34d; border-radius:10px; padding:18px 20px; margin-bottom:20px;">
+                <p style="margin:0 0 10px; font-size:14px; color:#92400e; line-height:1.7;">
+                    Eventos com cobrança de ingresso estão sujeitos ao pagamento da taxa de locação dos espaços do DAC, inclusive pelos turnos destinados a <strong>ensaios, montagem e desmontagem</strong>.
+                </p>
+                <p style="margin:0; font-size:14px; color:#92400e; line-height:1.7;">
+                    Os valores de locação estão disponíveis no <strong>item 11 do edital</strong>.
+                </p>
+            </div>
+            <div style="margin-top:24px; text-align:center;">
+                <button type="button" onclick="fecharModalTaxaLocacao()" style="padding:10px 32px; border-radius:8px; border:none; background:linear-gradient(135deg,#667eea,#764ba2); color:#fff; font-size:14px; font-weight:600; cursor:pointer;">Entendido</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Confirmação de Dados -->
+    <div class="modal-overlay" id="modalConfirmaDados" style="display:none;">
+        <div class="modal-content" style="max-width:440px;">
+            <h2 style="color:#764ba2;margin-bottom:6px;">Confirmar dados</h2>
+            <p style="color:#333;font-size:16px;font-weight:bold;margin-bottom:18px;">As informações abaixo estão corretas?</p>
+            <div id="modalConfirmaDadosResumo" style="background:#f8f9fa;border-radius:8px;padding:16px;text-align:left;margin-bottom:20px;font-size:14px;line-height:2;color:#333;"></div>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-no" onclick="voltarParaDados()">← Voltar e Revisar</button>
+                <button type="button" class="btn-modal btn-yes" onclick="confirmarDadosEProsseguir()">Sim, continuar →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Adicionar Outro -->
+    <div class="modal-overlay" id="modalAddAnother">
+        <div class="modal-content">
+            <h2 id="modalAddTitle" style="color: #764ba2; margin-bottom: 10px;">Adicionado!</h2>
+            <p id="modalAddText" style="color: #333; margin-bottom: 20px; font-size: 18px; font-weight: bold;">Deseja adicionar outro?</p>
+            <div class="modal-actions">
+                <button type="button" class="btn-modal btn-yes" id="btnAddNo">Não</button>
+                <button type="button" class="btn-modal btn-no" id="btnAddYes">Sim</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="modalCalendar">
+        <div class="modal-content" style="max-width: 900px; width: 95%;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: #764ba2; margin: 0;">Calendário de Eventos</h2>
+                <button type="button" onclick="document.getElementById('modalCalendar').style.display='none'" style="background: #eee; border: none; padding: 5px 10px; border-radius: 5px; cursor: pointer;">Fechar</button>
+            </div>
+            <iframe src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border: 0" width="100%" height="500" frameborder="0" scrolling="no"></iframe>
+        </div>
+    </div>
+
+    <!-- Engrenagem discreta: acesso admin/avaliador -->
+    <div id="gearMenuWrap" style="position: fixed; top: 14px; right: 16px; z-index: 1000;">
+        <button id="gearBtn" onclick="toggleGearMenu(event)" title="Acesso restrito" style="background: none; border: none; cursor: pointer; padding: 6px; line-height: 1; opacity: 0.35; transition: opacity 0.2s;" onmouseenter="this.style.opacity='0.7'" onmouseleave="this.style.opacity='0.35'">
+            <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
+        <div id="gearMenu" style="display:none; position:absolute; top:36px; right:0; background:#fff; border:1px solid #e5e7eb; border-radius:10px; box-shadow:0 4px 16px rgba(0,0,0,0.10); min-width:190px; padding:6px 0; animation: fadeInDown 0.15s ease;">
+            <p style="margin:0; padding:8px 18px 6px; font-size:11px; font-weight:700; color:#9ca3af; letter-spacing:0.08em; text-transform:uppercase;">Área Restrita</p>
+            <hr style="margin:0 0 4px; border:none; border-top:1px solid #f3f4f6;">
+            <a href="/admin" style="display:block; padding:10px 18px; font-size:14px; color:#374151; text-decoration:none; font-weight:500;" onmouseenter="this.style.background='#f3f4f6'" onmouseleave="this.style.background=''">⚙️ Área Administrativa</a>
+            <a href="/avaliador" style="display:block; padding:10px 18px; font-size:14px; color:#374151; text-decoration:none; font-weight:500;" onmouseenter="this.style.background='#f3f4f6'" onmouseleave="this.style.background=''">📊 Painel do Avaliador</a>
+        </div>
+    </div>
+    <script>
+        function toggleGearMenu(e) {
+            e.stopPropagation();
+            const m = document.getElementById('gearMenu');
+            m.style.display = m.style.display === 'none' ? 'block' : 'none';
+        }
+        document.addEventListener('click', function() {
+            const m = document.getElementById('gearMenu');
+            if (m) m.style.display = 'none';
+        });
+    </script>
+
+    <!-- Tela inicial: o que você gostaria de fazer? -->
+    <div id="homeContainer" style="position: fixed; inset: 0; background: #fafafa; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; z-index: 500; overflow-y: auto;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="margin-bottom: 8px; color: #222; font-weight: 600;">Sistema de Agendamento DAC</h1>
+            <p style="color: #555; font-size: 15px;">O que você gostaria de fazer?</p>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 14px; max-width: 380px; margin: 0 auto;">
+            <button type="button" id="btnHomeInterno" data-acao="edital-interno" data-desativado="true" onclick="mostrarMensagemDesativado()" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Edital Interno</button>
+
+            <button type="button" id="btnHomeExterno" data-acao="edital-ocupacao" onclick="abrirSelecaoLocal()" style="background: #2563eb; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 10px rgba(37,99,235,0.3); transition: background 0.15s;" onmouseover="this.style.background='#1d4ed8'" onmouseout="this.style.background='#2563eb'">Edital de Ocupação dos Espaços do DAC 2026</button>
+
+            <button type="button" id="btnHomeEnsaio" data-acao="apenas-ensaio" data-desativado="true" onclick="mostrarMensagemDesativado()" style="background: #b0b0b0; color: #fff; border: none; padding: 16px 20px; border-radius: 12px; font-weight: 700; font-size: 14px; cursor: not-allowed; box-shadow: 0 2px 6px rgba(0,0,0,0.1); opacity: 0.85;">Agendar Apenas Ensaio</button>
+        </div>
+    </div>
+
+    <!-- Seleção de local -->
+    <!-- Modal: botão desativado -->
+    <div id="modalBtnDesativado" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9999;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:32px 28px;max-width:380px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.18)">
+            <div style="font-size:40px;margin-bottom:12px">🔒</div>
+            <p id="modalBtnDesativadoTexto" style="font-size:16px;color:#333;font-weight:600;line-height:1.5;margin:0 0 24px"></p>
+            <button onclick="document.getElementById('modalBtnDesativado').style.display='none'" style="background:#2563eb;color:#fff;border:none;padding:10px 32px;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">OK</button>
+        </div>
+    </div>
+
+    <div id="modalSegundaEtapa" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;align-items:center;justify-content:center;padding:20px">
+        <div style="background:#fff;border-radius:16px;padding:36px 28px;max-width:420px;width:100%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.2)">
+            <div style="font-size:44px;margin-bottom:14px">📋</div>
+            <h2 style="color:#28a745;font-size:20px;margin:0 0 12px">Primeira etapa concluída!</h2>
+            <p style="color:#333;font-size:15px;line-height:1.6;margin:0 0 8px">Sua inscrição foi salva com sucesso.</p>
+            <p style="color:#555;font-size:14px;line-height:1.6;margin:0 0 24px">Agora você será direcionado para a <strong>segunda etapa</strong> — um formulário complementar que deve ser preenchido para que sua inscrição seja considerada completa.</p>
+            <a id="btnModalSegundaEtapa" href="#" target="_blank" style="display:block;background:linear-gradient(135deg,#28a745 0%,#218838 100%);color:#fff;text-decoration:none;padding:13px 24px;border-radius:10px;font-size:15px;font-weight:700;cursor:pointer" onclick="document.getElementById('modalSegundaEtapa').style.display='none';setTimeout(()=>location.reload(),800)">OK — Ir para a Segunda Etapa</a>
+        </div>
+    </div>
+
+    <div class="container" id="localSelectionContainer" style="display: none;">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="margin-bottom: 8px;">📅 <span id="tituloPaginaAgendamento">Inscrição de Projeto</span></h1>
+            <p style="color: #333; font-size: 18px; font-weight: bold;">Selecione o espaço que deseja utilizar:</p>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 560px; margin: 0 auto;">
+            <button type="button" onclick="confirmarLocal('teatro')" style="background: #fff; border: 2px solid #e0e0e0; border-radius: 14px; padding: 30px 20px; cursor: pointer; transition: all 0.2s; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <span style="font-size: 48px;">🎭</span>
+                <strong style="font-size: 16px; color: #333;">Teatro Carmen Fossari</strong>
+                <span style="font-size: 12px; color: #888;">Sala principal do DAC</span>
+            </button>
+            <button type="button" onclick="confirmarLocal('igrejinha')" style="background: #fff; border: 2px solid #e0e0e0; border-radius: 14px; padding: 30px 20px; cursor: pointer; transition: all 0.2s; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 12px;">
+                <span style="font-size: 48px;">⛪</span>
+                <strong style="font-size: 16px; color: #333;">Igrejinha da UFSC</strong>
+                <span style="font-size: 12px; color: #888;">Espaço alternativo do DAC</span>
+            </button>
+        </div>
+        <p style="text-align: center; margin-top: 16px;"><button type="button" onclick="voltarTelaInicial()" style="background: transparent; border: none; color: #2563eb; cursor: pointer; font-weight: 600; font-size: 14px;">← Voltar</button></p>
+    </div>
+
+    <div class="container" id="mainFormContainer" style="display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px;">
+            <div>
+                <h1 style="margin-bottom: 4px;">📅 <span class="tituloPaginaAgendamentoEl">Inscrição de Projeto</span></h1>
+                <div id="localSelectedBadge" style="display: inline-flex; align-items: center; gap: 8px; background: #ede9fe; color: #7c3aed; padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 700;"></div>
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                <button type="button" onclick="voltarSelecaoLocal()" style="background: #eee; color: #555; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold;">← Trocar Local</button>
+                <button type="button" onclick="document.getElementById('modalCalendar').style.display='flex'" style="background: #764ba2; color: white; border: none; padding: 10px 15px; border-radius: 8px; cursor: pointer; font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-calendar-alt"></i> Ver Calendário
+                </button>
+            </div>
+        </div>
+        <form id="agendamentoForm">
+            <input type="hidden" id="localSelecionado" value="teatro">
+
+            <!-- ── FASE 1: Dados do Proponente ── -->
+            <div id="dadosSection">
+                <div class="form-group"><label>Nome Completo *</label><input type="text" id="nome" oninput="checkDadosPreenchidos()" required></div>
+                <div class="form-group"><label>E-mail *</label><input type="email" id="email" oninput="checkDadosPreenchidos()" required></div>
+                <div class="form-group"><label>Telefone *</label><input type="tel" id="telefone" oninput="checkDadosPreenchidos()" required></div>
+                <div class="form-group"><label>Nome do Evento *</label><input type="text" id="evento" oninput="checkDadosPreenchidos()" required></div>
+                <button type="button" id="btnConfirmarDados" class="submit btn-blocked" onclick="abrirModalConfirmaDados()" style="margin-top:8px;">Confirmar Dados e Escolher Datas →</button>
+            </div>
+
+            <!-- ── FASE 2: Calendário + Envio (oculto até confirmar dados) ── -->
+            <div id="schedulingSection" style="display:none;">
+                <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:14px 18px;margin-bottom:18px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:13px;font-weight:700;color:#28a745;">✅ Dados confirmados</span>
+                        <button type="button" onclick="voltarParaDados()" style="background:none;border:1px solid #adb5bd;color:#555;cursor:pointer;font-weight:600;padding:4px 12px;font-size:12px;border-radius:6px;">✏️ Editar dados</button>
+                    </div>
+                    <div id="dadosBannerResumo" style="font-size:13px;color:#444;line-height:1.9;"></div>
+                </div>
+                <div style="background: #fff3cd; border: 1px solid #ffeeba; color: #856404; padding: 15px; border-radius: 8px; margin-bottom: 20px; font-size: 14px; line-height: 1.5;">
+                    <strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.
+                </div>
+                <div class="accordion" id="stepsAccordion">
+                    <!-- Etapas Geradas via JS -->
+                </div>
+                <div class="summary-section" id="summarySection">
+                    <h3 style="font-size: 18px; margin-bottom: 15px; color: #333;">Resumo do Cronograma</h3>
+                    <div id="summaryList"></div>
+                </div>
+                <div class="loading" id="loading">Processando agendamento...</div>
+                <p id="submitHint" style="display:none;color:#c0392b;font-size:13px;text-align:center;margin:0 0 8px;background:#fdf2f0;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px">⚠️ É obrigatório adicionar pelo menos um <strong>Evento</strong> para finalizar a inscrição.</p>
+                <button type="button" class="submit btn-blocked" id="submitBtn" onclick="handleSubmitClick(event)">Finalizar 1ª Etapa da Inscrição</button>
+                <div class="message" id="message"></div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const stepNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const steps = ['evento', 'ensaio', 'montagem', 'desmontagem'];
+        const selections = {};
+        const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
+        let currentStepContext = null;
+        let googleEvents = [];
+        let permitirDisputa = true;
+        let horariosLimites = {
+            ensaio: { fim: '17:00' },
+            montagem: { fim: '21:00' },
+            desmontagem: { fim: '21:00' }
+        };
+        let datasBloqueadas = [];
+        let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
+        let dataInicioEdital = null; // Data mínima conforme edital selecionado (YYYY-MM-DD)
+        let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
+        let somenteFinaisDeSemana = false; // Se true, bloqueia seg/ter/qua no calendário
+        let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
+
+        steps.forEach(s => {
+            selections[s] = { date: null, start: null, end: null };
+        });
+
+        async function fetchAvailability() {
+            try {
+                const configRes = await fetch('/api/config');
+                if (configRes.ok) {
+                    const config = await configRes.json();
+                    permitirDisputa = config.permitirDisputa !== false;
+                    somenteFinaisDeSemana = !!config.somenteFinaisDeSemana;
+                    if (config.horariosLimites) horariosLimites = config.horariosLimites;
+                    datasBloqueadas = config.datasBloqueadas || [];
+                    
+                    const aviso = document.querySelector('div[style*="background: #fff3cd"]');
+                    if (aviso) {
+                        if (permitirDisputa) {
+                            aviso.style.display = 'block';
+                            aviso.innerHTML = '<strong>Atenção:</strong> As datas e horários marcados em <strong>amarelo</strong> já foram solicitados por outro proponente. Você pode se inscrever nessas horas e concorrer à vaga mesmo assim. A alocação final será definida para a proposta que obtiver a maior pontuação, conforme os critérios estabelecidos no item 8 do edital.';
+                        } else {
+                            aviso.style.display = 'none';
+                        }
+                    }
+                }
+
+                const localAtual = document.getElementById('localSelecionado')?.value || 'teatro';
+                const res = await fetch(`/api/disponibilidade?local=${localAtual}`);
+                if (res.ok) {
+                    googleEvents = await res.json();
+                    steps.forEach(s => {
+                        const content = document.getElementById(`content-${s}`);
+                        if (content && content.classList.contains('show')) {
+                            renderStepCalendar(s);
+                            renderTimeSlots(s);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('Erro ao buscar disponibilidade:', err);
+            }
+        }
+
+        fetchAvailability();
+        setInterval(fetchAvailability, 120000);
+
+        async function carregarTituloPagina() {
+            try {
+                const r = await fetch('/api/config');
+                const c = await r.json();
+                const titulo = (c.tituloPaginaAgendamento || 'Inscrição de Projeto').trim();
+                const elTopo = document.getElementById('tituloPaginaAgendamento');
+                if (elTopo) elTopo.textContent = titulo;
+                document.querySelectorAll('.tituloPaginaAgendamentoEl').forEach(el => el.textContent = titulo);
+                aplicarBotoesHome(c.botoesHome);
+                if (c.mensagemBotoesDesativados) mensagemBotoesDesativados = c.mensagemBotoesDesativados;
+            } catch (e) {}
+        }
+
+        function aplicarBotoesHome(bh) {
+            const padrao = {
+                interno: { ativo: false, texto: 'Edital Interno' },
+                externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
+                ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
+            };
+            const cfg = {
+                interno: { ...padrao.interno, ...((bh && bh.interno) || {}) },
+                externo: { ...padrao.externo, ...((bh && bh.externo) || {}) },
+                ensaio:  { ...padrao.ensaio,  ...((bh && bh.ensaio)  || {}) }
+            };
+            // Armazena data de início por tipo de edital
+            botoesHomeDataInicio = {
+                interno: cfg.interno.dataInicio || null,
+                externo: cfg.externo.dataInicio || null,
+                ensaio:  cfg.ensaio.dataInicio  || null
+            };
+            const aplicar = (el, def, tipo) => {
+                if (!el) return;
+                el.textContent = def.texto;
+                if (def.ativo) {
+                    el.disabled = false;
+                    el.removeAttribute('title');
+                    el.dataset.desativado = 'false';
+                    el.style.background = '#2563eb';
+                    el.style.color = '#fff';
+                    el.style.cursor = 'pointer';
+                    el.style.opacity = '1';
+                    el.style.boxShadow = '0 4px 10px rgba(37,99,235,0.3)';
+                    el.onmouseover = () => { el.style.background = '#1d4ed8'; };
+                    el.onmouseout  = () => { el.style.background = '#2563eb'; };
+                    el.onclick = () => abrirSelecaoLocal(tipo);
+                } else {
+                    el.disabled = false;
+                    el.removeAttribute('title');
+                    el.dataset.desativado = 'true';
+                    el.style.background = '#b0b0b0';
+                    el.style.color = '#fff';
+                    el.style.cursor = 'not-allowed';
+                    el.style.opacity = '0.85';
+                    el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)';
+                    el.onmouseover = null;
+                    el.onmouseout = null;
+                    el.onclick = () => mostrarMensagemDesativado();
+                }
+            };
+            aplicar(document.getElementById('btnHomeInterno'), cfg.interno, 'interno');
+            aplicar(document.getElementById('btnHomeExterno'), cfg.externo, 'externo');
+            aplicar(document.getElementById('btnHomeEnsaio'),  cfg.ensaio,  'ensaio');
+        }
+        carregarTituloPagina();
+
+        function initAccordion() {
+            const accordion = document.getElementById('stepsAccordion');
+            steps.forEach(s => {
+                const item = document.createElement('div');
+                item.className = 'accordion-item' + (s !== 'evento' ? ' disabled' : '');
+                item.setAttribute('data-step', s);
+                item.innerHTML = `
+                    <div class="accordion-header" onclick="toggleStep('${s}')">
+                        <h3>${stepNames[s]}</h3>
+                        <span class="status-icon">▼</span>
+                    </div>
+                    <div class="accordion-content" id="content-${s}">
+                        <div class="calendar" id="calendar-${s}"></div>
+                        <div style="display: flex; gap: 15px; margin-bottom: 20px; font-size: 12px; justify-content: center; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 1px solid #eee; border-radius: 2px; background: #fff;"></div> Livre</div>
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 1px solid #ffe066; border-radius: 2px; background: #fff4cc;"></div> Parcialmente Ocupado</div>
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 1px solid #ff8080; border-radius: 2px; background: #ffb3b3;"></div> Ocupado</div>
+                            <div style="display: flex; align-items: center; gap: 5px;"><div style="width: 12px; height: 12px; border: 2px solid #28a745; border-radius: 2px; background: #d4edda;"></div> Data Selecionada</div>
+                        </div>
+                        <div class="time-slots" id="slots-${s}"></div>
+                        <button type="button" class="btn-confirm-step" id="btn-confirm-${s}" onclick="confirmStep('${s}')">Confirmar ${stepNames[s]}</button>
+                    </div>
+                `;
+                accordion.appendChild(item);
+            });
+        }
+
+        function toggleStep(step) {
+            if (step !== 'evento' && confirmedSteps.evento.length === 0) return;
+
+            steps.forEach(s => {
+                const content = document.getElementById(`content-${s}`);
+                const header = content.previousElementSibling;
+                if (s === step) {
+                    const isShowing = content.classList.contains('show');
+                    content.classList.toggle('show', !isShowing);
+                    header.classList.toggle('active', !isShowing);
+                    if (!isShowing) {
+                        fetchAvailability();
+                        renderStepCalendar(s);
+                    }
+                } else {
+                    content.classList.remove('show');
+                    header.classList.remove('active');
+                }
+            });
+        }
+
+        function renderStepCalendar(step) {
+            const container = document.getElementById(`calendar-${step}`);
+            const sel = selections[step];
+            const year = globalCurrentMonth.getFullYear();
+            const month = globalCurrentMonth.getMonth();
+
+            container.innerHTML = `
+                <div class="calendar-header">
+                    <button type="button" onclick="event.stopPropagation(); changeMonth('${step}', -1)">←</button>
+                    <span>${globalCurrentMonth.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</span>
+                    <button type="button" onclick="event.stopPropagation(); changeMonth('${step}', 1)">→</button>
+                </div>
+                <div class="calendar-grid"></div>
+            `;
+
+            const grid = container.querySelector('.calendar-grid');
+            ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab'].forEach(d => {
+                const h = document.createElement('div'); h.className = 'day-header'; h.textContent = d; grid.appendChild(h);
+            });
+
+            const firstDay = new Date(year, month, 1).getDay();
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+            for (let i = daysInPrevMonth - firstDay + 1; i <= daysInPrevMonth; i++) {
+                const d = document.createElement('div'); d.className = 'day other-month'; d.textContent = i; grid.appendChild(d);
+            }
+
+            for (let i = 1; i <= daysInMonth; i++) {
+                const d = document.createElement('div'); d.className = 'day'; d.textContent = i;
+                const date = new Date(year, month, i);
+                const today = new Date(); today.setHours(0,0,0,0);
+                const minDate = dataInicioEdital ? new Date(dataInicioEdital + 'T00:00:00') : today;
+                const limiteMin = minDate > today ? minDate : today;
+                const diasSemana = date.getDay(); // 0=Dom,1=Seg,2=Ter,3=Qua,4=Qui,5=Sex,6=Sáb
+                // somenteFinaisDeSemana NÃO se aplica ao Ensaio (ele tem regra própria de dias)
+                const diaPermitido = step === 'ensaio' || !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
+
+                // Ensaio em fim de semana: mostrar o dia (para que ocupações do Google Calendar apareçam),
+                // mas bloquear clique se não houver evento confirmado neste mesmo dia
+                let ensaioFimDeSemanasBloqueado = false;
+                if (step === 'ensaio') {
+                    const isWeekend = diasSemana === 0 || diasSemana === 6;
+                    if (isWeekend) {
+                        const dateStrEns = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                        const temEventoNoDia = confirmedSteps.evento.some(conf =>
+                            conf.date.toISOString().split('T')[0] === dateStrEns
+                        );
+                        if (!temEventoNoDia) ensaioFimDeSemanasBloqueado = true;
+                    }
+                }
+
+                if (date < limiteMin || !diaPermitido) {
+                    d.classList.add('other-month');
+                } else {
+                    const dateStr = date.toISOString().split('T')[0];
+                    const isBloqueada = datasBloqueadas.includes(dateStr);
+                    
+                    if (isBloqueada) {
+                        d.classList.add('busy-full');
+                        d.title = 'Data bloqueada administrativamente';
+                        d.onclick = null;
+                        d.style.cursor = 'not-allowed';
+                    } else {
+                        let isUserSelected = false;
+                        steps.forEach(s => {
+                            confirmedSteps[s].forEach(conf => {
+                                if (conf.date.toDateString() === date.toDateString()) isUserSelected = true;
+                            });
+                        });
+                        if (isUserSelected) d.classList.add('user-selected');
+
+                        const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+                        const toMinutes = value => {
+                            const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
+                            return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+                        };
+                        const intervalosBloqueados = eventsOnDay.map(e => ({
+                            inicio: toMinutes(e.start.split('T')[1]),
+                            fim: toMinutes(e.end?.split('T')[1])
+                        })).filter(e => e.inicio !== null && e.fim !== null);
+                        const limiteHorario = horariosLimites[step] || { fim: '21:00' };
+                        const inicioMinutos = 8 * 60;
+                        const fimMinutos = toMinutes(limiteHorario.fim) || 21 * 60;
+                        const agoraCalendario = new Date();
+                        const hojeCalendario = `${agoraCalendario.getFullYear()}-${String(agoraCalendario.getMonth() + 1).padStart(2, '0')}-${String(agoraCalendario.getDate()).padStart(2, '0')}`;
+                        const agoraMinutos = agoraCalendario.getHours() * 60 + agoraCalendario.getMinutes();
+                        const bloqueiaIntervalo = (inicio, fim) => intervalosBloqueados.some(intervalo => {
+                            const bloqueadoPorDisputa = intervalo.inicio < fim && intervalo.fim > inicio;
+                            const eventoDoSistema = eventsOnDay.find(e =>
+                                toMinutes(e.start.split('T')[1]) === intervalo.inicio &&
+                                toMinutes(e.end?.split('T')[1]) === intervalo.fim
+                            )?.source === 'sistema';
+                            return bloqueadoPorDisputa && (!eventoDoSistema || !permitirDisputa);
+                        });
+                        const existeHorarioLivre = Array.from(
+                            { length: Math.max(0, Math.floor((fimMinutos - inicioMinutos - 60) / 30) + 1) },
+                            (_, index) => inicioMinutos + index * 30
+                        ).some(inicio => {
+                            const fim = inicio + 60;
+                            if (dateStr === hojeCalendario && fim <= agoraMinutos) return false;
+                            return !bloqueiaIntervalo(inicio, fim);
+                        });
+                        const dayBlocked = !existeHorarioLivre;
+                        if (eventsOnDay.length > 0) {
+                            // Amarelo indica ocupação parcial; vermelho só quando nenhum intervalo de 1h está livre.
+                            d.classList.add(dayBlocked ? 'busy-full' : 'busy-partial');
+                            if (dayBlocked) d.style.cursor = 'not-allowed';
+                        }
+
+                        if (ensaioFimDeSemanasBloqueado) {
+                            d.style.cursor = 'not-allowed';
+                            d.title = 'Ensaio em fim de semana só é permitido no mesmo dia de um Evento confirmado';
+                            d.onclick = null;
+                        } else if (!dayBlocked) {
+                            d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
+                        }
+                        if (sel.date && date.toDateString() === sel.date.toDateString()) d.classList.add('selected');
+                    }
+                }
+                grid.appendChild(d);
+            }
+        }
+
+        function changeMonth(step, delta) {
+            globalCurrentMonth.setMonth(globalCurrentMonth.getMonth() + delta);
+            renderStepCalendar(step);
+        }
+
+        function selectDate(step, date) {
+            selections[step].date = date;
+            selections[step].start = null;
+            selections[step].end = null;
+            renderStepCalendar(step);
+            renderTimeSlots(step);
+            updateStepUI(step);
+            
+            const slotsElement = document.getElementById(`slots-${step}`);
+            if (slotsElement) {
+                setTimeout(() => {
+                    slotsElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 100);
+            }
+        }
+
+        function renderTimeSlots(step) {
+            const container = document.getElementById(`slots-${step}`);
+            container.innerHTML = '';
+            const sel = selections[step];
+            if (!sel.date) return;
+
+            const dateStr = sel.date.toISOString().split('T')[0];
+            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+
+            const hLimit = horariosLimites[step] || { fim: '21:00' };
+            const minTime = 800;
+            // Ensaio em dia sem evento do mesmo proponente: limite fixo de 17h independente do config
+            let maxTime = parseInt(hLimit.fim.replace(':', ''));
+            if (step === 'ensaio') {
+                const temEventoNoDia = confirmedSteps.evento.some(conf =>
+                    conf.date.toISOString().split('T')[0] === dateStr
+                );
+                if (!temEventoNoDia) maxTime = Math.min(maxTime, 1700);
+            }
+            const maxStartTime = maxTime - 100;
+
+            const toMins = v => Math.floor(v / 100) * 60 + (v % 100);
+            const fromMins = n => Math.floor(n / 60) * 100 + (n % 60);
+            const agora = new Date();
+            const hojeStr = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}-${String(agora.getDate()).padStart(2, '0')}`;
+            const agoraEmMinutos = agora.getHours() * 60 + agora.getMinutes();
+
+            // Intervalos já confirmados por todas as etapas desta inscrição no mesmo dia
+            // Inclui a própria etapa para que slots já confirmados apareçam ao adicionar um segundo
+            const otherIntervals = steps.flatMap(s =>
+                confirmedSteps[s]
+                    .filter(conf => conf.date.toISOString().split('T')[0] === dateStr)
+                    .map(conf => ({
+                        start: parseInt(conf.start.replace(':', '')),
+                        end:   parseInt(conf.end.replace(':', '')),
+                        name:  stepNames[s]
+                    }))
+            );
+
+            // Retorna o nome da etapa conflitante, ou null
+            const getStepConflict = (tVal) =>
+                (otherIntervals.find(iv => tVal >= iv.start && tVal < iv.end) || null);
+
+            // Verifica se o intervalo [startVal, endVal) sobrepõe alguma outra etapa
+            const rangeConflicts = (startVal, endVal) =>
+                otherIntervals.some(iv => startVal < iv.end && endVal > iv.start);
+
+            for (let h = 0; h <= 23; h++) {
+                for (let m = 0; m < 60; m += 30) {
+                    const time = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                    const timeVal = parseInt(time.replace(':', ''));
+
+                    if (timeVal < minTime || timeVal > maxTime) continue;
+                    if (!sel.start && timeVal > maxStartTime) continue;
+
+                    const slot = document.createElement('div');
+                    slot.className = 'time-slot';
+                    slot.textContent = time;
+
+                    const minutosDoHorario = toMins(timeVal);
+                    const horarioPassado = dateStr === hojeStr && (
+                        sel.start && !sel.end
+                            ? minutosDoHorario <= agoraEmMinutos
+                            : minutosDoHorario < agoraEmMinutos
+                    );
+                    if (horarioPassado) {
+                        slot.classList.add('past');
+                        slot.style.opacity = '0.45';
+                        slot.style.cursor = 'not-allowed';
+                        slot.title = sel.start && !sel.end
+                            ? 'Este horário de início já passou'
+                            : 'Este horário de término já passou';
+                        container.appendChild(slot);
+                        continue;
+                    }
+
+                    const overlaps = (e) => {
+                        if (!e.start.includes('T')) return false;
+                        const eStart = parseInt(e.start.split('T')[1].substring(0,5).replace(':', ''));
+                        const eEnd   = parseInt(e.end.split('T')[1].substring(0,5).replace(':', ''));
+                        const eEndBuf = fromMins(toMins(eEnd) + 30);
+                        return timeVal >= eStart && timeVal < eEndBuf;
+                    };
+                    const isBusyManual = eventsOnDay.some(e => e.source !== 'sistema' && overlaps(e));
+                    const isBusySystem = eventsOnDay.some(e => e.source === 'sistema' && overlaps(e));
+
+                    if (isBusyManual) {
+                        slot.classList.add('busy');
+                        slot.title = 'Horário indisponível';
+                        container.appendChild(slot);
+                        continue;
+                    } else if (isBusySystem) {
+                        if (permitirDisputa) {
+                            slot.classList.add('dispute');
+                            slot.title = 'Horário já solicitado via sistema (disputa permitida)';
+                        } else {
+                            slot.classList.add('busy');
+                            slot.title = 'Horário já ocupado';
+                            slot.onclick = null;
+                            container.appendChild(slot);
+                            continue;
+                        }
+                    }
+
+                    // Bloquear slots ocupados por outras etapas desta inscrição
+                    const stepConflict = getStepConflict(timeVal);
+                    if (stepConflict) {
+                        slot.classList.add('step-conflict');
+                        slot.title = `Reservado: ${stepConflict.name}`;
+                        slot.textContent = `${time} (${stepConflict.name})`;
+                        container.appendChild(slot);
+                        continue;
+                    }
+
+                    if (sel.start === time) slot.classList.add('selected');
+                    if (sel.end === time) slot.classList.add('selected');
+
+                    if (sel.start && !sel.end) {
+                        const sVal = parseInt(sel.start.replace(':', ''));
+                        if (timeVal > sVal && timeVal <= maxTime) {
+                            if (rangeConflicts(sVal, timeVal)) {
+                                slot.style.opacity = '0.3';
+                                slot.style.cursor = 'not-allowed';
+                                slot.title = 'Término aqui criaria sobreposição com outra etapa';
+                            } else {
+                                slot.onclick = () => selectTime(step, time);
+                            }
+                        } else {
+                            slot.style.opacity = '0.3';
+                            slot.style.cursor = 'not-allowed';
+                        }
+                    } else {
+                        slot.onclick = () => selectTime(step, time);
+                    }
+                    container.appendChild(slot);
+                }
+            }
+        }
+
+        function selectTime(step, time) {
+            const sel = selections[step];
+            if (!sel.start || (sel.start && sel.end)) {
+                sel.start = time; sel.end = null;
+                document.getElementById('modalStart').style.display = 'flex';
+            } else {
+                const sVal = parseInt(sel.start.replace(':', ''));
+                const eVal = parseInt(time.replace(':', ''));
+                if (eVal <= sVal) return;
+                sel.end = time;
+            }
+            renderTimeSlots(step);
+            updateStepUI(step);
+        }
+
+        function updateStepUI(step) {
+            const sel = selections[step];
+            const btn = document.getElementById(`btn-confirm-${step}`);
+            if (sel.date && sel.start && sel.end) {
+                btn.classList.add('show');
+            } else {
+                btn.classList.remove('show');
+            }
+        }
+
+        function confirmStep(step) {
+            const sel = selections[step];
+            const data = {
+                date: new Date(sel.date),
+                start: sel.start,
+                end: sel.end
+            };
+            
+            confirmedSteps[step].push(data);
+            currentStepContext = step;
+
+            if (step === 'ensaio' || step === 'evento') {
+                document.getElementById('modalAddTitle').textContent = `${stepNames[step]} adicionado!`;
+                document.getElementById('modalAddText').textContent = `Deseja adicionar outro ${stepNames[step]}?`;
+                document.getElementById('modalAddAnother').style.display = 'flex';
+            } else {
+                finishStepSelection(step);
+            }
+        }
+
+        function finishStepSelection(step) {
+            document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.add('completed');
+            selections[step].date = null;
+            selections[step].start = null;
+            selections[step].end = null;
+
+            if (step === 'evento') {
+                ['ensaio', 'montagem', 'desmontagem'].forEach(s => {
+                    document.querySelector(`.accordion-item[data-step="${s}"]`).classList.remove('disabled');
+                });
+            }
+
+            toggleStep(null);
+            updateSummary();
+        }
+
+        function updateSummary() {
+            const section = document.getElementById('summarySection');
+            const list = document.getElementById('summaryList');
+            list.innerHTML = '';
+            
+            let hasConfirmed = false;
+            steps.forEach(s => {
+                confirmedSteps[s].forEach((data, index) => {
+                    hasConfirmed = true;
+                    const card = document.createElement('div');
+                    card.className = 'summary-card';
+                    const label = confirmedSteps[s].length > 1 ? `${stepNames[s]} ${index + 1}` : stepNames[s];
+                    card.innerHTML = `
+                        <div class="summary-info">
+                            <h4>${label}</h4>
+                            <p>📅 ${data.date.toLocaleDateString('pt-BR')} | ⏰ ${data.start} às ${data.end}</p>
+                        </div>
+                        <button type="button" class="btn-delete" onclick="deleteConfirmedStep('${s}', ${index})">Excluir</button>
+                    `;
+                    list.appendChild(card);
+                });
+            });
+
+            const hasEvento = confirmedSteps['evento'].length > 0;
+            const submitBtn = document.getElementById('submitBtn');
+            const submitHint = document.getElementById('submitHint');
+
+            section.classList.toggle('show', hasConfirmed);
+            submitBtn.classList.toggle('btn-blocked', !hasEvento);
+
+            if (hasEvento && submitHint) {
+                submitHint.style.display = 'none';
+            }
+        }
+
+        function deleteConfirmedStep(step, index) {
+            confirmedSteps[step].splice(index, 1);
+            if (confirmedSteps[step].length === 0) {
+                document.querySelector(`.accordion-item[data-step="${step}"] .accordion-header`).classList.remove('completed');
+                if (step === 'evento') {
+                    ['ensaio', 'montagem', 'desmontagem'].forEach(s => {
+                        document.querySelector(`.accordion-item[data-step="${s}"]`).classList.add('disabled');
+                        confirmedSteps[s] = [];
+                        document.querySelector(`.accordion-item[data-step="${s}"] .accordion-header`).classList.remove('completed');
+                    });
+                }
+            }
+            updateSummary();
+            
+            const calendarElement = document.getElementById(`calendar-${step}`);
+            if (calendarElement) {
+                setTimeout(() => {
+                    calendarElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        }
+
+        document.getElementById('btnStartOk').onclick = () => document.getElementById('modalStart').style.display = 'none';
+        
+        document.getElementById('btnAddYes').onclick = () => {
+            const step = currentStepContext;
+            document.getElementById('modalAddAnother').style.display = 'none';
+            selections[step].date = null;
+            selections[step].start = null;
+            selections[step].end = null;
+            renderStepCalendar(step);
+            renderTimeSlots(step);
+            updateStepUI(step);
+            updateSummary();
+            
+            const calendarElement = document.getElementById(`calendar-${step}`);
+            if (calendarElement) {
+                setTimeout(() => {
+                    calendarElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }, 100);
+            }
+        };
+
+        document.getElementById('btnAddNo').onclick = () => {
+            document.getElementById('modalAddAnother').style.display = 'none';
+            finishStepSelection(currentStepContext);
+        };
+
+        async function handleSubmitClick(e) {
+            const submitBtn = document.getElementById('submitBtn');
+            const loading = document.getElementById('loading');
+            const msg = document.getElementById('message');
+            const submitHint = document.getElementById('submitHint');
+
+            if (submitBtn.classList.contains('btn-blocked')) {
+                submitHint.style.display = 'block';
+                return;
+            }
+
+            if (submitBtn.getAttribute('data-submitting') === 'true') return;
+            submitBtn.setAttribute('data-submitting', 'true');
+            submitBtn.classList.add('btn-blocked');
+            submitBtn.style.opacity = '0.5';
+            submitBtn.textContent = 'Enviando...';
+            loading.classList.add('show');
+
+            const payload = {
+                nome: document.getElementById('nome').value,
+                email: document.getElementById('email').value,
+                telefone: document.getElementById('telefone').value,
+                evento: document.getElementById('evento').value,
+                local: document.getElementById('localSelecionado').value || 'teatro',
+                etapas: {}
+            };
+
+            steps.forEach(s => {
+                if (confirmedSteps[s].length > 0) {
+                    payload.etapas[s] = confirmedSteps[s].map(data => ({
+                        data: data.date.toISOString().split('T')[0],
+                        horario: `${data.start} às ${data.end}`
+                    }));
+                }
+            });
+
+            try {
+                const res = await fetch('/api/agendar', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                if (res.ok) {
+                    msg.textContent = '✅ Primeira etapa concluída com sucesso!';
+                    msg.className = 'message success';
+                    submitBtn.style.display = 'none';
+
+                    let formsLink = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+                    try {
+                        const configRes = await fetch('/api/config');
+                        const config = await configRes.json();
+                        if (config.formsLink) formsLink = config.formsLink;
+                    } catch (e) {
+                        console.error('Erro ao buscar link do forms:', e);
+                    }
+
+                    document.getElementById('btnModalSegundaEtapa').href = formsLink;
+                    const m = document.getElementById('modalSegundaEtapa');
+                    m.style.display = 'flex';
+                } else {
+                    const result = await res.json();
+                    msg.textContent = '❌ Erro: ' + result.error;
+                    msg.className = 'message error';
+                }
+            } catch (err) {
+                msg.textContent = '❌ Erro de conexão.';
+                msg.className = 'message error';
+            } finally {
+                loading.classList.remove('show');
+                submitBtn.removeAttribute('data-submitting');
+                submitBtn.classList.remove('btn-blocked');
+                submitBtn.style.opacity = '';
+                submitBtn.textContent = 'Finalizar 1ª Etapa da Inscrição';
+            }
+        }
+
+        // ── SELEÇÃO DE LOCAL ──────────────────────────────────
+        const locaisNomes = {
+            teatro: '🎭 Teatro Carmen Fossari',
+            igrejinha: '⛪ Igrejinha da UFSC'
+        };
+
+        let _localPendente = null;
+
+        function confirmarLocal(local) {
+            _localPendente = local;
+            document.getElementById('modalAvisoInscricao').style.display = 'flex';
+        }
+
+        function fecharAvisoInscricao() {
+            _localPendente = null;
+            document.getElementById('modalAvisoInscricao').style.display = 'none';
+        }
+
+        function abrirModalDocumentos() {
+            document.getElementById('modalDocumentos').style.display = 'flex';
+        }
+
+        function fecharModalDocumentos() {
+            document.getElementById('modalDocumentos').style.display = 'none';
+        }
+
+        function abrirModalTaxaLocacao() {
+            document.getElementById('modalTaxaLocacao').style.display = 'flex';
+        }
+
+        function fecharModalTaxaLocacao() {
+            document.getElementById('modalTaxaLocacao').style.display = 'none';
+        }
+
+        function confirmarContinuar() {
+            document.getElementById('modalAvisoInscricao').style.display = 'none';
+            if (_localPendente) selecionarLocal(_localPendente);
+            _localPendente = null;
+        }
+
+        function selecionarLocal(local) {
+            document.getElementById('localSelecionado').value = local;
+            document.getElementById('localSelectedBadge').textContent = locaisNomes[local] || local;
+            document.getElementById('localSelectionContainer').style.display = 'none';
+            document.getElementById('mainFormContainer').style.display = 'block';
+            // Atualiza src do calendário embedding
+            const calSrc = local === 'igrejinha'
+                ? 'https://calendar.google.com/calendar/embed?src=c_e19d30c40d4de176bc7d4e11ada96bfaffd130b3ed499d9807c88785e2c71c05%40group.calendar.google.com&ctz=America%2FSao_Paulo'
+                : 'https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo';
+            const iframe = document.querySelector('#modalCalendar iframe');
+            if (iframe) iframe.src = calSrc;
+            // Recarrega disponibilidade com o novo local
+            fetchAvailability();
+        }
+
+        function voltarSelecaoLocal() {
+            document.getElementById('mainFormContainer').style.display = 'none';
+            document.getElementById('localSelectionContainer').style.display = 'block';
+        }
+
+        function mostrarMensagemDesativado() {
+            const modal = document.getElementById('modalBtnDesativado');
+            const txt = document.getElementById('modalBtnDesativadoTexto');
+            if (txt) txt.textContent = mensagemBotoesDesativados;
+            if (modal) modal.style.display = 'flex';
+        }
+
+        function abrirSelecaoLocal(tipo) {
+            // Aplica data de início do edital selecionado ao calendário
+            dataInicioEdital = (tipo && botoesHomeDataInicio[tipo]) || null;
+            // Reposiciona o mês visível para a dataInicio se ainda não chegou
+            if (dataInicioEdital) {
+                const minDate = new Date(dataInicioEdital + 'T00:00:00');
+                const hoje = new Date(); hoje.setHours(0,0,0,0);
+                if (minDate > hoje) {
+                    globalCurrentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                }
+            }
+            document.getElementById('homeContainer').style.display = 'none';
+            document.getElementById('gearMenuWrap').style.display = 'none';
+            document.getElementById('localSelectionContainer').style.display = 'block';
+        }
+
+        function voltarTelaInicial() {
+            document.getElementById('localSelectionContainer').style.display = 'none';
+            document.getElementById('mainFormContainer').style.display = 'none';
+            document.getElementById('homeContainer').style.display = 'flex';
+            document.getElementById('gearMenuWrap').style.display = 'block';
+        }
+
+        // ── FLUXO DE DADOS ──────────────────────────────────
+        function checkDadosPreenchidos() {
+            const ok = ['nome','email','telefone','evento'].every(id => {
+                const el = document.getElementById(id);
+                return el && el.value.trim().length > 0;
+            });
+            const btn = document.getElementById('btnConfirmarDados');
+            if (ok) btn.classList.remove('btn-blocked');
+            else btn.classList.add('btn-blocked');
+        }
+
+        function abrirModalConfirmaDados() {
+            const btn = document.getElementById('btnConfirmarDados');
+            if (btn.classList.contains('btn-blocked')) return;
+            const nome     = document.getElementById('nome').value.trim();
+            const email    = document.getElementById('email').value.trim();
+            const telefone = document.getElementById('telefone').value.trim();
+            const evento   = document.getElementById('evento').value.trim();
+            document.getElementById('modalConfirmaDadosResumo').innerHTML =
+                `<div><strong>Nome:</strong> ${nome}</div>` +
+                `<div><strong>E-mail:</strong> ${email}</div>` +
+                `<div><strong>Telefone:</strong> ${telefone}</div>` +
+                `<div><strong>Nome do Evento:</strong> ${evento}</div>`;
+            document.getElementById('modalConfirmaDados').style.display = 'flex';
+        }
+
+        function confirmarDadosEProsseguir() {
+            document.getElementById('modalConfirmaDados').style.display = 'none';
+            document.getElementById('dadosSection').style.display = 'none';
+            const nome     = document.getElementById('nome').value.trim();
+            const email    = document.getElementById('email').value.trim();
+            const telefone = document.getElementById('telefone').value.trim();
+            const evento   = document.getElementById('evento').value.trim();
+            document.getElementById('dadosBannerResumo').innerHTML =
+                `<div><strong>Nome:</strong> ${nome}</div>` +
+                `<div><strong>E-mail:</strong> ${email}</div>` +
+                `<div><strong>Telefone:</strong> ${telefone}</div>` +
+                `<div><strong>Nome do Evento:</strong> ${evento}</div>`;
+            document.getElementById('schedulingSection').style.display = 'block';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function voltarParaDados() {
+            document.getElementById('modalConfirmaDados').style.display = 'none';
+            document.getElementById('schedulingSection').style.display = 'none';
+            document.getElementById('dadosSection').style.display = 'block';
+        }
+
+        initAccordion();
+    </script>
+</body>
+</html>
