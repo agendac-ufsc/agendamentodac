@@ -134,6 +134,14 @@
             color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
         }
         .btn-next-step:disabled { opacity: .5; cursor: not-allowed; }
+        .continue-message {
+            display: block; background: transparent; padding: 0; margin-top: 20px;
+        }
+        .continue-message button {
+            width: 100%; padding: 13px 24px; border: none; border-radius: 10px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff; font-size: 15px; font-weight: 700; cursor: pointer;
+        }
         .full-page-step {
             display: none; background: #fff; border-radius: 15px;
             box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
@@ -441,10 +449,6 @@
             <div class="form-group">
                 <label for="testeCpfPessoaFisica">CPF *</label>
                 <input type="text" id="testeCpfPessoaFisica" placeholder="Sua resposta" inputmode="numeric" required>
-            </div>
-            <div class="form-group">
-                <label for="testeCelularPessoaFisica">Celular (DDD + número) *</label>
-                <input type="tel" id="testeCelularPessoaFisica" placeholder="Sua resposta" required>
             </div>
             <div class="form-group">
                 <label for="testeCepPessoaFisica">CEP Residencial *</label>
@@ -1238,8 +1242,8 @@
                     body: JSON.stringify(payload)
                 });
                 if (res.ok) {
-                    msg.textContent = '✅ Primeira etapa concluída com sucesso!';
-                    msg.className = 'message success';
+                    msg.innerHTML = '<button type="button" onclick="continuarAposSalvarTeste()">Continuar</button>';
+                    msg.className = 'message continue-message';
                     submitBtn.style.display = 'none';
 
                     formsLinkProximaEtapaTeste = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
@@ -1292,6 +1296,10 @@
             mostrarTelaTeste('mainFormContainer');
         }
 
+        function continuarAposSalvarTeste() {
+            mostrarTelaTeste('tipoProponenteSection');
+        }
+
         function voltarParaTipoProponenteTeste() {
             mostrarTelaTeste('tipoProponenteSection');
         }
@@ -1307,7 +1315,7 @@
         }
 
         function avancarPessoaFisicaTeste() {
-            const campos = ['testeNomePessoaFisica', 'testeCpfPessoaFisica', 'testeCelularPessoaFisica', 'testeCepPessoaFisica'];
+            const campos = ['testeNomePessoaFisica', 'testeCpfPessoaFisica', 'testeCepPessoaFisica'];
             if (campos.some(id => !document.getElementById(id).value.trim())) {
                 alert('Preencha todos os campos obrigatórios.');
                 return;
