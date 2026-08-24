@@ -909,10 +909,11 @@ app.post('/api/agendar', async (req, res) => {
         };
         const tabelaHtml = gerarTabelaEtapas(etapas);
         const adminEmail = process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com';
+        const idAgendamento = Date.now().toString();
 
         // Salvar no Redis ANTES dos e-mails — garante que a inscrição não se perde se o e-mail falhar
         // calendarSynced: false — eventos no Google Calendar só serão criados quando a etapa 2 (Forms) for detectada
-        await saveAgendamento({ id: Date.now().toString(), nome, email, telefone, evento, etapas, local: localKey, localNome, calendarId: calId, timestamp: new Date().toLocaleString('pt-BR'), calendarSynced: false });
+        await saveAgendamento({ id: idAgendamento, nome, email, telefone, evento, etapas, local: localKey, localNome, calendarId: calId, timestamp: new Date().toLocaleString('pt-BR'), calendarSynced: false });
 
         // Enviar e-mails de forma independente — erro de e-mail não cancela a inscrição já salva
         const formsLinkEmail = FORMS_LINK || '';
@@ -922,9 +923,101 @@ app.post('/api/agendar', async (req, res) => {
         sendEmail(email, '📋 Registro de Datas — Inscrição Pendente (DAC/UFSC)', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá, ${nome}!</h2><p>Este e-mail é apenas um <strong>registro das datas e horários</strong> que você escolheu para o projeto <strong>${evento}</strong> no <strong>${localNome}</strong>. Guarde para não esquecer.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Datas escolhidas:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><div style="background:#fff8e1;border-left:4px solid #f59e0b;padding:14px 16px;border-radius:6px;margin:16px 0"><p style="margin:0 0 8px;font-size:14px;color:#92400e"><strong>📌 Lembre-se: a inscrição só é válida com as duas etapas preenchidas.</strong><br>Se você ainda não preencheu o <strong>formulário complementar (2ª etapa)</strong>, acesse agora pelo botão abaixo para concluir sua inscrição.</p>${botaoForms}<p style="margin:8px 0 0;font-size:12px;color:#b45309"><em>Se já preencheu o formulário, pode ignorar o botão acima.</em></p></div><p>Em caso de dúvidas, entre em contato com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`).catch(err => console.error('⚠️ [E-mail] Erro ao enviar confirmação ao proponente:', err.message));
         sendEmail(adminEmail, `📅 NOVA INSCRIÇÃO: ${evento} (${nome}) — ${localNome}`, `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #333;">Nova Inscrição de Projeto</h2><p>Um novo projeto foi inscrito com o seguinte cronograma:</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Dados do Proponente:</strong></p><p>👤 <strong>Nome:</strong> ${nome}</p><p>📧 <strong>E-mail:</strong> ${email}</p><p>📞 <strong>Telefone:</strong> ${telefone}</p><p>🏛️ <strong>Local:</strong> ${localNome}</p><p>🎭 <strong>Evento:</strong> ${evento}</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Cronograma do Projeto:</strong></p>${tabelaHtml}</div>`).catch(err => console.error('⚠️ [E-mail] Erro ao enviar notificação ao admin:', err.message));
 
-        res.json({ success: true });
+        res.json({ success: true, id: idAgendamento });
     } catch (error) {
         res.status(500).json({ error: 'Erro interno ao processar agendamento.' });
+    }
+});
+
+function criarHtmlComprovanteInscricaoTeste(dados) {
+    const etapas = Object.entries(dados.etapas || {}).flatMap(([tipo, valores]) => {
+        const nomes = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        return (Array.isArray(valores) ? valores : [valores]).map((item, index) => {
+            const label = (Array.isArray(valores) && valores.length > 1) ? `${nomes[tipo] || tipo} ${index + 1}` : (nomes[tipo] || tipo);
+            const data = String(item?.data || '').split('-').reverse().join('/');
+            return `<tr><td style="border:1px solid #ddd;padding:8px"><strong>${escapeHtml(label)}</strong></td><td style="border:1px solid #ddd;padding:8px">${escapeHtml(data)}</td><td style="border:1px solid #ddd;padding:8px">${escapeHtml(item?.horario || '')}</td></tr>`;
+        });
+    }).join('');
+    const campos = [
+        ['Tipo de proponente', dados.tipoProponente],
+        ['Categoria da proposta', dados.categoriaProposta],
+        ['Vínculo com a UFSC', dados.vinculoUfsc],
+        ['Área/segmento', dados.areas],
+        ['Finalidade', dados.finalidade],
+        ['Acessibilidade comunicacional', dados.acessibilidade],
+        ['Recursos de acessibilidade', dados.recursosAcessibilidade],
+        ['Gratuidade do evento', dados.gratuidade],
+        ['Projeto do DAC', dados.projetoDac || 'Não se aplica'],
+        ['Sinopse/descrição', dados.sinopse],
+        ['Relevância cultural e impacto social', dados.relevancia]
+    ].filter(([, valor]) => valor !== undefined && valor !== null && valor !== '');
+    const camposHtml = campos.map(([label, valor]) =>
+        `<p style="margin:0 0 8px;font-size:13px"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(Array.isArray(valor) ? valor.join(', ') : valor)}</p>`
+    ).join('');
+    return `
+    <div style="font-family:sans-serif;max-width:680px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 30px;text-align:center">
+            <h2 style="margin:0;color:#fff;font-size:20px">Inscrição validada com sucesso</h2>
+            <p style="margin:7px 0 0;color:rgba(255,255,255,.85);font-size:13px">Comprovante de inscrição — DAC/UFSC</p>
+        </div>
+        <div style="padding:28px 30px">
+            <p style="font-size:15px">Olá, <strong>${escapeHtml(dados.nome)}</strong>!</p>
+            <p style="font-size:14px;line-height:1.6">Sua inscrição foi registrada e validada com sucesso. Este e-mail serve como comprovante da inscrição.</p>
+            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">${camposHtml}</div>
+            <p style="font-size:14px;font-weight:600;margin:0 0 8px">Cronograma solicitado</p>
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+                <tr style="background:#f8f9fa"><th style="border:1px solid #ddd;padding:8px;text-align:left">Etapa</th><th style="border:1px solid #ddd;padding:8px;text-align:left">Data</th><th style="border:1px solid #ddd;padding:8px;text-align:left">Horário</th></tr>
+                ${etapas || '<tr><td colspan="3" style="border:1px solid #ddd;padding:8px">Não informado</td></tr>'}
+            </table>
+            <p style="font-size:13px;color:#555;margin-top:22px">Em caso de dúvidas, entre em contato com <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>.</p>
+        </div>
+    </div>`;
+}
+
+app.post('/api/finalizar-inscricao-teste', async (req, res) => {
+    const dados = req.body || {};
+    const id = String(dados.id || '');
+    const email = String(dados.email || '').trim().toLowerCase();
+    if (!id || !email || !dados.nome || !dados.evento || !dados.etapas) {
+        return res.status(400).json({ error: 'Dados obrigatórios da inscrição não informados.' });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        return res.status(400).json({ error: 'Informe um e-mail válido para receber o comprovante.' });
+    }
+    try {
+        const agendamentos = await getAgendamentos();
+        const agendamento = agendamentos.find(item => String(item.id) === id);
+        if (!agendamento) return res.status(404).json({ error: 'Inscrição inicial não encontrada.' });
+
+        const segundaEtapaTeste = {
+            ...dados,
+            email,
+            concluidaEm: new Date().toISOString()
+        };
+        const jaConcluida = agendamento.inscricaoTesteConcluida === true;
+        const atualizada = await updateAgendamento(id, {
+            email,
+            inscricaoTesteConcluida: true,
+            segundaEtapaTeste,
+            statusInscricao: 'Validada'
+        });
+        if (!atualizada) return res.status(500).json({ error: 'Não foi possível validar a inscrição.' });
+
+        if (!jaConcluida) {
+            const comprovante = criarHtmlComprovanteInscricaoTeste({ ...agendamento, ...dados, email });
+            const enviado = await sendEmail(
+                [email, 'pautas.dac@contato.ufsc.br'],
+                `✅ Inscrição validada: ${dados.evento} — DAC/UFSC`,
+                comprovante
+            );
+            if (!enviado) {
+                return res.status(502).json({ error: 'A inscrição foi salva, mas não foi possível enviar o comprovante por e-mail.' });
+            }
+        }
+        return res.json({ success: true, validada: true, id });
+    } catch (error) {
+        console.error('❌ [/api/finalizar-inscricao-teste] erro:', error.message);
+        return res.status(500).json({ error: 'Erro interno ao validar a inscrição.' });
     }
 });
 
@@ -1248,6 +1341,21 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
             const localNomeResolvido = p.localNome || mapeamentoLocais[p.local] || mapeamentoLocais[p.calendarId] || 'Teatro';
             const calIdInscricao = p.calendarId || CALENDAR_IDS[(p.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
+
+            // Inscrições concluídas pelo ambiente de teste já possuem a segunda etapa
+            // salva no Redis e devem aparecer no painel sem depender do Google Forms.
+            if (!correspondencia && p.inscricaoTesteConcluida === true) {
+                unificados.push({
+                    primeiraEtapa: { ...p, localNome: localNomeResolvido },
+                    segundaEtapa: {
+                        headers: ['Segunda etapa', 'Status'],
+                        valores: ['Ambiente de teste', 'Concluída']
+                    },
+                    status: 'Completo (Teste)',
+                    eventosExistem: true
+                });
+                continue;
+            }
 
             if (correspondencia) {
                 usedSheetIndices.add(correspondenciaIdx);

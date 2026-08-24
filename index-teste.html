@@ -188,7 +188,7 @@
             overflow: hidden; margin-bottom: 16px;
         }
         .rental-fee-explanation h3 {
-            background: #a33124; color: #fff; padding: 15px 22px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; padding: 15px 22px;
             font-size: 16px; margin: 0;
         }
         .rental-fee-body {
@@ -873,6 +873,18 @@
         </div>
     </div>
 
+    <div class="full-page-step" id="inscricaoValidadaSection">
+        <h2>Inscrição validada com sucesso!</h2>
+        <div class="category-explanation">
+            <h3>Inscrição concluída</h3>
+            <div class="category-explanation-body">
+                <p>Os dados da sua inscrição foram registrados e validados com sucesso.</p>
+                <p>Enviamos uma cópia/comprovante para o e-mail informado e para a equipe do DAC.</p>
+                <p style="margin-bottom:0;">A inscrição já está disponível para consulta no painel administrativo, na aba <strong>Inscrições</strong>.</p>
+            </div>
+        </div>
+    </div>
+
     <div class="full-page-step" id="projetosDacSection">
         <h2>Projetos do DAC</h2>
         <div class="category-explanation">
@@ -1008,6 +1020,7 @@
         let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
         let formsLinkProximaEtapaTeste = '';
         let tipoPessoaTesteAtual = null;
+        let inscricaoTesteId = null;
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -1637,7 +1650,9 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
+                const result = await res.json().catch(() => ({}));
                 if (res.ok) {
+                    inscricaoTesteId = result.id || inscricaoTesteId;
                     msg.innerHTML = '<button type="button" onclick="continuarAposSalvarTeste()">Continuar</button>';
                     msg.className = 'message continue-message';
                     submitBtn.style.display = 'none';
@@ -1655,7 +1670,6 @@
                     atualizarBotaoAvancarTeste();
                     mostrarTelaTeste('tipoProponenteSection');
                 } else {
-                    const result = await res.json();
                     msg.textContent = '❌ Erro: ' + result.error;
                     msg.className = 'message error';
                 }
@@ -1678,7 +1692,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'taxaLocacaoSection', 'projetosDacSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'taxaLocacaoSection', 'inscricaoValidadaSection', 'projetosDacSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1859,8 +1873,78 @@
             mostrarTelaTeste('gratuidadeEventoSection');
         }
 
+        function coletarDadosFinaisInscricaoTeste(projetoDac = '') {
+            const selecionados = nome => Array.from(document.querySelectorAll(`input[name="${nome}"]:checked`)).map(input => input.value);
+            const arquivo = id => Array.from(document.getElementById(id)?.files || []).map(file => file.name);
+            const valor = id => document.getElementById(id)?.value?.trim() || '';
+            const gratuidade = document.querySelector('input[name="gratuidadeEventoTeste"]:checked')?.value || '';
+            const acessibilidade = document.querySelector('input[name="acessibilidadeComunicacionalTeste"]:checked')?.value || '';
+            const vinculo = document.querySelector('input[name="vinculoUfscTeste"]:checked')?.value || '';
+            return {
+                id: inscricaoTesteId,
+                nome: valor('nome'),
+                email: valor('email'),
+                telefone: valor('telefone'),
+                evento: valor('evento'),
+                local: document.getElementById('localSelecionado')?.value || 'teatro',
+                etapas: Object.fromEntries(steps.filter(step => confirmedSteps[step].length).map(step => [
+                    step,
+                    confirmedSteps[step].map(item => ({
+                        data: item.date.toISOString().split('T')[0],
+                        horario: `${item.start} às ${item.end}`
+                    }))
+                ])),
+                tipoProponente: document.querySelector('input[name="tipoProponenteTeste"]:checked')?.value || tipoPessoaTesteAtual || '',
+                categoriaProposta: vinculo === 'SIM' ? 'Com vínculo com a UFSC' : 'Externa',
+                vinculoUfsc: vinculo,
+                descricaoVinculoUfsc: valor('testeDescricaoVinculoUfsc'),
+                areas: selecionados('areaSegmentoTeste'),
+                finalidade: document.querySelector('input[name="finalidadeAtividadeTeste"]:checked')?.value || '',
+                sinopse: valor('testeSinopseProposta'),
+                relevancia: valor('testeRelevanciaProposta'),
+                acessibilidade,
+                recursosAcessibilidade: selecionados('recursosAcessibilidadeTeste'),
+                gratuidade,
+                projetoDac,
+                arquivos: [
+                    ...arquivo('testeCurriculoPessoaFisica'),
+                    ...arquivo('testeDocumentoPessoaFisica'),
+                    ...arquivo('testePortfolioPessoaJuridica'),
+                    ...arquivo('testeContratoPessoaJuridica'),
+                    ...arquivo('testeDocumentoRepresentantePessoaJuridica'),
+                    ...arquivo('testeDocumentoCnpjPessoaJuridica'),
+                    ...arquivo('testeComprovanteVinculoUfsc'),
+                    ...arquivo('testeFichaTecnicaProposta'),
+                    ...arquivo('testeLinksVideoProposta'),
+                    ...arquivo('testeOutrosLinksProposta')
+                ]
+            };
+        }
+
+        async function concluirInscricaoFinalTeste(projetoDac = '') {
+            const dados = coletarDadosFinaisInscricaoTeste(projetoDac);
+            if (!dados.id) {
+                alert('Não foi possível identificar a inscrição inicial. Volte e tente novamente.');
+                return;
+            }
+            try {
+                const res = await fetch('/api/finalizar-inscricao-teste', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(dados)
+                });
+                const resultado = await res.json().catch(() => ({}));
+                if (!res.ok || !resultado.success) {
+                    throw new Error(resultado.error || 'Não foi possível validar a inscrição.');
+                }
+                mostrarTelaTeste('inscricaoValidadaSection');
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
         function concluirInscricaoComTaxaTeste() {
-            abrirFormularioTeste();
+            concluirInscricaoFinalTeste();
         }
 
         function concluirInscricaoTeste() {
@@ -1869,7 +1953,7 @@
                 alert('Escolha uma opção sobre a programação dos projetos do DAC.');
                 return;
             }
-            abrirFormularioTeste();
+            concluirInscricaoFinalTeste(projeto.value);
         }
 
         function arquivoComExtensao(file, extensoes) {
