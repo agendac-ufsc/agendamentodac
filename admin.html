@@ -1813,6 +1813,10 @@ function deleteAllInscricoes() {
         .map(c => allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa?.id)
         .filter(id => id && id !== 'undefined' && id !== 'null')
         .map(String);
+    if (exclusaoSelecionados.length > 0) {
+        excluirInscricoesSelecionadasDireto();
+        return;
+    }
     const titulo = document.getElementById('tituloExcluirTudo');
     const texto = document.getElementById('textoExcluirTudo');
     if (exclusaoSelecionados.length > 0) {
@@ -1829,6 +1833,37 @@ function deleteAllInscricoes() {
     onExcluirTudoInputChange();
     openModal('modalExcluirTudo');
     setTimeout(() => { input && input.focus(); }, 50);
+}
+
+async function excluirInscricoesSelecionadasDireto() {
+    const ids = [...exclusaoSelecionados];
+    const btn = document.getElementById('btnExcluirInscricoes');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo selecionados...';
+    }
+    try {
+        const falhas = [];
+        for (const id of ids) {
+            const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok || body.success === false) falhas.push(id);
+        }
+        if (falhas.length > 0) {
+            throw new Error(`${falhas.length} inscrição(ões) não puderam ser excluídas.`);
+        }
+        document.getElementById('checkAll').checked = false;
+        document.querySelectorAll('.insc-check').forEach(c => c.checked = false);
+        exclusaoSelecionados = [];
+        updateSelCount();
+        loadData();
+    } catch (e) {
+        alert('Erro ao excluir selecionados: ' + e.message);
+        if (btn) {
+            btn.disabled = false;
+            updateSelCount();
+        }
+    }
 }
 
 function closeExcluirTudoModal() {
