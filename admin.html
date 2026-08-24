@@ -808,6 +808,7 @@ let termoEditorCompleto = false;
 let termoAdminAlteracoesSalvas = false;
 let termoPendenteIndex = null;
 let exclusaoSelecionados = [];
+const inscricoesSelecionadas = new Set();
 
 // ══════════════════════════════════════════════════
 // LOGIN
@@ -1058,7 +1059,11 @@ function renderTabela() {
 
     document.getElementById('resultsCount').textContent = `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
 
-    if (filtered.length === 0) { showInscricoesState('empty'); return; }
+    if (filtered.length === 0) {
+        showInscricoesState('empty');
+        updateSelCount();
+        return;
+    }
     showInscricoesState('data');
 
     const tbody = document.getElementById('inscricoesBody');
@@ -1066,6 +1071,7 @@ function renderTabela() {
     filtered.forEach((item, fi) => {
         const p = item.primeiraEtapa;
         const originalIndex = allUnificados.indexOf(item);
+        const idInscricao = p.id ? String(p.id) : '';
 
         let etapasHtml = '';
         if (p.etapas) {
@@ -1141,7 +1147,7 @@ function renderTabela() {
         const row = document.createElement('tr');
         row.className = rowClass;
         row.innerHTML = `
-            <td class="check-col"><input type="checkbox" class="insc-checkbox insc-check" data-index="${originalIndex}" onchange="updateSelCount()"></td>
+            <td class="check-col"><input type="checkbox" class="insc-checkbox insc-check" data-index="${originalIndex}" ${inscricoesSelecionadas.has(idInscricao) ? 'checked' : ''} onchange="updateSelCount()"></td>
             <td style="color:#888;font-size:12px">${(fi+1).toString().padStart(2,'0')}</td>
             <td>
                 <div style="font-weight:700;color:#333">${(p.evento||'SEM EVENTO').toUpperCase()}</div>
@@ -1155,10 +1161,17 @@ function renderTabela() {
         `;
         tbody.appendChild(row);
     });
+    updateSelCount();
 }
 
 function updateSelCount() {
-    const checked = document.querySelectorAll('.insc-check:checked').length;
+    document.querySelectorAll('.insc-check').forEach(c => {
+        const id = allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa?.id;
+        if (!id) return;
+        if (c.checked) inscricoesSelecionadas.add(String(id));
+        else inscricoesSelecionadas.delete(String(id));
+    });
+    const checked = inscricoesSelecionadas.size;
     document.getElementById('countSelecionados').textContent = checked;
     document.getElementById('btnEnviarTermos').style.display = checked > 0 && userRole === 'admin' ? 'flex' : 'none';
     const btnExcluir = document.getElementById('btnExcluirInscricoes');
@@ -1854,6 +1867,7 @@ async function excluirInscricoesSelecionadasDireto() {
         }
         document.getElementById('checkAll').checked = false;
         document.querySelectorAll('.insc-check').forEach(c => c.checked = false);
+        inscricoesSelecionadas.clear();
         exclusaoSelecionados = [];
         updateSelCount();
         loadData();
@@ -2023,6 +2037,7 @@ async function enviarTermosSelecionados() {
         });
         const d = await r.json();
         alert(`✅ Termos enviados!\n\nEnviados: ${d.enviados}\nErros: ${d.erros}\nTotal: ${d.total}`);
+        inscricoesSelecionadas.clear();
         document.getElementById('checkAll').checked = false;
         toggleCheckAll();
     } catch(e) {
