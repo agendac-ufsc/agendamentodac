@@ -200,6 +200,18 @@
         .ufsc-link-option input {
             width: 20px; height: 20px; margin: 0; accent-color: #667eea;
         }
+        .institutional-fields { display: grid; gap: 18px; }
+        .institutional-fields textarea {
+            width: 100%; min-height: 120px; padding: 12px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font: inherit; font-size: 15px; resize: vertical;
+        }
+        .institutional-fields textarea:focus { outline: none; border-color: #667eea; }
+        .institutional-upload {
+            border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px;
+            background: #fafafa;
+        }
+        .institutional-upload ul { margin: 10px 0 18px 22px; color: #444; line-height: 1.6; }
+        .institutional-upload input[type="file"] { padding: 10px; font-size: 13px; background: #fff; }
         @media (max-width: 600px) {
             .full-page-step { padding: 28px 20px; }
             .person-type-page-options { grid-template-columns: 1fr; }
@@ -577,6 +589,31 @@
         <div class="step-actions">
             <button type="button" class="btn-back-step" onclick="voltarParaPessoaAnteriorTeste()">← Voltar</button>
             <button type="button" class="btn-next-step" onclick="avancarCategoriaPropostaTeste()">Avançar →</button>
+        </div>
+    </div>
+
+    <div class="full-page-step" id="vinculoInstitucionalSection">
+        <h2>Vínculo Institucional</h2>
+        <p class="step-description">Informe os dados que comprovam o vínculo da proposta com a UFSC.</p>
+        <div class="institutional-fields">
+            <div class="form-group">
+                <label for="testeDescricaoVinculoUfsc">Descreva brevemente o vínculo que possui com a Universidade e setor da UFSC *</label>
+                <textarea id="testeDescricaoVinculoUfsc" placeholder="Sua resposta"></textarea>
+            </div>
+            <div class="institutional-upload">
+                <label for="testeComprovanteVinculoUfsc">Comprovação da vinculação do projeto *</label>
+                <p style="margin:10px 0 0;color:#444;font-size:15px;">Anexar:</p>
+                <ul>
+                    <li>comprovante de cadastro do Projeto no SIGPEX; ou</li>
+                    <li>declaração de servidor docente ou TAE que ateste a vinculação.</li>
+                </ul>
+                <small class="file-help">Faça upload de 1 arquivo aceito: PDF. O tamanho máximo é de 10 MB.</small>
+                <input type="file" id="testeComprovanteVinculoUfsc" accept=".pdf,application/pdf">
+            </div>
+        </div>
+        <div class="step-actions">
+            <button type="button" class="btn-back-step" onclick="voltarParaCategoriaPropostaTeste()">← Voltar</button>
+            <button type="button" class="btn-next-step" onclick="avancarVinculoInstitucionalTeste()">Avançar →</button>
         </div>
     </div>
 
@@ -1343,7 +1380,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -1406,6 +1443,29 @@
             const vinculo = document.querySelector('input[name="vinculoUfscTeste"]:checked');
             if (!vinculo) {
                 alert('Selecione se a proposta possui vínculo com a UFSC.');
+                return;
+            }
+            if (vinculo.value === 'SIM') {
+                mostrarTelaTeste('vinculoInstitucionalSection');
+            } else {
+                abrirFormularioTeste();
+            }
+        }
+
+        function voltarParaCategoriaPropostaTeste() {
+            mostrarTelaTeste('categoriaPropostaSection');
+        }
+
+        function avancarVinculoInstitucionalTeste() {
+            const descricao = document.getElementById('testeDescricaoVinculoUfsc').value.trim();
+            const comprovante = document.getElementById('testeComprovanteVinculoUfsc').files;
+            const arquivo = comprovante[0];
+            if (!descricao) {
+                alert('Descreva brevemente o vínculo com a UFSC.');
+                return;
+            }
+            if (comprovante.length !== 1 || !arquivo || !arquivo.name.toLowerCase().endsWith('.pdf') || arquivo.type !== 'application/pdf' || arquivo.size > 10 * 1024 * 1024) {
+                alert('Selecione 1 comprovante em PDF com tamanho máximo de 10 MB.');
                 return;
             }
             abrirFormularioTeste();
