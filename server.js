@@ -229,9 +229,17 @@ const deleteAgendamentoById = async (id) => {
                         if (!sameSlot(event)) return false;
                         const privateProps = event.extendedProperties?.private || {};
                         if (privateProps.dac_inscricao_id) return false;
-                        return event.description?.includes(agendamentoAExcluir.email || '')
-                            || (privateProps.dac_source === 'sistema'
-                                && event.description?.startsWith('Em análise\nLocal:'));
+                        const descricao = String(event.description || '');
+                        const emailMatch = Boolean(agendamentoAExcluir.email)
+                            && descricao.toLowerCase().includes(String(agendamentoAExcluir.email).toLowerCase());
+                        // Eventos criados antes de dac_inscricao_id podem ter
+                        // qualquer um dos dois formatos oficiais de descrição.
+                        // Não usamos apenas o e-mail porque registros antigos
+                        // do fluxo oficial nem sempre o tinham na descrição.
+                        const descricaoSistema = privateProps.dac_source === 'sistema'
+                            || descricao.startsWith('Em análise\nLocal:')
+                            || (descricao.includes('Proponente:') && descricao.includes('Local:'));
+                        return emailMatch || descricaoSistema;
                     });
                     // Eventos novos são identificados pelo ID. Para eventos
                     // antigos, só usamos o fallback quando há uma única
@@ -240,6 +248,14 @@ const deleteAgendamentoById = async (id) => {
                     const matches = matchesWithId.length > 0
                         ? matchesWithId
                         : legacyMatches.length === 1 ? legacyMatches : [];
+                    console.log(
+                        `[Calendar] Exclusão ID ${agendamentoAExcluir.id}: ` +
+                        `${eventos.length} eventos no calendário, ` +
+                        `${matchesWithId.length} por ID, ${legacyMatches.length} legados ` +
+                        `para "${label}: ${agendamentoAExcluir.evento}" ` +
+                        `(${item.data} ${horaInicio})` +
+                        (legacyMatches.length > 1 ? ' — ambíguo, preservado' : '')
+                    );
                     for (const event of matches) {
                         try {
                             await calendar.events.delete({ auth: googleAuthClient, calendarId, eventId: event.id });
