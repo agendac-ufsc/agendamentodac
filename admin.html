@@ -1149,6 +1149,10 @@ function renderTabela() {
             ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> termo concluído${termoEditLink}</div>`
             : '';
         const termoClick = `abrirEditorTermo(${originalIndex})`;
+        const documentosTeste = Array.isArray(p.documentos) ? p.documentos : [];
+        const documentosBtn = p.inscricaoTeste
+            ? `<button class="btn-action" title="Documentos (${documentosTeste.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:#16a34a"><i class="fas fa-folder-open"></i>${documentosTeste.length ? ` <small>${documentosTeste.length}</small>` : ''}</button>`
+            : '';
 
         let stClass = 'st-pendente', stText = 'Pendente';
         if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
@@ -1160,6 +1164,7 @@ function renderTabela() {
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="Enviar formulário de atividades ao proponente" aria-label="Enviar formulário de atividades ao proponente" onclick="abrirEmailFormularioAtividades(${originalIndex})" style="color:#2563eb"><i class="fas fa-clipboard-list"></i></button>
+            ${documentosBtn}
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
 

@@ -14,6 +14,9 @@ const path = require('path');
 const axios = require('axios');
 const { google } = require('googleapis');
 const { Redis } = require('@upstash/redis');
+const multer = require('multer');
+const { Client: ObjectStorageClient } = require('@replit/object-storage');
+const { randomUUID } = require('crypto');
 
 const app = express();
 app.use(cors());
@@ -21,6 +24,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
 app.use(express.static(path.join(__dirname)));
+
+const objectStorage = new ObjectStorageClient();
+const uploadDocumentosTeste = multer({
+    storage: multer.memoryStorage(),
+    limits: { files: 30, fileSize: 100 * 1024 * 1024 }
+});
 
 // Configurar Google Calendar — locais disponíveis
 const CALENDAR_IDS = {
@@ -1290,7 +1299,8 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
             inscricaoTesteConcluida: true,
             segundaEtapaTeste,
             statusInscricao: 'Validada',
-            calendarSynced: true
+            calendarSynced: true,
+            documentos: Array.isArray(dados.documentos) ? dados.documentos : (agendamento.documentos || [])
         });
         if (!atualizada) return res.status(500).json({ error: 'Não foi possível validar a inscrição.' });
 
@@ -1309,6 +1319,93 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
     } catch (error) {
         console.error('❌ [/api/finalizar-inscricao-teste] erro:', error.message);
         return res.status(500).json({ error: 'Erro interno ao validar a inscrição.' });
+    }
+});
+
+// Upload privado dos documentos do ambiente de teste. Os bytes ficam no App
+// Storage; o Redis guarda apenas os metadados e o caminho do objeto.
+app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos', 30), async (req, res) => {
+    const id = String(req.body?.id || '');
+    if (!id) return res.status(400).json({ error: 'ID da inscrição não informado.' });
+    try {
+        const agendamentos = await getAgendamentos();
+        const agendamento = agendamentos.find(item => String(item.id) === id);
+        if (!agendamento || agendamento.inscricaoTeste !== true) {
+            return res.status(404).json({ error: 'Inscrição de teste não encontrada.' });
+        }
+        const metadata = JSON.parse(req.body?.metadata || '[]');
+        const arquivos = [];
+        for (let index = 0; index < (req.files || []).length; index++) {
+            const file = req.files[index];
+            const info = metadata[index] || {};
+            const nomeSeguro = String(file.originalname || 'arquivo')
+                .replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-150);
+            const objectPath = `inscricoes/${id}/${randomUUID()}-${nomeSeguro}`;
+            const uploaded = await objectStorage.uploadFromBytes(objectPath, file.buffer, {
+                contentType: file.mimetype
+            });
+            if (!uploaded?.ok) throw new Error(uploaded?.error?.message || 'Falha ao salvar arquivo.');
+            arquivos.push({
+                id: randomUUID(),
+                objectPath,
+                nome: file.originalname,
+                mimeType: file.mimetype,
+                tamanho: file.size,
+                campo: info.campo || '',
+                categoria: info.categoria || 'Documentos',
+                enviadoEm: new Date().toISOString()
+            });
+        }
+        if (arquivos.length) {
+            await updateAgendamento(id, { documentos: [...(agendamento.documentos || []), ...arquivos] });
+        }
+        res.json({ success: true, documentos: arquivos });
+    } catch (error) {
+        console.error('❌ [/api/documentos-teste/upload] erro:', error.message);
+        res.status(500).json({ error: 'Não foi possível armazenar os documentos.' });
+    }
+});
+
+app.get('/api/admin/inscricoes/:id/documentos', async (req, res) => {
+    try {
+        const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
+        if (!agendamento) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        res.json({ documentos: agendamento.documentos || [] });
+    } catch (error) {
+        res.status(500).json({ error: 'Não foi possível carregar os documentos.' });
+    }
+});
+
+app.get('/api/admin/documentos/:id/:documentoId', async (req, res) => {
+    try {
+        const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
+        const documento = agendamento?.documentos?.find(item => String(item.id) === String(req.params.documentoId));
+        if (!documento) return res.status(404).send('Documento não encontrado.');
+        const resultado = await objectStorage.downloadAsBytes(documento.objectPath);
+        if (!resultado?.ok) return res.status(404).send('Arquivo removido ou indisponível.');
+        res.set('Content-Type', documento.mimeType || 'application/octet-stream');
+        res.set('Content-Disposition', `inline; filename="${encodeURIComponent(documento.nome || 'documento')}"`);
+        res.send(resultado.value);
+    } catch (error) {
+        console.error('❌ [/api/admin/documentos] erro:', error.message);
+        res.status(500).send('Não foi possível abrir o documento.');
+    }
+});
+
+app.delete('/api/admin/inscricoes/:id/documentos/:documentoId', async (req, res) => {
+    try {
+        const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
+        const documento = agendamento?.documentos?.find(item => String(item.id) === String(req.params.documentoId));
+        if (!agendamento || !documento) return res.status(404).json({ error: 'Documento não encontrado.' });
+        const resultado = await objectStorage.delete(documento.objectPath);
+        if (!resultado?.ok) return res.status(502).json({ error: 'Não foi possível excluir o arquivo.' });
+        await updateAgendamento(req.params.id, {
+            documentos: agendamento.documentos.filter(item => String(item.id) !== String(req.params.documentoId))
+        });
+        res.json({ success: true });
+    } catch (error) {
+        console.error('❌ [/api/admin/inscricoes/:id/documentos] erro:', error.message);
+        res.status(500).json({ error: 'Não foi possível excluir o documento.' });
     }
 });
 

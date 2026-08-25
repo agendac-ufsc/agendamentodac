@@ -1925,6 +1925,24 @@
             };
         }
 
+        function coletarArquivosFinaisInscricaoTeste() {
+            const campos = [
+                ['testeCurriculoPessoaFisica', 'Currículo', 'Pessoa Física'],
+                ['testeDocumentoPessoaFisica', 'Documento oficial', 'Pessoa Física'],
+                ['testePortfolioPessoaJuridica', 'Portfólio', 'Pessoa Jurídica'],
+                ['testeContratoPessoaJuridica', 'Contrato social', 'Pessoa Jurídica'],
+                ['testeDocumentoRepresentantePessoaJuridica', 'Documento do representante', 'Pessoa Jurídica'],
+                ['testeDocumentoCnpjPessoaJuridica', 'Documento do CNPJ', 'Pessoa Jurídica'],
+                ['testeComprovanteVinculoUfsc', 'Comprovante de vínculo', 'Vínculo UFSC'],
+                ['testeFichaTecnicaProposta', 'Ficha técnica', 'Proposta'],
+                ['testeLinksVideoProposta', 'Links e vídeos', 'Proposta'],
+                ['testeOutrosLinksProposta', 'Outros documentos', 'Proposta']
+            ];
+            return campos.flatMap(([campo, categoria, grupo]) =>
+                Array.from(document.getElementById(campo)?.files || []).map(file => ({ file, campo, categoria: `${grupo} — ${categoria}` }))
+            );
+        }
+
         async function concluirInscricaoFinalTeste(projetoDac = '') {
             const dados = coletarDadosFinaisInscricaoTeste(projetoDac);
             if (!dados.id) {
@@ -1932,6 +1950,19 @@
                 return;
             }
             try {
+                const arquivos = coletarArquivosFinaisInscricaoTeste();
+                if (arquivos.length) {
+                    const formData = new FormData();
+                    formData.append('id', dados.id);
+                    formData.append('metadata', JSON.stringify(arquivos.map(({ campo, categoria }) => ({ campo, categoria }))));
+                    arquivos.forEach(({ file }) => formData.append('arquivos', file));
+                    const uploadRes = await fetch('/api/documentos-teste/upload', { method: 'POST', body: formData });
+                    const uploadResult = await uploadRes.json().catch(() => ({}));
+                    if (!uploadRes.ok || !uploadResult.success) {
+                        throw new Error(uploadResult.error || 'Não foi possível enviar os documentos.');
+                    }
+                    dados.documentos = uploadResult.documentos || [];
+                }
                 const res = await fetch('/api/finalizar-inscricao-teste', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
