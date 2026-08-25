@@ -26,6 +26,13 @@ app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-ca
 app.use(express.static(path.join(__dirname)));
 
 const objectStorage = new ObjectStorageClient();
+// O SDK inicializa o bucket de forma assíncrona. Anexar o tratamento aqui
+// evita uma rejeição não tratada quando o App Storage ainda não foi provisionado
+// neste ambiente; as rotas retornam um erro explicativo nesse caso.
+const objectStorageReady = objectStorage.getBucket().catch(error => {
+    console.warn('⚠️ [Object Storage] Armazenamento indisponível:', error.message);
+    return null;
+});
 const uploadDocumentosTeste = multer({
     storage: multer.memoryStorage(),
     limits: { files: 30, fileSize: 100 * 1024 * 1024 }
@@ -1333,7 +1340,49 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
         if (!agendamento || agendamento.inscricaoTeste !== true) {
             return res.status(404).json({ error: 'Inscrição de teste não encontrada.' });
         }
-        const metadata = JSON.parse(req.body?.metadata || '[]');
+        if (!await objectStorageReady) {
+            return res.status(503).json({ error: 'O armazenamento de documentos ainda não está provisionado.' });
+        }
+        let metadata;
+        try {
+            metadata = JSON.parse(req.body?.metadata || '[]');
+        } catch {
+            return res.status(400).json({ error: 'Metadados dos documentos inválidos.' });
+        }
+        if (!Array.isArray(metadata) || metadata.length !== (req.files || []).length) {
+            return res.status(400).json({ error: 'A lista de documentos não corresponde aos arquivos enviados.' });
+        }
+        const regrasDocumentos = {
+            testeCurriculoPessoaFisica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+            testeDocumentoPessoaFisica: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+            testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024, tipos: 'pdf-imagem' },
+            testeContratoPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+            testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+            testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+            testeComprovanteVinculoUfsc: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+            testeFichaTecnicaProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+            testeLinksVideoProposta: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+            testeOutrosLinksProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' }
+        };
+        const quantidades = {};
+        const ehPdf = file => file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname || '');
+        const ehImagem = file => String(file.mimetype || '').startsWith('image/');
+        for (let index = 0; index < (req.files || []).length; index++) {
+            const file = req.files[index];
+            const campo = String(metadata[index]?.campo || '');
+            const regra = regrasDocumentos[campo];
+            if (!regra) return res.status(400).json({ error: 'Campo de documento não permitido.' });
+            quantidades[campo] = (quantidades[campo] || 0) + 1;
+            if (quantidades[campo] > regra.max || file.size > regra.bytes) {
+                return res.status(400).json({ error: `Limite excedido para ${metadata[index]?.categoria || 'este documento'}.` });
+            }
+            const tipoValido = regra.tipos === 'pdf'
+                ? ehPdf(file)
+                : ehPdf(file) || ehImagem(file);
+            if (!tipoValido) {
+                return res.status(400).json({ error: `Formato inválido para ${metadata[index]?.categoria || 'este documento'}.` });
+            }
+        }
         const arquivos = [];
         for (let index = 0; index < (req.files || []).length; index++) {
             const file = req.files[index];
@@ -1378,6 +1427,7 @@ app.get('/api/admin/inscricoes/:id/documentos', async (req, res) => {
 
 app.get('/api/admin/documentos/:id/:documentoId', async (req, res) => {
     try {
+        if (!await objectStorageReady) return res.status(503).send('O armazenamento de documentos ainda não está provisionado.');
         const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
         const documento = agendamento?.documentos?.find(item => String(item.id) === String(req.params.documentoId));
         if (!documento) return res.status(404).send('Documento não encontrado.');
@@ -1394,6 +1444,7 @@ app.get('/api/admin/documentos/:id/:documentoId', async (req, res) => {
 
 app.delete('/api/admin/inscricoes/:id/documentos/:documentoId', async (req, res) => {
     try {
+        if (!await objectStorageReady) return res.status(503).json({ error: 'O armazenamento de documentos ainda não está provisionado.' });
         const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
         const documento = agendamento?.documentos?.find(item => String(item.id) === String(req.params.documentoId));
         if (!agendamento || !documento) return res.status(404).json({ error: 'Documento não encontrado.' });

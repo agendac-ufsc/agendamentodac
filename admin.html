@@ -800,6 +800,22 @@
     </div>
 </div>
 
+<!-- ═══════════════ MODAL DOCUMENTOS DA INSCRIÇÃO ═══ -->
+<div class="modal" id="modalDocumentosInscricao">
+    <div class="modal-box" style="max-width:760px">
+        <h3 style="display:flex;align-items:center;gap:8px">
+            <i class="fas fa-folder-open" style="color:#16a34a"></i>
+            <span id="documentosInscricaoTitulo">Documentos da inscrição</span>
+        </h3>
+        <div id="documentosInscricaoResumo" style="font-size:13px;color:#666;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;margin-bottom:16px"></div>
+        <div id="documentosInscricaoStatus" style="font-size:13px;min-height:20px;margin-bottom:10px"></div>
+        <div id="documentosInscricaoLista"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalDocumentosInscricao')">Fechar</button>
+        </div>
+    </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // ESTADO GLOBAL
@@ -817,6 +833,7 @@ let termoEditorCompleto = false;
 let termoAdminAlteracoesSalvas = false;
 let termoPendenteIndex = null;
 let exclusaoSelecionados = [];
+let documentosInscricaoIndex = null;
 const inscricoesSelecionadas = new Set();
 
 // ══════════════════════════════════════════════════
@@ -2571,6 +2588,122 @@ function desbloquearData(d) {
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+// ══════════════════════════════════════════════════
+// DOCUMENTOS DA INSCRIÇÃO DE TESTE
+// ══════════════════════════════════════════════════
+function formatarTamanhoDocumento(bytes) {
+    const tamanho = Number(bytes) || 0;
+    if (tamanho < 1024) return `${tamanho} B`;
+    if (tamanho < 1024 * 1024) return `${(tamanho / 1024).toFixed(1)} KB`;
+    return `${(tamanho / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function escapeAtributoDocumento(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+async function abrirDocumentos(idx) {
+    if (userRole !== 'admin') return;
+    const item = allUnificados[idx];
+    const p = item?.primeiraEtapa;
+    if (!p?.id || !p.inscricaoTeste) return;
+
+    documentosInscricaoIndex = idx;
+    document.getElementById('documentosInscricaoTitulo').textContent =
+        `Documentos — ${p.evento || 'Inscrição'}`;
+    document.getElementById('documentosInscricaoResumo').innerHTML =
+        `<strong>${escapeHtml(p.nome || 'Proponente não informado')}</strong>` +
+        ` <span style="color:#999">·</span> ${escapeHtml(p.email || 'E-mail não informado')}`;
+    document.getElementById('documentosInscricaoStatus').style.color = '#666';
+    document.getElementById('documentosInscricaoStatus').textContent = 'Carregando documentos...';
+    document.getElementById('documentosInscricaoLista').innerHTML =
+        '<div class="loading-msg" style="padding:28px"><i class="fas fa-spinner fa-spin"></i></div>';
+    openModal('modalDocumentosInscricao');
+
+    try {
+        const response = await fetch(`/api/admin/inscricoes/${encodeURIComponent(p.id)}/documentos?_=${Date.now()}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os documentos.');
+        renderDocumentosInscricao(data.documentos || [], p.id);
+    } catch (error) {
+        document.getElementById('documentosInscricaoStatus').style.color = '#b91c1c';
+        document.getElementById('documentosInscricaoStatus').textContent = error.message;
+        document.getElementById('documentosInscricaoLista').innerHTML = '';
+    }
+}
+
+function renderDocumentosInscricao(documentos, inscricaoId) {
+    const status = document.getElementById('documentosInscricaoStatus');
+    const lista = document.getElementById('documentosInscricaoLista');
+    status.style.color = '#666';
+    status.textContent = documentos.length
+        ? `${documentos.length} arquivo(s) armazenado(s) de forma privada.`
+        : 'Nenhum documento enviado para esta inscrição.';
+
+    if (!documentos.length) {
+        lista.innerHTML = '<div class="empty-msg" style="padding:32px 10px">A pasta está vazia.</div>';
+        return;
+    }
+
+    const porCategoria = documentos.reduce((grupos, documento) => {
+        const categoria = documento.categoria || 'Documentos';
+        (grupos[categoria] ||= []).push(documento);
+        return grupos;
+    }, {});
+
+    lista.innerHTML = Object.entries(porCategoria).map(([categoria, itens]) => `
+        <section style="margin-bottom:18px">
+            <h4 style="font-size:13px;color:#4b5563;margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb">
+                <i class="fas fa-folder" style="color:#f59e0b;margin-right:6px"></i>${escapeHtml(categoria)}
+            </h4>
+            <div style="display:grid;gap:8px">
+                ${itens.map(documento => {
+                    const url = `/api/admin/documentos/${encodeURIComponent(inscricaoId)}/${encodeURIComponent(documento.id)}`;
+                    const nome = escapeHtml(documento.nome || 'Documento sem nome');
+                    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;flex-wrap:wrap">
+                        <i class="far fa-file-alt" style="color:#64748b;font-size:18px"></i>
+                        <div style="flex:1;min-width:180px">
+                            <div style="font-size:13px;font-weight:600;color:#334155;word-break:break-word">${nome}</div>
+                            <div style="font-size:11px;color:#94a3b8;margin-top:2px">${formatarTamanhoDocumento(documento.tamanho)} · ${escapeHtml(documento.mimeType || 'tipo desconhecido')}</div>
+                        </div>
+                        <div style="display:flex;gap:6px">
+                            <a class="btn-top" href="${url}" target="_blank" rel="noopener" style="padding:7px 10px;background:#2563eb;color:#fff;text-decoration:none" title="Visualizar ou baixar">
+                                <i class="fas fa-external-link-alt"></i> Abrir
+                            </a>
+                            <button class="btn-top btn-danger" style="padding:7px 10px" onclick="excluirDocumento('${escapeAtributoDocumento(inscricaoId)}','${escapeAtributoDocumento(documento.id)}')">
+                                <i class="far fa-trash-alt"></i> Excluir
+                            </button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </section>
+    `).join('');
+}
+
+async function excluirDocumento(inscricaoId, documentoId) {
+    if (userRole !== 'admin') return;
+    if (!confirm('Excluir este documento permanentemente? Esta ação não pode ser desfeita.')) return;
+    const status = document.getElementById('documentosInscricaoStatus');
+    status.style.color = '#666';
+    status.textContent = 'Excluindo documento...';
+    try {
+        const response = await fetch(`/api/admin/inscricoes/${encodeURIComponent(inscricaoId)}/documentos/${encodeURIComponent(documentoId)}`, { method: 'DELETE' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível excluir o documento.');
+        const responseLista = await fetch(`/api/admin/inscricoes/${encodeURIComponent(inscricaoId)}/documentos?_=${Date.now()}`);
+        const lista = await responseLista.json().catch(() => ({}));
+        if (!responseLista.ok) throw new Error(lista.error || 'Documento excluído, mas não foi possível atualizar a lista.');
+        const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(inscricaoId));
+        if (item) item.primeiraEtapa.documentos = lista.documentos || [];
+        renderDocumentosInscricao(lista.documentos || [], inscricaoId);
+        renderTabela();
+    } catch (error) {
+        status.style.color = '#b91c1c';
+        status.textContent = error.message;
+    }
+}
 
 // ══════════════════════════════════════════════════
 // AUTO-LOGIN (sessão salva)
