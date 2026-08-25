@@ -10,6 +10,7 @@
   "dependencies": {
     "@replit/object-storage": "^1.0.0",
     "@upstash/redis": "^1.37.0",
+    "@vercel/blob": "^2.8.0",
     "adm-zip": "^0.5.17",
     "axios": "^1.13.6",
     "cors": "^2.8.5",
