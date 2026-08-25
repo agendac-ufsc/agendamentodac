@@ -828,12 +828,17 @@ function formatarDataBrasileiraServidor(data) {
 }
 
 function obterFimDoUltimoEvento(agendamento) {
-    const eventos = Array.isArray(agendamento?.etapas?.evento)
+    const eventosRegistrados = Array.isArray(agendamento?.etapas?.evento)
         ? agendamento.etapas.evento
         : agendamento?.etapas?.evento
             ? [agendamento.etapas.evento]
             : [];
-    const candidatos = eventos.map(item => {
+    // Inscrições antigas podem não ter etapas estruturadas, mas ter as datas
+    // recuperadas diretamente do Google Calendar pelo processo de legado.
+    const eventosLegados = Array.isArray(agendamento?.calendarDates)
+        ? agendamento.calendarDates
+        : [];
+    const candidatos = [...eventosRegistrados, ...eventosLegados].map(item => {
         const data = String(item?.data || '');
         const horario = String(item?.horario || '');
         const dataMatch = data.match(/^(\d{4})-(\d{2})-(\d{2})$/) || data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
@@ -848,6 +853,110 @@ function obterFimDoUltimoEvento(agendamento) {
         return Number.isNaN(fimDate.getTime()) ? null : { fimDate, data, horario };
     }).filter(Boolean);
     return candidatos.sort((a, b) => a.fimDate - b.fimDate).at(-1) || null;
+}
+
+async function buscarDatasEventosLegados(agendamento) {
+    if (!googleAuthClient || !agendamento?.evento) return [];
+    const normalizar = valor => String(valor || '').toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
+    const nomeEvento = normalizar(agendamento.evento);
+    if (!nomeEvento) return [];
+
+    try {
+        const agora = new Date();
+        const consultas = await Promise.all(Object.values(CALENDAR_IDS).map(async calendarId => {
+            const resposta = await calendar.events.list({
+                auth: googleAuthClient,
+                calendarId,
+                timeMin: new Date(agora.getFullYear() - 1, 0, 1).toISOString(),
+                timeMax: new Date(agora.getFullYear() + 3, 11, 31).toISOString(),
+                singleEvents: true,
+                orderBy: 'startTime',
+                maxResults: 2500
+            });
+            return resposta.data.items || [];
+        }));
+
+        return consultas.flat()
+            .filter(evento => normalizar(evento.summary).includes(nomeEvento))
+            .map(evento => {
+                const inicio = evento.start?.dateTime || evento.start?.date || '';
+                const fim = evento.end?.dateTime || evento.end?.date || '';
+                return {
+                    data: inicio.split('T')[0],
+                    horario: inicio.includes('T') && fim.includes('T')
+                        ? `${inicio.split('T')[1].substring(0, 5)} às ${fim.split('T')[1].substring(0, 5)}`
+                        : '',
+                    resumo: evento.summary || ''
+                };
+            });
+    } catch (error) {
+        console.warn(`⚠️ [Atividades] Falha ao buscar evento legado de ${agendamento.email}:`, error.message);
+        return [];
+    }
+}
+
+let atividadesLegadasCache = { atualizadoEm: 0, inscricoes: [] };
+
+async function buscarInscricoesLegadasParaAtividades() {
+    const agora = Date.now();
+    if (agora - atividadesLegadasCache.atualizadoEm < 5 * 60 * 1000) {
+        return atividadesLegadasCache.inscricoes;
+    }
+    if (!googleAuthClient) await initGoogleAuth();
+    await getConfigs('verificação automática de formulários legados');
+
+    try {
+        let response;
+        try {
+            response = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
+                range: 'Respostas ao formulário 1!A:ZZ'
+            });
+        } catch {
+            const meta = await sheets.spreadsheets.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID
+            });
+            const nomeAba = meta.data?.sheets?.[0]?.properties?.title;
+            if (!nomeAba) return [];
+            response = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
+                range: `'${nomeAba}'!A:ZZ`
+            });
+        }
+
+        const rows = response.data.values || [];
+        const headers = (rows[0] || []).map(h => String(h || '').toLowerCase());
+        const findIndex = keywords => headers.findIndex(h => keywords.some(k => h.includes(k)));
+        const emailIndex = findIndex(['endereço de e-mail', 'e-mail', 'email', 'e mail']);
+        const eventIndex = findIndex(['nome do evento', 'título do projeto', 'event name', 'project title']);
+        const nameIndex = headers.findIndex(h =>
+            (h.includes('nome completo') && !h.includes('representante')) || h.includes('full name')
+        );
+
+        if (emailIndex < 0 || eventIndex < 0) return [];
+        const inscricoes = rows.slice(1).map((values, index) => {
+            const email = String(values[emailIndex] || '').trim();
+            const evento = String(values[eventIndex] || '').trim();
+            if (!email || !evento) return null;
+            const baseId = `forms_${email.toLowerCase()}_${evento.toLowerCase().replace(/\s+/g, '_')}`;
+            return {
+                id: `${baseId}_${index}`,
+                nome: nameIndex >= 0 ? String(values[nameIndex] || '').trim() : 'Inscrição Forms',
+                email,
+                evento,
+                etapas: {},
+                isLegada: true
+            };
+        }).filter(Boolean);
+
+        atividadesLegadasCache = { atualizadoEm: agora, inscricoes };
+        return inscricoes;
+    } catch (error) {
+        console.warn('⚠️ [Atividades] Falha ao carregar inscrições legadas da planilha:', error.message);
+        return [];
+    }
 }
 
 function criarMensagemFormularioAtividades(prazo) {
@@ -897,11 +1006,23 @@ async function verificarEnviosAutomaticosFormulario() {
     if (!redis || !process.env.BREVO_API_KEY) return;
     try {
         const agora = new Date();
-        const agendamentos = await getAgendamentos();
+        const agendamentosRedis = await getAgendamentos();
+        const agendamentosLegados = await buscarInscricoesLegadasParaAtividades();
+        const agendamentos = [...agendamentosRedis, ...agendamentosLegados]
+            .filter((agendamento, index, lista) =>
+                lista.findIndex(item => String(item.id) === String(agendamento.id)) === index
+            );
         for (const agendamento of agendamentos) {
             const email = String(agendamento.email || '').trim().toLowerCase();
             if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
-            const ultimoEvento = obterFimDoUltimoEvento(agendamento);
+            let ultimoEvento = obterFimDoUltimoEvento(agendamento);
+            if (!ultimoEvento && agendamento.isLegada) {
+                const eventosLegados = await buscarDatasCalendarioLegada(agendamento.evento);
+                ultimoEvento = obterFimDoUltimoEvento({ ...agendamento, calendarDates: eventosLegados });
+                if (ultimoEvento) {
+                    console.log(`ℹ️ [Atividades] Evento legado localizado no calendário para ${agendamento.email}.`);
+                }
+            }
             if (!ultimoEvento) continue;
             if (agora < ultimoEvento.fimDate) continue;
 
