@@ -1870,6 +1870,7 @@ async function excluirInscricoesSelecionadasDireto() {
         document.querySelectorAll('.insc-check').forEach(c => c.checked = false);
         inscricoesSelecionadas.clear();
         exclusaoSelecionados = [];
+        if (btn) btn.disabled = false;
         updateSelCount();
         loadData();
     } catch (e) {
