@@ -1,10 +1,10 @@
 ---
-name: App Storage provisioning
-description: O SDK do App Storage precisa de um bucket provisionado no ambiente antes de aceitar uploads.
+name: Document storage provider
+description: A decisão de armazenamento de documentos precisa funcionar tanto no preview quanto na Vercel.
 ---
 
-O pacote `@replit/object-storage` pode ser instalado sem que exista um bucket disponível. Nesse estado, a inicialização do cliente falha com a mensagem de bucket ausente; isso é uma configuração do ambiente, não uma falha do fluxo de documentos.
+Documentos de inscrições devem usar Vercel Blob com acesso `private`. O Redis guarda apenas metadados e a URL do blob; as rotas administrativas fazem a leitura autenticada e a exclusão.
 
-**Why:** O cliente inicializa o bucket de forma assíncrona e uma instância sem bucket pode produzir rejeição não tratada se o erro não for capturado.
+**Why:** O backend de produção roda na Vercel, portanto o App Storage do Replit não estaria disponível automaticamente nesse ambiente.
 
-**How to apply:** Antes de testar uploads, provisionar o App Storage no ambiente. O servidor deve capturar a falha e retornar indisponibilidade explícita, sem derrubar o workflow.
+**How to apply:** Configurar `BLOB_READ_WRITE_TOKEN` como segredo no preview e na Vercel antes de testar uploads. Sem o token, o servidor deve permanecer saudável e retornar indisponibilidade explícita para as rotas de documentos.
