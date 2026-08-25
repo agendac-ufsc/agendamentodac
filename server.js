@@ -806,6 +806,7 @@ const escapeHtml = (value) => String(value ?? '')
 const ATIVIDADES_FORMULARIO_URL = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
 const ATIVIDADES_FORMULARIO_LABEL = 'Formulário Atividades DAC 2026';
 const ATIVIDADES_ENVIADAS_PREFIX = 'atividades_formulario_enviado:';
+const ATIVIDADES_CONFIRMACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
 
 function adicionarDiasUteisServidor(dataInicial, quantidade) {
     const data = new Date(dataInicial);
@@ -1041,6 +1042,33 @@ async function verificarEnviosAutomaticosFormulario() {
                     ultimoEvento: ultimoEvento.fimDate.toISOString()
                 });
                 console.log(`✅ [Atividades] Formulário enviado automaticamente para ${email} no fim da inscrição ${agendamento.id}.`);
+
+                const confirmacaoHtml = `
+                <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
+                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
+                        <h2 style="margin:0;color:#fff;font-size:18px">Formulário de atividades enviado</h2>
+                        <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">Confirmação automática — DAC/UFSC</p>
+                    </div>
+                    <div style="padding:28px">
+                        <p style="font-size:15px">O formulário de atividades foi enviado automaticamente ao proponente após o término do evento.</p>
+                        <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;font-size:13px;line-height:1.7">
+                            <p style="margin:0"><strong>Proponente:</strong> ${escapeHtml(agendamento.nome || 'Não informado')}</p>
+                            <p style="margin:0"><strong>E-mail destinatário:</strong> ${escapeHtml(email)}</p>
+                            <p style="margin:0"><strong>Evento:</strong> ${escapeHtml(agendamento.evento || 'Não informado')}</p>
+                            <p style="margin:0"><strong>Término considerado:</strong> ${escapeHtml(ultimoEvento.data)} — ${escapeHtml(ultimoEvento.horario)}</p>
+                        </div>
+                    </div>
+                </div>`;
+                const confirmacao = await sendEmail(
+                    ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
+                    'Confirmação: formulário de atividades enviado',
+                    confirmacaoHtml
+                );
+                if (confirmacao) {
+                    console.log(`✅ [Atividades] Confirmação enviada ao DAC sobre ${email}.`);
+                } else {
+                    console.error(`❌ [Atividades] Formulário enviado, mas falhou a confirmação ao DAC sobre ${email}.`);
+                }
             } else {
                 console.error(`❌ [Atividades] Falha ao enviar formulário automático para ${email}.`);
             }
