@@ -1710,6 +1710,39 @@ app.delete('/api/admin/excluir/:email', async (req, res) => {
     res.json({ success });
 });
 
+// Exclusão em lote: processa sequencialmente para evitar disputas entre
+// leituras/gravações do Redis quando várias inscrições são removidas juntas.
+app.delete('/api/agendamentos-selecionados', async (req, res) => {
+    const ids = Array.isArray(req.body?.ids)
+        ? [...new Set(req.body.ids.map(String).filter(id => id && id !== 'undefined' && id !== 'null'))]
+        : [];
+    if (ids.length === 0) {
+        return res.status(400).json({ success: false, error: 'Nenhum ID fornecido' });
+    }
+
+    const falhas = [];
+    for (const id of ids) {
+        try {
+            const agendamentos = await getAgendamentos();
+            const agendamento = agendamentos.find(a => String(a.id) === id);
+            if (!agendamento) {
+                // Mantém o mesmo comportamento da exclusão individual para
+                // registros legados que existem apenas na planilha.
+                await addToBlacklist(id);
+                continue;
+            }
+            const resultado = await deleteAgendamentoById(agendamento.id);
+            if (resultado === false) falhas.push(id);
+        } catch (error) {
+            falhas.push(id);
+            console.error(`❌ [Exclusão em lote] Erro no ID ${id}:`, error.message);
+        }
+    }
+
+    console.log(`✅ [Exclusão em lote] Processados: ${ids.length}; falhas: ${falhas.length}`);
+    res.json({ success: falhas.length === 0, processados: ids.length, falhas });
+});
+
 // Rota alternativa para compatibilidade com admin.html (usando ID em vez de email)
 app.delete('/api/agendamentos/:id', async (req, res) => {
     const { id } = req.params;

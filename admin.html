@@ -1856,14 +1856,15 @@ async function excluirInscricoesSelecionadasDireto() {
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo selecionados...';
     }
     try {
-        const falhas = [];
-        for (const id of ids) {
-            const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
-            const body = await r.json().catch(() => ({}));
-            if (!r.ok || body.success === false) falhas.push(id);
-        }
-        if (falhas.length > 0) {
-            throw new Error(`${falhas.length} inscrição(ões) não puderam ser excluídas.`);
+        const r = await fetch('/api/agendamentos-selecionados', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids })
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok || body.success === false) {
+            const quantidadeFalhas = Array.isArray(body.falhas) ? body.falhas.length : ids.length;
+            throw new Error(`${quantidadeFalhas} inscrição(ões) não puderam ser excluídas.`);
         }
         document.getElementById('checkAll').checked = false;
         document.querySelectorAll('.insc-check').forEach(c => c.checked = false);
