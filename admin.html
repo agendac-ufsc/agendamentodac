@@ -1823,9 +1823,8 @@ async function deleteInscricao(id) {
 
 function deleteAllInscricoes() {
     exclusaoSelecionados = [...document.querySelectorAll('.insc-check:checked')]
-        .map(c => allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa?.id)
-        .filter(id => id && id !== 'undefined' && id !== 'null')
-        .map(String);
+        .map(c => allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa)
+        .filter(p => p?.id && p.id !== 'undefined' && p.id !== 'null');
     if (exclusaoSelecionados.length > 0) {
         excluirInscricoesSelecionadasDireto();
         return;
@@ -1849,7 +1848,8 @@ function deleteAllInscricoes() {
 }
 
 async function excluirInscricoesSelecionadasDireto() {
-    const ids = [...exclusaoSelecionados];
+    const inscricoes = [...exclusaoSelecionados];
+    const ids = inscricoes.map(p => String(p.id));
     const btn = document.getElementById('btnExcluirInscricoes');
     if (btn) {
         btn.disabled = true;
@@ -1859,7 +1859,7 @@ async function excluirInscricoesSelecionadasDireto() {
         const r = await fetch('/api/agendamentos-selecionados', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ids })
+            body: JSON.stringify({ inscricoes })
         });
         const body = await r.json().catch(() => ({}));
         if (!r.ok || body.success === false) {

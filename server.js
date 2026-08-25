@@ -286,6 +286,51 @@ const deleteAgendamentoById = async (id) => {
     return false;
 };
 
+const deleteLegacyCalendarEvents = async (inscricao) => {
+    if (!googleAuthClient || !Array.isArray(inscricao?.calendarDates)) return 0;
+    const nomesCalendarios = {
+        'teatro carmen fossari': CALENDAR_IDS.teatro,
+        'igre jinha da ufsc': CALENDAR_IDS.igrejinha,
+        'igrejinha da ufsc': CALENDAR_IDS.igrejinha
+    };
+    let removidos = 0;
+    const consultas = new Map();
+    for (const item of inscricao.calendarDates) {
+        if (!item?.data || !item?.horario || !item?.resumo) continue;
+        const calendarId = nomesCalendarios[String(item.local || '').toLowerCase()]
+            || CALENDAR_IDS.teatro;
+        if (!consultas.has(calendarId)) consultas.set(calendarId, []);
+        consultas.get(calendarId).push(item);
+    }
+
+    for (const [calendarId, itens] of consultas) {
+        const resposta = await calendar.events.list({
+            auth: googleAuthClient, calendarId, maxResults: 2500, singleEvents: true
+        });
+        const eventos = resposta.data.items || [];
+        for (const item of itens) {
+            const [horaInicio] = String(item.horario).split(' às ');
+            const matches = eventos.filter(event => {
+                const inicio = event.start?.dateTime || '';
+                return event.summary === item.resumo
+                    && inicio.slice(0, 10) === item.data
+                    && inicio.includes('T')
+                    && inicio.split('T')[1].slice(0, 5) === horaInicio;
+            });
+            for (const event of matches) {
+                try {
+                    await calendar.events.delete({ auth: googleAuthClient, calendarId, eventId: event.id });
+                    removidos++;
+                    console.log(`✅ [Calendar] Evento legado deletado: ${event.summary} (${item.data} ${horaInicio})`);
+                } catch (error) {
+                    console.error(`⚠️ [Calendar] Erro ao deletar evento legado ${event.id}:`, error.message);
+                }
+            }
+        }
+    }
+    return removidos;
+};
+
 // Compatibilidade: nunca apagar vários registros só porque compartilham o e-mail.
 const deleteAgendamentoByEmail = async (email) => {
     const agendamentos = await getAgendamentos();
@@ -1713,19 +1758,35 @@ app.delete('/api/admin/excluir/:email', async (req, res) => {
 // Exclusão em lote: processa sequencialmente para evitar disputas entre
 // leituras/gravações do Redis quando várias inscrições são removidas juntas.
 app.delete('/api/agendamentos-selecionados', async (req, res) => {
-    const ids = Array.isArray(req.body?.ids)
-        ? [...new Set(req.body.ids.map(String).filter(id => id && id !== 'undefined' && id !== 'null'))]
-        : [];
+    const entradas = Array.isArray(req.body?.inscricoes) ? req.body.inscricoes : [];
+    let ids;
+    if (entradas.length > 0) {
+        ids = [...new Map(entradas
+            .filter(item => item?.id && item.id !== 'undefined' && item.id !== 'null')
+            .map(item => [String(item.id), item])).values()];
+    } else if (Array.isArray(req.body?.ids)) {
+        ids = [...new Set(req.body.ids
+            .map(String)
+            .filter(id => id && id !== 'undefined' && id !== 'null'))]
+            .map(id => ({ id }));
+    } else {
+        ids = [];
+    }
     if (ids.length === 0) {
         return res.status(400).json({ success: false, error: 'Nenhum ID fornecido' });
     }
 
     const falhas = [];
-    for (const id of ids) {
+    for (const entrada of ids) {
+        const id = String(entrada.id);
         try {
             const agendamentos = await getAgendamentos();
             const agendamento = agendamentos.find(a => String(a.id) === id);
             if (!agendamento) {
+                if (Array.isArray(entrada.calendarDates) && entrada.calendarDates.length > 0) {
+                    if (!googleAuthClient) await initGoogleAuth();
+                    await deleteLegacyCalendarEvents(entrada);
+                }
                 // Mantém o mesmo comportamento da exclusão individual para
                 // registros legados que existem apenas na planilha.
                 await addToBlacklist(id);
