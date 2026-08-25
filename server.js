@@ -216,7 +216,9 @@ const deleteAgendamentoById = async (id) => {
                     const [horaInicio] = String(item.horario).split(' às ');
                     const sameSlot = event => {
                         const inicio = horaDoEvento(event);
-                        return event.summary === `${label}: ${agendamentoAExcluir.evento}`
+                         const resumoEsperado = `${label}: ${agendamentoAExcluir.evento}`;
+                         const resumoAtual = String(event.summary || '').replace(/^\[Em análise\]\s*/i, '').trim();
+                         return resumoAtual === resumoEsperado
                             && inicio.data === item.data
                             && inicio.hora === horaInicio;
                     };
