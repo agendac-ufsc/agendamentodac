@@ -1,0 +1,2729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Administrativo - DAC</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;color:#333}
+
+        /* ── LOGIN ── */
+        #loginOverlay{position:fixed;inset:0;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;z-index:9999}
+        .login-box{background:#fff;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+        .login-box h1{font-size:22px;color:#444;text-align:center;margin-bottom:6px}
+        .login-box p{font-size:13px;color:#888;text-align:center;margin-bottom:28px}
+        .login-tabs{display:flex;gap:8px;margin-bottom:24px}
+        .login-tab{flex:1;padding:10px;border:2px solid #eee;border-radius:8px;background:#fff;cursor:pointer;font-weight:600;font-size:13px;color:#888;transition:.2s}
+        .login-tab.active{border-color:#764ba2;color:#764ba2;background:#f8f4ff}
+        .form-field{margin-bottom:16px}
+        .form-field label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px}
+        .form-field input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;transition:.2s}
+        .form-field input:focus{outline:none;border-color:#764ba2}
+        .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:.2s}
+        .btn-login:hover{opacity:.9}
+        .login-err{color:#d9534f;font-size:13px;text-align:center;margin-top:12px;display:none}
+
+        /* ── APP SHELL ── */
+        #appShell{display:none}
+        .topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.05)}
+        .topbar-left{display:flex;align-items:center;gap:12px}
+        .topbar-left h1{font-size:18px;color:#444;font-weight:700}
+        .role-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700}
+        .role-admin{background:#ede9fe;color:#7c3aed}
+        .role-viewer{background:#dcfce7;color:#15803d}
+        .topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+        .btn-top{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s}
+        .btn-top:hover{opacity:.85}
+        .btn-refresh{background:#667eea;color:#fff}
+        .btn-danger{background:#fff;color:#d9534f;border:1px solid #d9534f}
+        .btn-danger:hover{background:#d9534f;color:#fff}
+        .btn-success{background:#28a745;color:#fff}
+        .btn-purple{background:#764ba2;color:#fff}
+        .btn-orange{background:#fd7e14;color:#fff}
+        .btn-logout{background:#eee;color:#555;border:1px solid #ddd}
+        .btn-logout:hover{background:#ddd}
+
+        /* ── TABS ── */
+        .tabs-bar{background:#fff;border-bottom:2px solid #eee;padding:0 24px;display:flex;gap:4px}
+        .tab-btn{padding:14px 20px;border:none;background:none;cursor:pointer;font-weight:600;font-size:14px;color:#888;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.2s}
+        .tab-btn.active{color:#764ba2;border-bottom-color:#764ba2}
+        .tab-btn:hover:not(.active){color:#555}
+        .tab-pane{display:none;padding:24px}
+        .tab-pane.active{display:block}
+
+        /* ── FILTERS BAR ── */
+        .filters-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+        .search-wrap{position:relative;flex:1;min-width:200px;max-width:360px}
+        .search-wrap input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none;transition:.2s}
+        .search-wrap input:focus{border-color:#764ba2}
+        .search-wrap i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#aaa;font-size:13px}
+        .filter-sel{padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff;outline:none;cursor:pointer}
+        .filter-sel:focus{border-color:#764ba2}
+
+        /* ── TABLE ── */
+        .table-wrap{overflow-x:auto;border-radius:10px;border:1px solid #e5e7eb;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+        table{width:100%;border-collapse:collapse;background:#fff;table-layout:fixed}
+        th{background:#f8f9fb;color:#666;text-transform:uppercase;font-size:11px;font-weight:700;padding:10px 10px;text-align:left;border-bottom:2px solid #e5e7eb;white-space:nowrap}
+        td{padding:11px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle;font-size:13px}
+        tr:last-child td{border-bottom:none}
+        tr:hover td{background:#fcfaff}
+        /* Larguras fixas das colunas para caber em 100% de zoom */
+        #inscricoesTable .check-col{width:36px}
+        #inscricoesTable th:nth-child(2),#inscricoesTable td:nth-child(2){width:36px}
+        #inscricoesTable th:nth-child(3),#inscricoesTable td:nth-child(3){width:22%}
+        #inscricoesTable th:nth-child(4),#inscricoesTable td:nth-child(4){width:106px}
+        #inscricoesTable th:nth-child(5),#inscricoesTable td:nth-child(5){width:auto;overflow:hidden}
+        #inscricoesTable td:nth-child(5) span{white-space:normal!important}
+        #inscricoesTable th:nth-child(6),#inscricoesTable td:nth-child(6){width:88px}
+        #inscricoesTable th:nth-child(7){width:140px;text-align:center}
+        #inscricoesTable td:nth-child(7){width:140px;text-align:center;padding-right:16px}
+        .col-evento{font-weight:700;color:#333}
+        .local-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
+        .local-teatro{background:#ede9fe;color:#7c3aed}
+        .local-igrejinha{background:#dcfce7;color:#15803d}
+        .status-badge{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap}
+        .st-completo{background:#d1fae5;color:#065f46}
+        .st-pendente{background:#fef3c7;color:#92400e}
+        .st-cancelado{background:#fee2e2;color:#991b1b}
+        .row-cancelada{opacity:.6;background:#fff8f8!important}
+        .btn-action{background:none;border:none;cursor:pointer;font-size:15px;padding:4px 3px;transition:.2s}
+        .btn-action:hover{transform:scale(1.2)}
+        .termo-aceite{display:inline-flex;align-items:center;gap:4px;margin-top:4px;color:#15803d;font-size:10px;font-weight:700}
+        .termo-editar-link{border:0;background:none;color:#764ba2;cursor:pointer;font-size:10px;font-weight:700;padding:0 0 0 6px}
+        .termo-editar-link:hover{text-decoration:underline}
+        .check-col{width:36px;text-align:center}
+        .insc-checkbox{width:15px;height:15px;cursor:pointer;accent-color:#764ba2}
+
+        /* ── CARDS ── */
+        .card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:20px;margin-bottom:16px}
+        .card-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+
+        /* ── MODAL ── */
+        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:2000}
+        .modal.open{display:flex}
+        .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+        .modal-box h3{font-size:18px;margin-bottom:16px;color:#444;border-bottom:1px solid #eee;padding-bottom:12px}
+        .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
+        .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+        .btn-save-modal{padding:9px 20px;background:#764ba2;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600}
+        .termo-edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+        .termo-edit-grid .full{grid-column:1 / -1}
+        .termo-edit-grid textarea{min-height:68px;resize:vertical}
+        .termo-edit-grid input:disabled,.termo-edit-grid textarea:disabled,.termo-edit-grid select:disabled{opacity:1;color:#374151;background:#f8fafc;border-color:#e5e7eb;cursor:default}
+        .form-section-label{grid-column:1 / -1;border-top:1px solid #e5e7eb;padding-top:14px;margin-top:4px;font-size:13px;font-weight:700;color:#4b5563}
+        .termo-pillrow{display:flex;gap:10px;flex-wrap:wrap}
+        .termo-pill{display:inline-flex;align-items:center;gap:8px;padding:9px 14px;border:1px solid #d1d5db;border-radius:6px;background:#fff;cursor:pointer;font-size:13px;font-weight:500;color:#374151;transition:all .15s}
+        .termo-pill.active{background:#2563eb;color:#fff;border-color:#2563eb}
+        .termo-pill:disabled{opacity:1;cursor:default}
+        .termo-pill .check{width:14px;height:14px;border:1.5px solid #9ca3af;border-radius:3px;display:inline-flex;align-items:center;justify-content:center}
+        .termo-pill.active .check{background:#fff;border-color:#fff;color:#2563eb}
+        .termo-pill .check::after{content:'✓';display:none;font-size:10px;line-height:1}
+        .termo-pill.active .check::after{display:block}
+        .termo-edit-note{font-size:12px;line-height:1.5;color:#666;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px;margin-bottom:16px}
+        @media(max-width:640px){.termo-edit-grid{grid-template-columns:1fr}.termo-edit-grid .full{grid-column:auto}}
+
+        /* ── AVALIAÇÃO ── */
+        .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+        .av-info h4{font-size:14px;font-weight:700;margin-bottom:4px}
+        .av-info p{font-size:12px;color:#666}
+        .av-score{font-size:20px;font-weight:800;color:#764ba2}
+        .stars{display:flex;gap:4px;margin-top:6px}
+        .star{font-size:22px;cursor:pointer;color:#ddd;transition:.1s}
+        .star.on{color:#f59e0b}
+        .criteria-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0}
+        .criteria-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+        .criteria-label{flex:1;font-size:14px;font-weight:600;color:#333}
+        .criteria-weight{font-size:11px;color:#888;margin-top:2px}
+
+        /* ── AVALIADORES ── */
+        .av-list-item{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#fff;border:1px solid #eee;border-radius:8px;margin-bottom:8px}
+        .av-list-item .av-email{font-size:13px;font-weight:600;color:#333}
+        .av-list-item .av-nome{font-size:11px;color:#888;margin-top:2px}
+
+        /* ── CONFIG TABS ── */
+        .cfg-tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:2px solid #eee}
+        .cfg-tab{padding:10px 16px;border:none;background:none;cursor:pointer;font-weight:600;font-size:13px;color:#888;border-bottom:3px solid transparent;margin-bottom:-2px;transition:.2s}
+        .cfg-tab.active{color:#764ba2;border-bottom-color:#764ba2}
+        .cfg-pane{display:none}
+        .cfg-pane.active{display:block}
+        .form-label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px;margin-top:14px}
+        .form-input{width:100%;padding:10px 13px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none;transition:.2s}
+        .form-input:focus{border-color:#764ba2}
+        .password-wrap{position:relative}
+        .password-wrap input{padding-right:42px}
+        .toggle-password{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;background:transparent;color:#888;cursor:pointer;border-radius:6px}
+        .toggle-password:hover,.toggle-password:focus{background:#f3f0ff;color:#764ba2;outline:none}
+
+        /* ── EMPTY / LOADING ── */
+        .loading-msg{text-align:center;padding:60px;color:#667eea;font-size:16px}
+        .empty-msg{text-align:center;padding:60px;color:#aaa;font-size:15px}
+        .error-msg{text-align:center;padding:40px;color:#d9534f;background:#fff5f5;border-radius:10px;border:1px solid #fcc}
+        .results-count{font-size:12px;color:#888;margin-bottom:12px}
+
+        /* Responsivo */
+        @media(max-width:640px){
+            .topbar{padding:10px 14px}
+            .tab-btn{padding:10px 12px;font-size:12px}
+            .tab-pane{padding:14px}
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ LOGIN ═══ -->
+<div id="loginOverlay">
+    <div class="login-box">
+        <h1>🏛️ DAC — UFSC</h1>
+        <p>Painel de Administração</p>
+        <div id="loginAdmin">
+            <div class="form-field">
+                <label>Senha de Administrador</label>
+                <div class="password-wrap">
+                    <input type="password" id="adminPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+                    <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('adminPass', this)">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        <button class="btn-login" onclick="doLogin()">Entrar</button>
+        <div class="login-err" id="loginErr"></div>
+        <p style="text-align:center;margin-top:18px;font-size:13px;color:#666">É avaliador? <a href="/avaliador" style="color:#2563eb;font-weight:600;text-decoration:none">Acesse o Painel do Avaliador</a></p>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ APP ═══ -->
+<div id="appShell">
+    <!-- Topbar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>📊 DAC — Painel</h1>
+            <span class="role-badge" id="roleBadge"></span>
+        </div>
+        <div class="topbar-right" id="topActions">
+            <!-- preenchido por JS conforme role -->
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-bar" id="tabsBar">
+        <!-- preenchido por JS conforme role -->
+    </div>
+
+    <!-- Tab: Inscrições -->
+    <div class="tab-pane active" id="pane-inscricoes">
+        <div class="filters-bar">
+            <div class="search-wrap">
+                <i class="fas fa-search"></i>
+                <input type="text" id="searchInput" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
+            </div>
+            <select id="filterLocal" class="filter-sel" onchange="renderTabela()">
+                <option value="">Todos os Locais</option>
+                <option value="Teatro">Teatro</option>
+                <option value="Igrejinha">Igrejinha</option>
+            </select>
+            <select id="filterStatus" class="filter-sel" onchange="renderTabela()">
+                <option value="">Todos os Status</option>
+                <option value="Completo">Completo</option>
+                <option value="Pendente">Pendente</option>
+                <option value="Cancelado">Cancelado</option>
+            </select>
+            <select id="filterTermo" class="filter-sel" onchange="renderTabela()">
+                <option value="">Todos os Termos</option>
+                <option value="completo">Termo digital completo</option>
+                <option value="incompleto">Termo digital incompleto</option>
+            </select>
+            <button class="btn-top btn-orange" id="btnEnviarTermos" onclick="enviarTermosSelecionados()" style="display:none">
+                <i class="fas fa-paper-plane"></i> Enviar Termos (<span id="countSelecionados">0</span>)
+            </button>
+        </div>
+        <div class="results-count" id="resultsCount"></div>
+        <div class="table-wrap">
+            <div class="loading-msg" id="inscricoesLoading"><i class="fas fa-spinner fa-spin"></i> Carregando inscrições...</div>
+            <table id="inscricoesTable" style="display:none">
+                <thead>
+                    <tr>
+                        <th class="check-col"><input type="checkbox" id="checkAll" class="insc-checkbox" onchange="toggleCheckAll()"></th>
+                        <th>#</th>
+                        <th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="toggleSort()" title="Alternar ordem por data de inscrição">Evento / Proponente <span id="sortArrow">↓</span></th>
+                        <th>Local</th>
+                        <th>Etapas</th>
+                        <th>Status</th>
+                        <th style="text-align:center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody id="inscricoesBody"></tbody>
+            </table>
+            <div class="empty-msg" id="inscricoesEmpty" style="display:none">Nenhuma inscrição encontrada.</div>
+            <div class="error-msg" id="inscricoesError" style="display:none"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Envio de Termos (admin only) -->
+    <div class="tab-pane" id="pane-termos">
+
+        <!-- Termo em Branco -->
+        <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap">
+                <div>
+                    <h4 style="font-size:15px;color:#222;margin:0 0 6px;display:flex;align-items:center;gap:8px">
+                        <i class="fas fa-file-alt" style="color:#2563eb"></i> Termo Digital em Branco
+                    </h4>
+                    <p style="font-size:13px;color:#888;margin:0">Abre uma versão totalmente em branco do termo, para o proponente preencher todos os dados manualmente. Ideal para quando a inscrição não está cadastrada no sistema.</p>
+                </div>
+                <button class="btn-top" style="background:#2563eb;color:#fff;border-color:#2563eb;white-space:nowrap;flex-shrink:0" onclick="window.open('/termo','_blank')">
+                    <i class="fas fa-external-link-alt"></i> Abrir Termo em Branco
+                </button>
+            </div>
+        </div>
+
+        <!-- Envio em Massa -->
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444"><i class="fas fa-paper-plane" style="color:#764ba2"></i> Envio em Massa de Termos Digitais</h3>
+            </div>
+            <p style="font-size:13px;color:#666;margin-bottom:20px">
+                Cole abaixo os e-mails dos proponentes (um por linha, ou separados por vírgula/ponto-e-vírgula). O sistema irá buscar a inscrição de cada e-mail e enviar o link individual do Termo Digital.
+            </p>
+
+            <div style="background:#f8f5fc;border:1px solid #e5d9f0;border-radius:10px;padding:14px 16px;margin-bottom:20px">
+                <label class="form-label" style="font-weight:600;color:#444;margin-top:0">
+                    Nome da representante da Secretaria de Cultura
+                </label>
+                <p style="font-size:12px;color:#777;margin:0 0 8px">
+                    Este nome será exibido nos próximos PDFs gerados do Termo de Autorização.
+                </p>
+                <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                    <input type="text" id="termoResponsavelNome" class="form-input" maxlength="150"
+                        placeholder="Nome completo da representante" style="flex:1;min-width:240px">
+                    <button class="btn-top btn-purple" onclick="salvarNomeResponsavelTermo()">
+                        <i class="fas fa-save"></i> Salvar nome
+                    </button>
+                </div>
+                <div id="termoResponsavelStatus" style="font-size:12px;min-height:16px;margin-top:7px"></div>
+            </div>
+
+            <label class="form-label" style="font-weight:600;color:#444">E-mails dos proponentes</label>
+            <textarea id="termosEmailsInput" rows="7"
+                style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;font-family:monospace;resize:vertical;outline:none;transition:.2s"
+                onfocus="this.style.borderColor='#764ba2'" onblur="this.style.borderColor='#ddd'"
+                oninput="atualizarContadorTermos()"
+                placeholder="proponente1@email.com&#10;proponente2@email.com&#10;proponente3@email.com"></textarea>
+            <p id="termosContador" style="font-size:12px;color:#888;margin:6px 0 20px">0 e-mail(s) detectado(s)</p>
+
+            <label class="form-label" style="font-weight:600;color:#444">Observação / Aviso adicional <span style="font-weight:400;color:#aaa">(opcional)</span></label>
+            <p style="font-size:12px;color:#888;margin:-4px 0 8px">Esta mensagem será exibida em destaque no início do e-mail, antes do link do termo.</p>
+            <textarea id="termosObservacao" rows="3"
+                style="width:100%;box-sizing:border-box;padding:12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;resize:vertical;outline:none;transition:.2s;background:#fffbeb"
+                onfocus="this.style.borderColor='#d97706'" onblur="this.style.borderColor='#ddd'"
+                placeholder="Ex: Por favor, desconsidere o e-mail anterior enviado com erro. Utilize apenas este novo link para preencher o Termo Digital."></textarea>
+
+            <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button class="btn-top btn-purple" style="font-size:14px;padding:11px 22px" onclick="enviarLinksTermoMassa()">
+                    <i class="fas fa-paper-plane"></i> Enviar Links em Massa
+                </button>
+                <button class="btn-top" style="background:#eee;color:#666;border-color:#ddd" onclick="document.getElementById('termosEmailsInput').value='';atualizarContadorTermos()">
+                    <i class="fas fa-times"></i> Limpar
+                </button>
+            </div>
+
+            <div id="termosResultado" style="display:none;margin-top:20px"></div>
+        </div>
+    </div>
+
+    <!-- Tab: Relatório (admin only) -->
+    <div class="tab-pane" id="pane-relatorio">
+        <div class="card">
+            <div class="card-header" style="flex-wrap:wrap;gap:10px">
+                <h3 style="font-size:16px;color:#444"><i class="fas fa-trophy" style="color:#d97706"></i> Ranking de Avaliações</h3>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <select id="filterLocalRel" class="filter-sel" onchange="renderRelatorio()">
+                        <option value="">Todos os Locais</option>
+                        <option value="Teatro">Teatro</option>
+                        <option value="Igrejinha">Igrejinha</option>
+                    </select>
+                    <select id="filterStatusRel" class="filter-sel" onchange="renderRelatorio()">
+                        <option value="">Todos os Status</option>
+                        <option value="Concluída">Concluídas</option>
+                        <option value="Em andamento">Em andamento</option>
+                        <option value="Sem avaliações">Sem avaliações</option>
+                    </select>
+                    <button class="btn-top" style="background:#16a34a;color:#fff;border-color:#16a34a" onclick="exportRelatorioCSV()"><i class="fas fa-file-csv"></i> Exportar CSV</button>
+                </div>
+            </div>
+            <div id="relatorioResumo" style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:16px"></div>
+            <div id="relatorioContent"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div></div>
+        </div>
+    </div>
+
+    <!-- Tab: Avaliadores (admin only) -->
+    <div class="tab-pane" id="pane-avaliadores">
+        <div class="card">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444">Lista de Avaliadores</h3>
+                <button class="btn-top btn-purple" onclick="openAddAvaliadorModal()"><i class="fas fa-plus"></i> Adicionar</button>
+            </div>
+            <p style="font-size:13px;color:#888;margin-bottom:16px">
+                A senha padrão de todos os avaliadores é: <strong style="font-family:monospace;background:#f0f0f0;padding:2px 8px;border-radius:4px">admin.dac.ufsc</strong>
+            </p>
+            <div id="avaliadoresList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+        </div>
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444">Critérios de Avaliação</h3>
+                <button class="btn-top btn-purple" onclick="saveCriteria()"><i class="fas fa-save"></i> Salvar Critérios</button>
+            </div>
+            <p style="font-size:13px;color:#888;margin-bottom:16px">Defina os critérios e seus pesos para o cálculo da pontuação final.</p>
+            <div id="criteriaList"></div>
+            <button class="btn-top" style="background:#eee;color:#666;margin-top:12px" onclick="addCriterion()"><i class="fas fa-plus"></i> Novo Critério</button>
+        </div>
+
+        <!-- Regras de Avaliação -->
+        <div class="card" style="margin-top:16px">
+            <div class="card-header">
+                <h3 style="font-size:16px;color:#444;display:flex;align-items:center;gap:8px"><i class="fas fa-user-check" style="color:#2563eb"></i> Regras de Avaliação</h3>
+            </div>
+            <label class="form-label" style="font-size:13px;color:#444;font-weight:600">Avaliações Necessárias por Inscrição</label>
+            <input type="number" id="cfgAvaliacoesNecessarias" class="form-input" min="1" max="20" value="3" style="max-width:140px">
+            <p style="font-size:12px;color:#888;margin-top:8px">Define o número de avaliações para uma inscrição ser considerada "concluída".</p>
+            <button class="btn-top btn-purple" style="margin-top:14px;background:#2563eb;border-color:#2563eb" onclick="saveAvaliacoesNecessarias()"><i class="fas fa-save"></i> Salvar Regra de Avaliação</button>
+        </div>
+    </div>
+
+    <!-- Tab: Configurações (admin only) -->
+    <div class="tab-pane" id="pane-config">
+        <div class="card">
+            <div class="cfg-tabs" id="cfgTabsBar">
+                <button class="cfg-tab active" onclick="switchCfgTab('forms')">Formulários</button>
+                <button class="cfg-tab" onclick="switchCfgTab('regras')">Regras</button>
+                <button class="cfg-tab" onclick="switchCfgTab('calendario')">Calendário</button>
+            </div>
+            <style>
+                .regra-row{background:#f8f9fa;padding:16px 20px;border-radius:10px;border:1px solid #eee;display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+                .regra-row h4{font-size:15px;color:#333;margin:0 0 4px}
+                .regra-row p{font-size:12px;color:#666;margin:0}
+            </style>
+
+            <!-- Forms -->
+            <div class="cfg-pane active" id="cfg-forms">
+                <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:18px">
+                    <h4 style="font-size:15px;color:#222;margin:0 0 12px;display:flex;align-items:center;gap:8px"><i class="fas fa-font" style="color:#2563eb"></i> Título da Página de Agendamento</h4>
+                    <label class="form-label" style="font-size:12px;color:#666">Título do Edital Atual</label>
+                    <input type="text" id="cfgTituloPagina" class="form-input" placeholder="Inscrição de Projeto" maxlength="120">
+                    <button class="btn-top btn-purple" style="margin-top:12px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Título</button>
+                </div>
+
+                <!-- Controle dos botões da tela inicial -->
+                <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:18px">
+                    <h4 style="font-size:15px;color:#222;margin:0 0 14px;display:flex;align-items:center;gap:8px"><i class="fas fa-cog" style="color:#2563eb"></i> Controle da Página Inicial</h4>
+
+                    <style>
+                        .home-btn-row{background:#fff;border:1px solid #eef0f3;border-radius:10px;padding:12px 14px;margin-bottom:10px}
+                        .home-btn-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+                        .home-btn-title{font-size:14px;color:#333;font-weight:600}
+                        .switch{position:relative;display:inline-block;width:44px;height:24px;flex-shrink:0}
+                        .switch input{opacity:0;width:0;height:0}
+                        .switch .slider{position:absolute;cursor:pointer;inset:0;background:#cbd5e1;transition:.2s;border-radius:24px}
+                        .switch .slider:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.2s;border-radius:50%;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+                        .switch input:checked + .slider{background:#2563eb}
+                        .switch input:checked + .slider:before{transform:translateX(20px)}
+                        .home-btn-body{margin-top:10px}
+                    </style>
+
+                    <div class="home-btn-row">
+                        <div class="home-btn-head">
+                            <span class="home-btn-title">Ativar “Edital Interno”</span>
+                            <label class="switch"><input type="checkbox" id="cfgBtnInternoAtivo"><span class="slider"></span></label>
+                        </div>
+                        <div class="home-btn-body">
+                            <label class="form-label" style="font-size:12px;color:#666">Texto do Botão</label>
+                            <input type="text" id="cfgBtnInternoTexto" class="form-input" placeholder="Edital Interno" maxlength="80">
+                            <label class="form-label" style="font-size:12px;color:#666;margin-top:8px">Data de Início das Inscrições <span style="color:#aaa;font-weight:400">(bloqueia datas anteriores no calendário)</span></label>
+                            <input type="date" id="cfgBtnInternoDataInicio" class="form-input" style="max-width:200px">
+                        </div>
+                    </div>
+
+                    <div class="home-btn-row">
+                        <div class="home-btn-head">
+                            <span class="home-btn-title">Ativar “Edital Externo”</span>
+                            <label class="switch"><input type="checkbox" id="cfgBtnExternoAtivo"><span class="slider"></span></label>
+                        </div>
+                        <div class="home-btn-body">
+                            <label class="form-label" style="font-size:12px;color:#666">Texto do Botão</label>
+                            <input type="text" id="cfgBtnExternoTexto" class="form-input" placeholder="Edital de Ocupação dos Espaços do DAC 2026" maxlength="80">
+                            <label class="form-label" style="font-size:12px;color:#666;margin-top:8px">Data de Início das Inscrições <span style="color:#aaa;font-weight:400">(bloqueia datas anteriores no calendário)</span></label>
+                            <input type="date" id="cfgBtnExternoDataInicio" class="form-input" style="max-width:200px">
+                        </div>
+                    </div>
+
+                    <div class="home-btn-row">
+                        <div class="home-btn-head">
+                            <span class="home-btn-title">Ativar “Agendar Apenas Ensaio”</span>
+                            <label class="switch"><input type="checkbox" id="cfgBtnEnsaioAtivo"><span class="slider"></span></label>
+                        </div>
+                        <div class="home-btn-body">
+                            <label class="form-label" style="font-size:12px;color:#666">Texto do Botão</label>
+                            <input type="text" id="cfgBtnEnsaioTexto" class="form-input" placeholder="Agendar Apenas Ensaio" maxlength="80">
+                            <label class="form-label" style="font-size:12px;color:#666;margin-top:8px">Data de Início das Inscrições <span style="color:#aaa;font-weight:400">(bloqueia datas anteriores no calendário)</span></label>
+                            <input type="date" id="cfgBtnEnsaioDataInicio" class="form-input" style="max-width:200px">
+                        </div>
+                    </div>
+
+                    <div style="margin-top:14px;padding:12px 14px;background:#fff;border:1px solid #eef0f3;border-radius:10px">
+                        <label class="form-label" style="font-size:13px;color:#333;font-weight:600;margin-bottom:6px;display:block"><i class="fas fa-comment-alt" style="color:#2563eb;margin-right:6px"></i>Mensagem quando todos os botões estiverem desativados</label>
+                        <textarea id="cfgMensagemBotoesDesativados" class="form-input" rows="3" maxlength="300" placeholder="Ex: As inscrições estão encerradas no momento." style="resize:vertical;font-size:13px"></textarea>
+                        <p style="font-size:11px;color:#999;margin:4px 0 0">Esta mensagem aparece em um aviso quando o proponente clicar em um botão desativado.</p>
+                    </div>
+                    <button class="btn-top btn-purple" style="margin-top:10px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
+                </div>
+                <label class="form-label">Link do Google Forms (2ª Etapa)</label>
+                <input type="text" id="cfgFormsLink" class="form-input" placeholder="https://docs.google.com/forms/...">
+                <label class="form-label">Link / ID da Planilha Google Sheets</label>
+                <input type="text" id="cfgSheetId" class="form-input" placeholder="Cole o link completo ou o ID da planilha">
+                <button class="btn-top btn-purple" style="margin-top:16px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar</button>
+            </div>
+
+            <!-- Regras -->
+            <div class="cfg-pane" id="cfg-regras">
+                <style>
+                    .toggle-switch{position:relative;display:inline-block;width:50px;height:24px;flex-shrink:0}
+                    .toggle-switch input{opacity:0;width:0;height:0}
+                    .toggle-switch .ts{position:absolute;cursor:pointer;inset:0;background:#ccc;transition:.3s;border-radius:24px}
+                    .toggle-switch .ts:before{content:'';position:absolute;height:18px;width:18px;left:3px;bottom:3px;background:#fff;transition:.3s;border-radius:50%}
+                    .toggle-switch input:checked+.ts{background:#764ba2}
+                    .toggle-switch input:checked+.ts:before{transform:translateX(26px)}
+                </style>
+
+                <!-- Disputa de Horários -->
+                <div class="regra-row">
+                    <div>
+                        <h4>Permitir Disputa de Horários</h4>
+                        <p>Se ativo, múltiplos proponentes podem solicitar o mesmo horário via sistema.</p>
+                    </div>
+                    <label class="toggle-switch"><input type="checkbox" id="cfgDisputa"><span class="ts"></span></label>
+                </div>
+
+                <!-- Somente Qui–Dom -->
+                <div class="regra-row">
+                    <div>
+                        <h4>Inscrições somente Qui, Sex, Sáb e Dom</h4>
+                        <p>Se ativo, segunda, terça e quarta ficam bloqueadas no calendário.</p>
+                    </div>
+                    <label class="toggle-switch"><input type="checkbox" id="cfgSomenteFinSemana"><span class="ts"></span></label>
+                </div>
+
+                <button class="btn-top btn-purple" style="margin-top:4px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Regras</button>
+
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
+
+                <!-- Bloqueio de Datas (integrado) -->
+                <h4 style="font-size:15px;color:#333;margin:0 0 4px;display:flex;align-items:center;gap:8px"><i class="fas fa-ban" style="color:#e53e3e"></i> Bloqueio de Datas Específicas</h4>
+                <p style="font-size:12px;color:#666;margin:0 0 14px">Bloqueia datas pontuais para impedir novos agendamentos naquele dia.</p>
+                <div style="display:flex;gap:10px;margin-bottom:16px">
+                    <input type="date" id="bloqueioData" class="form-input" style="flex:1;max-width:220px">
+                    <button class="btn-top btn-danger" onclick="toggleBloqueioData()"><i class="fas fa-ban"></i> Bloquear/Desbloquear</button>
+                </div>
+                <h5 style="font-size:13px;font-weight:700;margin-bottom:8px">Datas bloqueadas atualmente:</h5>
+                <div id="listaDatasBloqueadas" style="background:#fff;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data bloqueada.</div>
+                <button class="btn-top btn-purple" style="margin-top:14px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Bloqueios</button>
+
+                <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
+
+                <!-- Horários Limite (integrado) -->
+                <h4 style="font-size:15px;color:#333;margin:0 0 4px;display:flex;align-items:center;gap:8px"><i class="fas fa-clock" style="color:#764ba2"></i> Horários Limite por Etapa</h4>
+                <p style="font-size:12px;color:#666;margin:0 0 14px">Defina o horário final máximo que cada etapa pode terminar.</p>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="width:110px;font-size:14px;font-weight:600">Ensaio:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-ensaio-fim" class="form-input" style="width:110px" placeholder="17:00"></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="width:110px;font-size:14px;font-weight:600">Montagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-montagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
+                <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><span style="width:110px;font-size:14px;font-weight:600">Desmontagem:</span> <span style="font-size:12px;color:#888">Limite Final:</span> <input type="text" id="h-desmontagem-fim" class="form-input" style="width:110px" placeholder="21:00"></div>
+                <button class="btn-top btn-purple" style="margin-top:4px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Horários</button>
+            </div>
+
+            <!-- Calendário -->
+            <div class="cfg-pane" id="cfg-calendario">
+                <p style="font-size:13px;color:#777;margin:8px 0 16px">Visualize o calendário do Teatro Carmen Fossari.</p>
+                <iframe src="https://calendar.google.com/calendar/embed?src=oto.bezerra%40ufsc.br&ctz=America%2FSao_Paulo" style="border:0;border-radius:8px" width="100%" height="500" frameborder="0" scrolling="no"></iframe>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL CONTATO ═══ -->
+<div class="modal" id="modalContato">
+    <div class="modal-box">
+        <h3><i class="fas fa-address-card"></i> Dados do Proponente</h3>
+        <div id="contatoBody"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalContato')">Fechar</button>
+        </div>
+    </div>
+</div>
+
+
+<!-- ═══════════════ MODAL EDITAR ETAPAS ═══ -->
+<div class="modal" id="modalEditarEtapas">
+    <div class="modal-box" style="max-width:580px">
+        <h3><i class="fas fa-pencil-alt"></i> Editar Datas e Horários</h3>
+        <p style="font-size:12px;color:#888;margin:-8px 0 16px">Altere as datas e horários abaixo. As mudanças são salvas no sistema mas <strong>não atualizam automaticamente o Google Calendar</strong>.</p>
+        <div id="editarEtapasBody" style="display:flex;flex-direction:column;gap:14px"></div>
+        <div id="editarEtapasStatus" style="font-size:13px;margin-top:12px;min-height:18px"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalEditarEtapas')">Cancelar</button>
+            <button id="btnSalvarEtapas" class="btn-save-modal" style="background:#764ba2" onclick="salvarEtapas()">
+                <i class="fas fa-save"></i> Salvar Alterações
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL EMAIL RÁPIDO ═══ -->
+<div class="modal" id="modalEmailRapido">
+    <div class="modal-box" style="max-width:540px">
+        <h3><i class="fas fa-paper-plane"></i> Enviar E-mail ao Proponente</h3>
+        <div style="font-size:12px;color:#888;margin:-10px 0 16px;padding:8px 12px;background:#f8f4ff;border-radius:6px;border-left:3px solid #764ba2">
+            <i class="fas fa-info-circle"></i> O proponente verá o Reply-To como <strong>pautas.dac@contato.ufsc.br</strong> ao responder.
+        </div>
+        <div class="form-field">
+            <label>Para</label>
+            <input type="text" id="emailRapidoPara" class="form-input" readonly style="background:#f5f5f5;color:#888;cursor:default">
+        </div>
+        <div class="form-field">
+            <label>Assunto</label>
+            <input type="text" id="emailRapidoAssunto" class="form-input" placeholder="Assunto do e-mail">
+        </div>
+        <div class="form-field">
+            <label>Mensagem</label>
+            <textarea id="emailRapidoMensagem" class="form-input" rows="6" placeholder="Digite sua mensagem aqui..." style="resize:vertical;font-family:inherit;font-size:14px"></textarea>
+        </div>
+        <div id="emailRapidoStatus" style="font-size:13px;margin-bottom:8px;min-height:18px"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalEmailRapido')">Cancelar</button>
+            <button id="btnEnviarEmailRapido" class="btn-save-modal" style="background:#764ba2" onclick="sendEmailRapido()">
+                <i class="fas fa-paper-plane"></i> Enviar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL EXCLUIR TUDO (confirmação dupla) ═══ -->
+<div class="modal" id="modalExcluirTudo">
+    <div class="modal-box" style="max-width:520px;border-top:4px solid #dc2626">
+        <h3 id="tituloExcluirTudo" style="color:#dc2626"><i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições</h3>
+        <p id="textoExcluirTudo" style="font-size:14px;color:#444;line-height:1.5">
+            Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os
+            <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.
+        </p>
+        <p style="font-size:13px;color:#666;margin-top:12px">
+            Para confirmar, digite a <strong style="color:#dc2626">senha de autorização</strong> no campo abaixo:
+        </p>
+        <div class="form-field" style="margin-top:10px">
+            <input type="password" id="excluirTudoConfirmInput" class="form-input"
+                   placeholder='Senha de autorização' autocomplete="off" spellcheck="false"
+                   oninput="onExcluirTudoInputChange()">
+        </div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeExcluirTudoModal()">Cancelar</button>
+            <button id="btnConfirmExcluirTudo" class="btn-save-modal"
+                    style="background:#dc2626;opacity:0.5;cursor:not-allowed" disabled
+                    onclick="confirmDeleteAllInscricoes()">
+                <i class="fas fa-trash"></i> Confirmar exclusão
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL ADD AVALIADOR ═══ -->
+<div class="modal" id="modalAddAvaliador">
+    <div class="modal-box" style="max-width:480px">
+        <h3><i class="fas fa-user-plus"></i> Adicionar Avaliador</h3>
+        <div class="form-field">
+            <label>Nome</label>
+            <input type="text" id="newAvNome" class="form-input" placeholder="Nome do avaliador">
+        </div>
+        <div class="form-field">
+            <label>E-mail</label>
+            <input type="email" id="newAvEmail" class="form-input" placeholder="avaliador@exemplo.com">
+        </div>
+        <p style="font-size:12px;color:#888;margin-top:8px">A senha padrão será <strong>admin.dac.ufsc</strong></p>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalAddAvaliador')">Cancelar</button>
+            <button class="btn-save-modal" onclick="addAvaliador()"><i class="fas fa-save"></i> Adicionar</button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL VISUALIZAR TERMO CONCLUÍDO (admin only) ═══ -->
+<div class="modal" id="modalEditarTermo">
+    <div class="modal-box" style="max-width:720px;border-top:4px solid #16a34a">
+        <h3 id="adminTermoTitulo" style="display:flex;align-items:center;gap:8px">
+            <i class="fas fa-file-signature" style="color:#16a34a"></i>
+            Visualizar termo concluído
+        </h3>
+        <div id="adminTermoNota" class="termo-edit-note">
+            <strong><i class="fas fa-check-circle"></i> Termo concluído e enviado.</strong><br>
+            Os dados abaixo estão congelados para consulta. As cláusulas não são exibidas nesta versão.
+            Para corrigir alguma informação, clique em <strong>Editar</strong> no rodapé.
+        </div>
+        <div class="termo-edit-grid">
+            <div class="form-field full">
+                <label>1. Espaço físico objeto desta autorização</label>
+                <div class="termo-pillrow" id="adminTermoEspacoPills">
+                    <button type="button" class="termo-pill" id="adminPillTeatro" onclick="selecionarEspacoAdmin('teatro')">
+                        <span class="check"></span> Teatro Carmen Fossari
+                    </button>
+                    <button type="button" class="termo-pill" id="adminPillIgreja" onclick="selecionarEspacoAdmin('igrejinha')">
+                        <span class="check"></span> Igrejinha da UFSC
+                    </button>
+                </div>
+                <select id="adminTermoEspaco" style="display:none" aria-hidden="true">
+                    <option value="teatro">Teatro Carmen Fossari</option>
+                    <option value="igrejinha">Igrejinha da UFSC</option>
+                </select>
+            </div>
+            <div class="form-field">
+                <label>2. Evento a ser realizado</label>
+                <input id="adminTermoEvento" class="form-input" type="text">
+            </div>
+            <div class="form-field full">
+                <label>3. Data e horário (incluindo ensaio e montagem se aplicável)</label>
+                <textarea id="adminTermoDatas" class="form-input"></textarea>
+            </div>
+            <div class="form-field full">
+                <label>4. Outras informações</label>
+                <textarea id="adminTermoOutras" class="form-input"></textarea>
+            </div>
+            <div class="form-section-label full">II — Partes Envolvidas</div>
+            <div class="form-field">
+                <label>Nome completo</label>
+                <input id="adminTermoNome" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>CPF/CNPJ</label>
+                <input id="adminTermoCpf" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>RG</label>
+                <input id="adminTermoRg" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Telefone</label>
+                <input id="adminTermoTelefone" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>E-mail original <span style="color:#aaa;font-weight:400">(não editável)</span></label>
+                <input id="adminTermoEmail" class="form-input" type="email" readonly style="background:#f5f5f5;color:#777">
+            </div>
+            <div class="form-field">
+                <label>Endereço</label>
+                <input id="adminTermoEndereco" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Número</label>
+                <input id="adminTermoNumero" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Apartamento / Complemento</label>
+                <input id="adminTermoApartamento" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Bairro</label>
+                <input id="adminTermoBairro" class="form-input" type="text">
+            </div>
+            <div class="form-field">
+                <label>Cidade</label>
+                <input id="adminTermoCidade" class="form-input" type="text">
+            </div>
+        </div>
+        <div id="adminTermoStatus" style="font-size:13px;min-height:18px;margin-top:12px"></div>
+        <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn-close-modal" onclick="closeModal('modalEditarTermo')">Cancelar</button>
+                <button class="btn-close-modal" style="background:#e5e7eb" onclick="closeModal('modalEditarTermo')">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button id="btnAtualizarInformacoesTermo" class="btn-save-modal" style="background:#16a34a;display:none" onclick="atualizarInformacoesTermoAdmin()">
+                    <i class="fas fa-check-circle"></i> Atualizar informações
+                </button>
+                <button id="btnGerarPDFTermo" class="btn-save-modal" style="background:#dc2626" onclick="gerarPDFTermoAdmin()">
+                    <i class="far fa-file-pdf"></i> Gerar PDF
+                </button>
+                <button id="btnReenviarTermoEdicao" class="btn-save-modal" style="background:#d97706" onclick="reenviarTermoParaProponente()">
+                    <i class="fas fa-paper-plane"></i> Reenviar para o proponente
+                </button>
+                <button id="btnEditarTermoAdmin" class="btn-save-modal" style="background:#764ba2" onclick="ativarEdicaoTermoAdmin()">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+                <button id="btnSalvarTermoAdmin" class="btn-save-modal" style="background:#16a34a;display:none" onclick="salvarEdicaoTermoAdmin()">
+                    <i class="fas fa-save"></i> Salvar alterações
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL TERMO INCOMPLETO (admin only) ═══ -->
+<div class="modal" id="modalTermoPendente">
+    <div class="modal-box" style="max-width:620px;border-top:4px solid #f59e0b">
+        <h3 style="display:flex;align-items:center;gap:8px">
+            <i class="fas fa-file-signature" style="color:#d97706"></i>
+            Termo incompleto
+        </h3>
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:15px 16px;color:#92400e;font-size:13px;line-height:1.6">
+            <strong>Este termo ainda não foi concluído pelo proponente.</strong><br>
+            Envie o link abaixo para que ele preencha os dados restantes, leia e aprove as cláusulas e encaminhe o PDF assinado. Esse procedimento registra e oficializa o evento junto ao DAC/UFSC.
+        </div>
+        <div style="margin-top:18px;display:grid;gap:10px;font-size:13px">
+            <div><strong>Proponente:</strong> <span id="termoPendenteNome">—</span></div>
+            <div><strong>E-mail:</strong> <span id="termoPendenteEmail">—</span></div>
+            <div><strong>Evento:</strong> <span id="termoPendenteEvento">—</span></div>
+        </div>
+        <div id="termoPendenteStatus" style="font-size:13px;min-height:18px;margin-top:14px"></div>
+        <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap">
+            <button class="btn-close-modal" onclick="closeModal('modalTermoPendente')">Cancelar</button>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button class="btn-save-modal" style="background:#667eea" onclick="abrirTermoPendenteEmNovaAba()">
+                    <i class="fas fa-external-link-alt"></i> Abrir termo
+                </button>
+                <button id="btnEnviarLinkTermoPendente" class="btn-save-modal" style="background:#d97706" onclick="enviarLinkTermoPendente()">
+                    <i class="fas fa-paper-plane"></i> Enviar link para o e-mail
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL DOCUMENTOS DA INSCRIÇÃO ═══ -->
+<div class="modal" id="modalDocumentosInscricao">
+    <div class="modal-box" style="max-width:760px">
+        <h3 style="display:flex;align-items:center;gap:8px">
+            <i class="fas fa-folder-open" style="color:#16a34a"></i>
+            <span id="documentosInscricaoTitulo">Documentos da inscrição</span>
+        </h3>
+        <div id="documentosInscricaoResumo" style="font-size:13px;color:#666;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:12px 14px;margin-bottom:16px"></div>
+        <div id="documentosInscricaoStatus" style="font-size:13px;min-height:20px;margin-bottom:10px"></div>
+        <div id="documentosInscricaoLista"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalDocumentosInscricao')">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// ESTADO GLOBAL
+// ══════════════════════════════════════════════════
+let allUnificados = [];
+let criterios = [];
+let avaliadores = [];
+let datasBloqueadas = [];
+let adminDataRefreshTimer = null;
+let userRole = null; // 'admin' | 'viewer'
+let viewerEmail = null;
+let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
+let termoEditorIndex = null;
+let termoEditorCompleto = false;
+let termoAdminAlteracoesSalvas = false;
+let termoPendenteIndex = null;
+let exclusaoSelecionados = [];
+let documentosInscricaoIndex = null;
+const inscricoesSelecionadas = new Set();
+
+// ══════════════════════════════════════════════════
+// LOGIN
+// ══════════════════════════════════════════════════
+let loginMode = 'admin';
+
+function setLoginMode(mode) {
+    loginMode = mode;
+    document.getElementById('loginAdmin').style.display = mode === 'admin' ? 'block' : 'none';
+    document.getElementById('loginViewer').style.display = mode === 'viewer' ? 'block' : 'none';
+    document.querySelectorAll('.login-tab').forEach((t, i) => {
+        t.classList.toggle('active', (i === 0 && mode === 'admin') || (i === 1 && mode === 'avaliador'));
+    });
+    document.getElementById('loginErr').style.display = 'none';
+}
+
+function togglePasswordVisibility(inputId, button) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const visible = input.type === 'text';
+    input.type = visible ? 'password' : 'text';
+    button.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+    button.title = visible ? 'Mostrar senha' : 'Ocultar senha';
+    button.innerHTML = `<i class="fa-solid ${visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+}
+
+async function doLogin() {
+    const errEl = document.getElementById('loginErr');
+    errEl.style.display = 'none';
+    try {
+        if (loginMode === 'admin') {
+            const pass = document.getElementById('adminPass').value;
+            const r = await fetch('/api/auth/admin', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ password: pass }) });
+            const d = await r.json();
+            if (d.success) {
+                userRole = 'admin';
+                localStorage.setItem('dac_role', 'admin');
+                localStorage.setItem('dac_ts', Date.now());
+                initApp();
+            } else {
+                errEl.textContent = d.message || 'Senha incorreta.';
+                errEl.style.display = 'block';
+            }
+        } else {
+            const email = document.getElementById('viewerEmail').value;
+            const pass = document.getElementById('viewerPass').value;
+            const r = await fetch('/api/auth/viewer', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ email, password: pass }) });
+            const d = await r.json();
+            if (d.success) {
+                userRole = 'viewer';
+                viewerEmail = d.email;
+                localStorage.setItem('dac_role', 'viewer');
+                localStorage.setItem('dac_viewer_email', d.email);
+                localStorage.setItem('dac_ts', Date.now());
+                initApp();
+            } else {
+                errEl.textContent = d.message || 'Acesso negado.';
+                errEl.style.display = 'block';
+            }
+        }
+    } catch (e) {
+        errEl.textContent = 'Erro de conexão. Tente novamente.';
+        errEl.style.display = 'block';
+    }
+}
+
+function logout() {
+    localStorage.removeItem('dac_role');
+    localStorage.removeItem('dac_viewer_email');
+    localStorage.removeItem('dac_ts');
+    location.reload();
+}
+
+// ══════════════════════════════════════════════════
+// INIT APP
+// ══════════════════════════════════════════════════
+function initApp() {
+    document.getElementById('loginOverlay').style.display = 'none';
+    document.getElementById('appShell').style.display = 'block';
+
+    const badge = document.getElementById('roleBadge');
+    badge.textContent = userRole === 'admin' ? 'Administrador' : `Avaliador: ${viewerEmail}`;
+    badge.className = 'role-badge ' + (userRole === 'admin' ? 'role-admin' : 'role-viewer');
+
+    buildTopActions();
+    buildTabs();
+    loadData();
+    if (userRole === 'admin') iniciarAtualizacaoAutomaticaTermos();
+    loadCriteria();
+    if (userRole === 'admin') loadAvaliadores();
+}
+
+function buildTopActions() {
+    const el = document.getElementById('topActions');
+    if (userRole === 'admin') {
+        el.innerHTML = `
+            <button class="btn-top btn-refresh" onclick="loadData()"><i class="fas fa-sync-alt"></i> Atualizar</button>
+            <button class="btn-top btn-success" onclick="downloadAllPDFs()"><i class="fas fa-download"></i> Baixar PDFs</button>
+            <button class="btn-top btn-danger" id="btnExcluirInscricoes" onclick="deleteAllInscricoes()"><i class="fas fa-trash"></i> Excluir Tudo</button>
+            <button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>
+        `;
+    } else {
+        el.innerHTML = `<button class="btn-top btn-logout" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Sair</button>`;
+    }
+}
+
+function buildTabs() {
+    const bar = document.getElementById('tabsBar');
+    if (userRole === 'admin') {
+        bar.innerHTML = `
+            <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
+            <button class="tab-btn" onclick="switchTab('relatorio')">Relatório</button>
+            <button class="tab-btn" onclick="switchTab('termos')">Envio de Termos</button>
+            <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
+            <button class="tab-btn" onclick="switchTab('config')">Configurações</button>
+        `;
+    } else {
+        bar.innerHTML = `
+            <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
+        `;
+    }
+}
+
+function switchTab(name) {
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    const pane = document.getElementById(`pane-${name}`);
+    if (pane) pane.classList.add('active');
+    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', termos: 'termos', avaliadores: 'avaliadores', config: 'config' };
+    const kw = keyMap[name] || name;
+    document.querySelectorAll('.tab-btn').forEach(b => {
+        if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
+    });
+    if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
+    if (name === 'config') loadConfigs();
+    if (name === 'relatorio') loadRelatorio();
+}
+
+// ══════════════════════════════════════════════════
+// INSCRIÇÕES
+// ══════════════════════════════════════════════════
+async function loadData(silencioso = false) {
+    if (!silencioso) showInscricoesState('loading');
+    try {
+        const r = await fetch('/api/admin/dados-unificados?_=' + Date.now());
+        const data = await r.json();
+        if (data.error) throw new Error(data.error);
+        allUnificados = Array.isArray(data) ? data : [];
+        renderTabela();
+        sincronizarTermoAdminAberto();
+    } catch (err) {
+        if (silencioso) return;
+        document.getElementById('inscricoesError').textContent = 'Erro ao carregar dados: ' + err.message;
+        showInscricoesState('error');
+    }
+}
+
+window.addEventListener('message', (event) => {
+    if (event.origin !== window.location.origin || event.data?.type !== 'termo-assinado') return;
+    const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(event.data.id));
+    if (item) {
+        item.primeiraEtapa.termoAssinado = true;
+        if (event.data.termoDados) item.primeiraEtapa.termoDados = event.data.termoDados;
+        renderTabela();
+    }
+    // Rebusca os dados completos, inclusive quando o proponente está em
+    // outro navegador e não pode enviar postMessage para esta janela.
+    loadData(true);
+});
+
+function iniciarAtualizacaoAutomaticaTermos() {
+    if (adminDataRefreshTimer) clearInterval(adminDataRefreshTimer);
+    adminDataRefreshTimer = setInterval(() => {
+        if (document.visibilityState === 'visible') loadData(true);
+    }, 10000);
+}
+
+function sincronizarTermoAdminAberto() {
+    const modal = document.getElementById('modalEditarTermo');
+    if (!modal?.classList.contains('open') || termoEditorIndex === null || modal.dataset.editando === 'true') return;
+
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p) return;
+    const saved = p.termoDados || {};
+    const assinaturaAtual = JSON.stringify(saved);
+    if (modal.dataset.termoDadosHash === assinaturaAtual) return;
+    modal.dataset.termoDadosHash = assinaturaAtual;
+    const value = (key, fallback = '') => saved[key] ?? fallback ?? '';
+    document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
+    document.getElementById('adminTermoEmail').value = value('email', p.email);
+    document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
+    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
+    document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
+    atualizarPillsEspacoAdmin();
+    document.getElementById('adminTermoCpf').value = value('cpfCnpj');
+    document.getElementById('adminTermoRg').value = value('rg');
+    document.getElementById('adminTermoTelefone').value = value('telefone', p.telefone);
+    document.getElementById('adminTermoCidade').value = value('cidade');
+    document.getElementById('adminTermoEndereco').value = value('endereco');
+    document.getElementById('adminTermoNumero').value = value('numero');
+    document.getElementById('adminTermoApartamento').value = value('apartamento');
+    document.getElementById('adminTermoBairro').value = value('bairro');
+    document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
+}
+
+function showInscricoesState(state) {
+    document.getElementById('inscricoesLoading').style.display = state === 'loading' ? 'block' : 'none';
+    document.getElementById('inscricoesTable').style.display = state === 'data' ? 'table' : 'none';
+    document.getElementById('inscricoesEmpty').style.display = state === 'empty' ? 'block' : 'none';
+    document.getElementById('inscricoesError').style.display = state === 'error' ? 'block' : 'none';
+}
+
+function toggleSort() {
+    sortOrder = sortOrder === 'desc' ? 'asc' : 'desc';
+    document.getElementById('sortArrow').textContent = sortOrder === 'desc' ? '↓' : '↑';
+    renderTabela();
+}
+
+function renderTabela() {
+    const q = (document.getElementById('searchInput').value || '').toLowerCase();
+    const filterLocal = document.getElementById('filterLocal').value;
+    const filterStatus = document.getElementById('filterStatus').value;
+    const filterTermo = document.getElementById('filterTermo').value;
+    const nomesEtapas = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
+
+    const parseTs = ts => {
+        if (!ts) return 0;
+        const m = ts.match(/(\d{2})\/(\d{2})\/(\d{4}),?\s*(\d{2}):(\d{2})/);
+        if (!m) return 0;
+        return new Date(+m[3], +m[2]-1, +m[1], +m[4], +m[5]).getTime();
+    };
+
+    const qDigits = q.replace(/\D/g, '');
+    let filtered = allUnificados.filter(item => {
+        const p = item.primeiraEtapa;
+        const telDigits = (p.telefone || '').replace(/\D/g, '');
+        const matchTel = qDigits.length >= 3 && telDigits && telDigits.includes(qDigits);
+        const matchQ = !q
+            || (p.evento || '').toLowerCase().includes(q)
+            || (p.nome || '').toLowerCase().includes(q)
+            || (p.email || '').toLowerCase().includes(q)
+            || (p.telefone || '').toLowerCase().includes(q)
+            || matchTel;
+        const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
+        const matchStatus = !filterStatus || (item.status||'').toLowerCase().includes(filterStatus.toLowerCase());
+        const termoCompleto = p.termoAssinado === true || p.termoAssinado === 'true';
+        const matchTermo = !filterTermo
+            || (filterTermo === 'completo' && termoCompleto)
+            || (filterTermo === 'incompleto' && !termoCompleto);
+        return matchQ && matchLocal && matchStatus && matchTermo;
+    });
+
+    filtered.sort((a, b) => {
+        const tA = parseTs(a.primeiraEtapa?.timestamp);
+        const tB = parseTs(b.primeiraEtapa?.timestamp);
+        return sortOrder === 'desc' ? tB - tA : tA - tB;
+    });
+
+    document.getElementById('resultsCount').textContent = `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
+
+    if (filtered.length === 0) {
+        showInscricoesState('empty');
+        updateSelCount();
+        return;
+    }
+    showInscricoesState('data');
+
+    const tbody = document.getElementById('inscricoesBody');
+    tbody.innerHTML = '';
+    filtered.forEach((item, fi) => {
+        const p = item.primeiraEtapa;
+        const originalIndex = allUnificados.indexOf(item);
+        const idInscricao = p.id ? String(p.id) : '';
+
+        let etapasHtml = '';
+        if (p.etapas) {
+            for (const key in p.etapas) {
+                const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+                itens.forEach((it, i) => {
+                    if (it && it.data && it.horario) {
+                        const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                        etapasHtml += `<span style="display:block;white-space:nowrap;margin-bottom:2px"><strong>${label}:</strong> ${it.data.split('-').reverse().join('/')}, ${it.horario}</span>`;
+                    }
+                });
+            }
+        }
+        // Fallback: extrair datas/horários das colunas do Google Sheets (inscrições legadas)
+        if (!etapasHtml && item.segundaEtapa && item.segundaEtapa.headers && item.segundaEtapa.valores) {
+            const hdr = item.segundaEtapa.headers;
+            const val = item.segundaEtapa.valores;
+            const colMap = [
+                { keywords: ['ensaio'], label: 'Ensaio' },
+                { keywords: ['montagem'], label: 'Montagem' },
+                { keywords: ['1º dia', '1o dia', 'realização do evento'], label: 'Evento' },
+                { keywords: ['2º dia', '2o dia'], label: 'Evento 2' },
+                { keywords: ['3º dia', '3o dia'], label: 'Evento 3' },
+                { keywords: ['4º dia', '4o dia'], label: 'Evento 4' },
+                { keywords: ['desmontagem'], label: 'Desmontagem' },
+            ];
+            colMap.forEach(({ keywords, label }) => {
+                const idx = hdr.findIndex(h => keywords.some(k => h.toLowerCase().includes(k)));
+                if (idx >= 0 && val[idx] && val[idx].trim()) {
+                    etapasHtml += `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#666"><strong>${label}:</strong> ${val[idx].trim()}</span>`;
+                }
+            });
+            if (etapasHtml) etapasHtml = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Forms</span>` + etapasHtml;
+        }
+        // Fallback 2: eventos do Google Calendar encontrados por correspondência de nome (legadas antigas)
+        if (!etapasHtml && p.calendarDates && p.calendarDates.length > 0) {
+            etapasHtml = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Calendário</span>`;
+            p.calendarDates.forEach(cd => {
+                const dataBr = cd.data ? cd.data.split('-').reverse().join('/') : '';
+                etapasHtml += `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${dataBr}</strong>${cd.horario ? ', ' + cd.horario : ''} <span style="font-size:10px;color:#aaa">(${cd.resumo})</span></span>`;
+            });
+        }
+        const editEtapasBtn = (userRole === 'admin' && p.id && p.etapas) ? `<button onclick="openEditarEtapas(${originalIndex})" title="Editar datas e horários" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:12px;padding:2px 5px;border-radius:4px;margin-top:4px;display:inline-flex;align-items:center;gap:3px;opacity:.75" onmouseover="this.style.opacity='1';this.style.background='#f3e8ff'" onmouseout="this.style.opacity='.75';this.style.background='none'"><i class="fas fa-pencil-alt"></i> editar</button>` : '';
+
+        const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
+        const localBadge = `<span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}"><i class="fas fa-${isIgrejinha?'church':'theater-masks'}"></i> ${p.localNome||'Teatro'}</span>`;
+        const termoAssinado = p.termoAssinado === true || p.termoAssinado === 'true';
+        const termoColor = termoAssinado ? '#16a34a' : '#f59e0b';
+        const termoTitle = termoAssinado
+            ? 'Visualizar dados do termo concluído'
+            : 'Abrir termo incompleto e enviar link ao proponente';
+        const termoEditLink = termoAssinado && userRole === 'admin'
+            ? `<button class="termo-editar-link" onclick="abrirEditorTermo(${originalIndex})" title="Editar dados do termo concluído"><i class="fas fa-edit"></i> editar termo</button>`
+            : '';
+        const termoAceite = termoAssinado
+            ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> termo concluído${termoEditLink}</div>`
+            : '';
+        const termoClick = `abrirEditorTermo(${originalIndex})`;
+        const documentosTeste = Array.isArray(p.documentos) ? p.documentos : [];
+        const documentosBtn = p.inscricaoTeste
+            ? `<button class="btn-action" title="Documentos (${documentosTeste.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:#16a34a"><i class="fas fa-folder-open"></i>${documentosTeste.length ? ` <small>${documentosTeste.length}</small>` : ''}</button>`
+            : '';
+
+        let stClass = 'st-pendente', stText = 'Pendente';
+        if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
+        if ((item.status||'').includes('Cancelado')) { stClass='st-cancelado'; stText='Cancelado'; }
+        const rowClass = stText==='Cancelado' ? 'row-cancelada' : '';
+
+        const acoes = userRole === 'admin' ? `
+            <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
+            <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
+            <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
+            <button class="btn-action" title="Enviar formulário de atividades ao proponente" aria-label="Enviar formulário de atividades ao proponente" onclick="abrirEmailFormularioAtividades(${originalIndex})" style="color:#2563eb"><i class="fas fa-clipboard-list"></i></button>
+            ${documentosBtn}
+            <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
+        ` : '';
+
+        const row = document.createElement('tr');
+        row.className = rowClass;
+        row.innerHTML = `
+            <td class="check-col"><input type="checkbox" class="insc-checkbox insc-check" data-index="${originalIndex}" ${inscricoesSelecionadas.has(idInscricao) ? 'checked' : ''} onchange="updateSelCount()"></td>
+            <td style="color:#888;font-size:12px">${(fi+1).toString().padStart(2,'0')}</td>
+            <td>
+                <div style="font-weight:700;color:#333">${(p.evento||'SEM EVENTO').toUpperCase()}</div>
+                <div style="font-size:11px;color:#888;margin-top:2px">${p.nome||''} &middot; ${p.email||''}</div>
+                ${termoAceite}
+            </td>
+            <td>${localBadge}</td>
+            <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}${editEtapasBtn}</td>
+            <td><span class="status-badge ${stClass}">${stText}</span></td>
+            <td style="text-align:center;white-space:nowrap">${acoes}</td>
+        `;
+        tbody.appendChild(row);
+    });
+    updateSelCount();
+}
+
+function updateSelCount() {
+    document.querySelectorAll('.insc-check').forEach(c => {
+        const id = allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa?.id;
+        if (!id) return;
+        if (c.checked) inscricoesSelecionadas.add(String(id));
+        else inscricoesSelecionadas.delete(String(id));
+    });
+    const checked = inscricoesSelecionadas.size;
+    document.getElementById('countSelecionados').textContent = checked;
+    document.getElementById('btnEnviarTermos').style.display = checked > 0 && userRole === 'admin' ? 'flex' : 'none';
+    const btnExcluir = document.getElementById('btnExcluirInscricoes');
+    if (btnExcluir && userRole === 'admin') {
+        btnExcluir.innerHTML = checked > 0
+            ? `<i class="fas fa-trash"></i> Excluir somente os selecionados (${checked})`
+            : '<i class="fas fa-trash"></i> Excluir Tudo';
+    }
+}
+
+function toggleCheckAll() {
+    const all = document.getElementById('checkAll').checked;
+    document.querySelectorAll('.insc-check').forEach(c => c.checked = all);
+    updateSelCount();
+}
+
+async function abrirTermoDigital(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p || !p.id) { alert('Inscrição sem identificador — não é possível gerar o link.'); return; }
+    termoPendenteIndex = idx;
+    document.getElementById('termoPendenteNome').textContent = p.nome || '—';
+    document.getElementById('termoPendenteEmail').textContent = p.email || 'E-mail não informado';
+    document.getElementById('termoPendenteEvento').textContent = p.evento || '—';
+    document.getElementById('termoPendenteStatus').textContent = '';
+    document.getElementById('termoPendenteStatus').style.color = '#666';
+    const btn = document.getElementById('btnEnviarLinkTermoPendente');
+    btn.disabled = !p.email;
+    btn.title = p.email ? '' : 'Esta inscrição não possui e-mail cadastrado';
+    openModal('modalTermoPendente');
+}
+
+function abrirTermoPendenteEmNovaAba() {
+    if (termoPendenteIndex === null) return;
+    const p = allUnificados[termoPendenteIndex]?.primeiraEtapa;
+    if (!p?.id) return;
+    const termoWindow = window.open(`/termo?id=${encodeURIComponent(p.id)}`, '_blank');
+    if (!termoWindow) alert('Permita pop-ups deste site para abrir o termo.');
+}
+
+async function enviarLinkTermoPendente() {
+    if (userRole !== 'admin' || termoPendenteIndex === null) return;
+    const p = allUnificados[termoPendenteIndex]?.primeiraEtapa;
+    if (!p?.id || !p.email) {
+        alert('Esta inscrição não possui e-mail para receber o link.');
+        return;
+    }
+
+    const status = document.getElementById('termoPendenteStatus');
+    const btn = document.getElementById('btnEnviarLinkTermoPendente');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    status.style.color = '#666';
+    status.textContent = 'Enviando o link e as instruções ao proponente...';
+
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: p.id,
+                emails: [p.email],
+                baseUrl: window.location.origin,
+                observacao: 'Para registrar e oficializar seu evento junto ao DAC/UFSC, preencha os dados restantes do Termo Digital, leia e aprove todas as cláusulas e envie o PDF assinado pelo próprio formulário.'
+            })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success || data.enviados !== 1) {
+            throw new Error(data.error || 'O link não foi enviado.');
+        }
+        status.style.color = '#15803d';
+        status.textContent = `Link enviado para ${p.email}.`;
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+
+function abrirEditorTermo(idx) {
+    if (userRole !== 'admin') return;
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p || !p.id) return;
+
+    termoEditorIndex = idx;
+    termoEditorCompleto = p.termoAssinado === true || p.termoAssinado === 'true';
+    termoAdminAlteracoesSalvas = false;
+    const saved = p.termoDados || {};
+    const value = (key, fallback = '') => saved[key] ?? fallback ?? '';
+    document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
+    document.getElementById('adminTermoEmail').value = value('email', p.email);
+    document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
+    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
+    document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
+    atualizarPillsEspacoAdmin();
+    document.getElementById('adminTermoCpf').value = value('cpfCnpj');
+    document.getElementById('adminTermoRg').value = value('rg');
+    document.getElementById('adminTermoTelefone').value = value('telefone', p.telefone);
+    document.getElementById('adminTermoCidade').value = value('cidade');
+    document.getElementById('adminTermoEndereco').value = value('endereco');
+    document.getElementById('adminTermoNumero').value = value('numero');
+    document.getElementById('adminTermoApartamento').value = value('apartamento');
+    document.getElementById('adminTermoBairro').value = value('bairro');
+    document.getElementById('adminTermoOutras').value = value('outrasInformacoes');
+    document.getElementById('adminTermoStatus').textContent = '';
+    [
+        'adminTermoEspaco', 'adminTermoEvento', 'adminTermoDatas', 'adminTermoNome',
+        'adminTermoCpf', 'adminTermoRg', 'adminTermoTelefone', 'adminTermoEndereco',
+        'adminTermoNumero', 'adminTermoBairro', 'adminTermoCidade'
+    ].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.oninput = () => {
+                termoAdminAlteracoesSalvas = false;
+                atualizarBotaoAtualizarInformacoesTermo();
+            };
+        }
+    });
+    const titulo = document.getElementById('adminTermoTitulo');
+    const nota = document.getElementById('adminTermoNota');
+    const pdfBtn = document.getElementById('btnGerarPDFTermo');
+    if (titulo) {
+        titulo.innerHTML = termoEditorCompleto
+            ? '<i class="fas fa-file-signature" style="color:#16a34a"></i> Visualizar termo concluído'
+            : '<i class="fas fa-file-signature" style="color:#d97706"></i> Visualizar termo incompleto';
+    }
+    if (nota) {
+        nota.style.background = termoEditorCompleto ? '#f0fdf4' : '#fffbeb';
+        nota.style.borderColor = termoEditorCompleto ? '#bbf7d0' : '#fde68a';
+        nota.style.color = termoEditorCompleto ? '#666' : '#92400e';
+        nota.innerHTML = termoEditorCompleto
+            ? '<strong><i class="fas fa-check-circle"></i> Termo concluído e enviado.</strong><br>Os dados abaixo estão congelados para consulta. Para corrigir alguma informação, clique em <strong>Editar</strong> no rodapé.'
+            : '<strong><i class="fas fa-exclamation-triangle"></i> Termo ainda não concluído.</strong><br>Os dados já disponíveis podem ser consultados ou corrigidos pelo administrador. O PDF permanece bloqueado até o proponente concluir o termo.';
+    }
+    if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
+    atualizarBotaoAtualizarInformacoesTermo();
+    setModoEdicaoTermoAdmin(false);
+    openModal('modalEditarTermo');
+}
+
+function termoAdminTemTodosDados() {
+    const f = coletarEdicaoTermoAdmin();
+    const obrigatorios = [
+        f.nomeEvento, f.dataHorarioEvento, f.nomeCompleto, f.cpfCnpj,
+        f.rg, f.telefone, f.email, f.endereco, f.numero, f.bairro, f.cidade
+    ];
+    return Boolean(f.espacoTeatro || f.espacoIgreja) && obrigatorios.every(Boolean)
+        && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(f.email);
+}
+
+function atualizarBotaoAtualizarInformacoesTermo() {
+    const btn = document.getElementById('btnAtualizarInformacoesTermo');
+    if (!btn) return;
+    btn.style.display = !termoEditorCompleto && termoAdminAlteracoesSalvas && termoAdminTemTodosDados()
+        ? 'inline-flex'
+        : 'none';
+}
+
+function atualizarPillsEspacoAdmin() {
+    const valor = document.getElementById('adminTermoEspaco')?.value;
+    document.getElementById('adminPillTeatro')?.classList.toggle('active', valor === 'teatro');
+    document.getElementById('adminPillIgreja')?.classList.toggle('active', valor === 'igrejinha');
+}
+
+function selecionarEspacoAdmin(valor) {
+    if (document.getElementById('adminTermoEspaco')?.disabled) return;
+    document.getElementById('adminTermoEspaco').value = valor;
+    atualizarPillsEspacoAdmin();
+}
+
+function setModoEdicaoTermoAdmin(editando) {
+    const ids = [
+        'adminTermoEspaco', 'adminTermoEvento', 'adminTermoDatas', 'adminTermoOutras',
+        'adminTermoNome', 'adminTermoCpf', 'adminTermoRg', 'adminTermoTelefone',
+        'adminTermoEndereco', 'adminTermoNumero', 'adminTermoApartamento',
+        'adminTermoBairro', 'adminTermoCidade'
+    ];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.disabled = !editando;
+    });
+    ['adminPillTeatro', 'adminPillIgreja'].forEach(id => {
+        const pill = document.getElementById(id);
+        if (pill) pill.disabled = !editando;
+    });
+    const email = document.getElementById('adminTermoEmail');
+    if (email) email.disabled = true;
+
+    const btnEditar = document.getElementById('btnEditarTermoAdmin');
+    const btnSalvar = document.getElementById('btnSalvarTermoAdmin');
+    const btnReenviar = document.getElementById('btnReenviarTermoEdicao');
+    if (btnEditar) btnEditar.style.display = editando ? 'none' : 'inline-flex';
+    if (btnSalvar) btnSalvar.style.display = editando ? 'inline-flex' : 'none';
+    if (btnReenviar) btnReenviar.style.display = editando ? 'none' : 'inline-flex';
+    const modal = document.getElementById('modalEditarTermo');
+    if (modal) modal.dataset.editando = editando ? 'true' : 'false';
+    atualizarBotaoAtualizarInformacoesTermo();
+}
+
+function ativarEdicaoTermoAdmin() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    setModoEdicaoTermoAdmin(true);
+    const status = document.getElementById('adminTermoStatus');
+    status.style.color = '#764ba2';
+    status.textContent = 'Modo de edição ativado. Faça as correções e clique em “Salvar alterações”.';
+    document.getElementById('adminTermoNome')?.focus();
+}
+
+function coletarEdicaoTermoAdmin() {
+    return {
+        espacoTeatro: document.getElementById('adminTermoEspaco').value === 'teatro',
+        espacoIgreja: document.getElementById('adminTermoEspaco').value === 'igrejinha',
+        nomeEvento: document.getElementById('adminTermoEvento').value.trim(),
+        dataHorarioEvento: document.getElementById('adminTermoDatas').value.trim(),
+        outrasInformacoes: document.getElementById('adminTermoOutras').value.trim(),
+        nomeCompleto: document.getElementById('adminTermoNome').value.trim(),
+        cpfCnpj: document.getElementById('adminTermoCpf').value.trim(),
+        rg: document.getElementById('adminTermoRg').value.trim(),
+        telefone: document.getElementById('adminTermoTelefone').value.trim(),
+        email: document.getElementById('adminTermoEmail').value.trim(),
+        endereco: document.getElementById('adminTermoEndereco').value.trim(),
+        numero: document.getElementById('adminTermoNumero').value.trim(),
+        apartamento: document.getElementById('adminTermoApartamento').value.trim(),
+        bairro: document.getElementById('adminTermoBairro').value.trim(),
+        cidade: document.getElementById('adminTermoCidade').value.trim()
+    };
+}
+
+async function salvarEdicaoTermoAdmin(marcarConcluido = termoEditorCompleto) {
+    if (userRole !== 'admin' || termoEditorIndex === null) return false;
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p?.id) return false;
+    const termoDados = coletarEdicaoTermoAdmin();
+    const status = document.getElementById('adminTermoStatus');
+    const btn = document.getElementById('btnSalvarTermoAdmin');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    status.style.color = '#666';
+    status.textContent = 'Salvando dados do termo...';
+    try {
+        const r = await fetch('/api/admin/atualizar-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: p.id, termoDados, marcarConcluido })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o termo.');
+        p.termoDados = termoDados;
+        p.nome = termoDados.nomeCompleto || p.nome;
+        p.email = termoDados.email || p.email;
+        p.telefone = termoDados.telefone || p.telefone;
+        p.evento = termoDados.nomeEvento || p.evento;
+        p.localNome = termoDados.espacoIgreja ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
+        status.style.color = '#15803d';
+        termoEditorCompleto = marcarConcluido === true;
+        termoAdminAlteracoesSalvas = !termoEditorCompleto;
+        status.textContent = termoEditorCompleto
+            ? 'Alterações salvas. O termo continua marcado como concluído. Os dados estão congelados novamente.'
+            : 'Alterações salvas no painel. O termo continua aguardando a conclusão do proponente.';
+        p.termoAssinado = termoEditorCompleto;
+        const pdfBtn = document.getElementById('btnGerarPDFTermo');
+        if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
+        atualizarBotaoAtualizarInformacoesTermo();
+        renderTabela();
+        setModoEdicaoTermoAdmin(false);
+        return true;
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+        return false;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+
+async function atualizarInformacoesTermoAdmin() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    if (!termoAdminTemTodosDados()) {
+        const status = document.getElementById('adminTermoStatus');
+        status.style.color = '#b91c1c';
+        status.textContent = 'Preencha todos os campos obrigatórios antes de atualizar as informações.';
+        return;
+    }
+    const salvo = await salvarEdicaoTermoAdmin(true);
+    if (salvo) {
+        closeModal('modalEditarTermo');
+    }
+}
+
+function gerarPDFTermoAdmin() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p?.id) {
+        alert('Esta inscrição não possui identificador para gerar o PDF.');
+        return;
+    }
+    const url = `/termo?id=${encodeURIComponent(p.id)}&adminPdf=1`;
+    const win = window.open(url, '_blank');
+    if (!win) {
+        alert('Permita pop-ups deste site para gerar o PDF do termo.');
+    }
+}
+
+async function reenviarTermoParaProponente() {
+    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!p?.email) return;
+    if (!confirm(`Reenviar o link do termo para ${p.email}?\n\nO proponente poderá revisar os dados, reaprová-los e enviar uma nova versão.`)) return;
+    const status = document.getElementById('adminTermoStatus');
+    const btn = document.getElementById('btnReenviarTermoEdicao');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                emails: [p.email],
+                baseUrl: window.location.origin,
+                id: p.id,
+                observacao: 'Seu Termo Digital foi reaberto para revisão. Confira os dados, aprove novamente todas as cláusulas e envie uma nova versão.'
+            })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success || data.enviados !== 1) throw new Error(data.error || 'Não foi possível reenviar o link.');
+        status.style.color = '#15803d';
+        status.textContent = `Link reenviado para ${p.email}.`;
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+    }
+}
+
+async function copiarLinkTermo(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p || !p.id) { alert('Inscrição sem identificador.'); return; }
+    const url = `${window.location.origin}/termo?id=${encodeURIComponent(p.id)}`;
+    try {
+        await navigator.clipboard.writeText(url);
+        const btn = event.currentTarget;
+        const originalHTML = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        btn.style.color = '#16a34a';
+        setTimeout(() => { btn.innerHTML = originalHTML; btn.style.color = '#2563eb'; }, 1500);
+    } catch (e) {
+        prompt('Copie o link manualmente:', url);
+    }
+}
+
+function showContact(idx) {
+    const p = allUnificados[idx].primeiraEtapa;
+    document.getElementById('contatoBody').innerHTML = `
+        <p><strong>Proponente:</strong> ${p.nome||'—'}</p>
+        <p style="margin-top:8px;display:flex;align-items:center;gap:8px">
+            <strong>E-mail:</strong>
+            <a href="mailto:${p.email}">${p.email||'—'}</a>
+            ${p.email ? `<button onclick="openEmailRapido('${p.email}','${(p.nome||'').replace(/'/g,"\\'")}','${(p.evento||allUnificados[idx].evento||'').replace(/'/g,"\\'")}');event.stopPropagation()" title="Enviar e-mail rápido" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:15px;padding:2px 4px;border-radius:5px;line-height:1" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='none'"><i class="fas fa-paper-plane"></i></button>` : ''}
+        </p>
+        <p style="margin-top:8px"><strong>Telefone:</strong> ${p.telefone||'—'}</p>
+        <p style="margin-top:8px"><strong>Local:</strong> ${p.localNome||'—'}</p>
+        <p style="margin-top:8px"><strong>Inscrito em:</strong> ${p.timestamp||'—'}</p>
+    `;
+    openModal('modalContato');
+}
+
+let _editarEtapasData = {};
+const nomesEtapasEdit = { ensaio:'Ensaio', montagem:'Montagem', evento:'Evento', desmontagem:'Desmontagem' };
+let _editarEtapasRowCounter = 0;
+
+function _addEtapaRow(body, tipo, data, hIni, hFim) {
+    const rid = ++_editarEtapasRowCounter;
+    const opcoes = Object.entries(nomesEtapasEdit)
+        .map(([k,v]) => `<option value="${k}"${tipo===k?' selected':''}>${v}</option>`).join('');
+    const fieldStyle = 'padding:7px 10px;border:1.5px solid #ddd;border-radius:6px;font-size:13px;color:#333';
+    const div = document.createElement('div');
+    div.dataset.rowid = rid;
+    div.style.cssText = 'background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px';
+    div.innerHTML = `
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+            <label style="font-size:11px;font-weight:700;color:#555;margin-right:6px">Tipo</label>
+            <select data-field="tipo" style="flex:1;font-weight:600;font-size:13px;color:#764ba2;border:1px solid #ddd;border-radius:6px;padding:5px 8px;background:#fff;cursor:pointer">${opcoes}</select>
+            <button type="button" onclick="this.closest('[data-rowid]').remove()" title="Remover etapa"
+                style="margin-left:10px;background:#fee2e2;border:none;color:#dc2626;width:26px;height:26px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;display:flex;align-items:center;justify-content:center;flex-shrink:0">×</button>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end">
+            <div><label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Data</label>
+                <input type="date" data-field="data" value="${data||''}" style="${fieldStyle}"></div>
+            <div><label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Início</label>
+                <input type="time" data-field="ini" value="${hIni||''}" style="${fieldStyle}"></div>
+            <div><label style="display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:4px">Fim</label>
+                <input type="time" data-field="fim" value="${hFim||''}" style="${fieldStyle}"></div>
+        </div>`;
+    body.appendChild(div);
+}
+
+function openEditarEtapas(idx) {
+    const p = allUnificados[idx].primeiraEtapa;
+    _editarEtapasData = { id: p.id, idx };
+    const body = document.getElementById('editarEtapasBody');
+    body.innerHTML = '';
+    document.getElementById('editarEtapasStatus').textContent = '';
+    const btn = document.getElementById('btnSalvarEtapas');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+
+    let rowCount = 0;
+    const etapas = p.etapas || {};
+
+    // Preencher a partir de etapas salvas no Redis
+    for (const key in etapas) {
+        const itens = Array.isArray(etapas[key]) ? etapas[key] : [etapas[key]];
+        itens.forEach(it => {
+            if (!it || !it.data) return;
+            const [hIni, hFim] = (it.horario||'').split(' às ');
+            _addEtapaRow(body, key, it.data, hIni||'', hFim||'');
+            rowCount++;
+        });
+    }
+
+    // Fallback para legadas: pré-popular com calendarDates
+    if (rowCount === 0 && p.calendarDates && p.calendarDates.length > 0) {
+        p.calendarDates.forEach(cd => {
+            const t = (cd.resumo||'').toLowerCase();
+            let tipo = 'evento';
+            if (t.includes('montagem')) tipo = 'montagem';
+            else if (t.includes('ensaio')) tipo = 'ensaio';
+            else if (t.includes('desmontagem')) tipo = 'desmontagem';
+            const [hIni, hFim] = (cd.horario||'').split(' às ');
+            _addEtapaRow(body, tipo, cd.data, hIni||'', hFim||'');
+            rowCount++;
+        });
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:11px;color:#92400e;padding:7px 10px;background:#fffbeb;border-radius:6px;border-left:3px solid #f59e0b;margin-top:2px';
+        note.innerHTML = '<i class="fas fa-info-circle" style="color:#f59e0b"></i> Etapas importadas do Google Calendar. Ajuste tipos e horários se necessário antes de salvar.';
+        body.appendChild(note);
+    }
+
+    if (rowCount === 0) {
+        const empty = document.createElement('p');
+        empty.style.cssText = 'color:#aaa;font-size:13px;margin:0 0 4px';
+        empty.textContent = 'Nenhuma etapa cadastrada. Use o botão abaixo para adicionar.';
+        body.appendChild(empty);
+    }
+
+    // Botão "Adicionar etapa"
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.innerHTML = '<i class="fas fa-plus"></i> Adicionar etapa';
+    addBtn.style.cssText = 'margin-top:6px;background:#f3e8ff;border:1.5px dashed #a855f7;color:#7c3aed;border-radius:8px;padding:8px 16px;font-size:13px;cursor:pointer';
+    addBtn.onclick = () => _addEtapaRow(body, 'evento', '', '', '');
+    body.appendChild(addBtn);
+
+    openModal('modalEditarEtapas');
+}
+
+async function salvarEtapas() {
+    const status = document.getElementById('editarEtapasStatus');
+    const btn = document.getElementById('btnSalvarEtapas');
+    const body = document.getElementById('editarEtapasBody');
+
+    // Coletar etapas a partir do DOM (permite deleções e adições)
+    const etapasAtualizadas = {};
+    body.querySelectorAll('[data-rowid]').forEach(row => {
+        const tipo = row.querySelector('[data-field="tipo"]')?.value || 'evento';
+        const data = row.querySelector('[data-field="data"]')?.value || '';
+        const ini  = row.querySelector('[data-field="ini"]')?.value  || '';
+        const fim  = row.querySelector('[data-field="fim"]')?.value  || '';
+        if (!data) return;
+        const it = { data };
+        if (ini && fim) it.horario = `${ini} às ${fim}`;
+        else if (ini)  it.horario = ini;
+        if (!etapasAtualizadas[tipo]) etapasAtualizadas[tipo] = [];
+        etapasAtualizadas[tipo].push(it);
+    });
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    status.textContent = '';
+
+    try {
+        const r = await fetch('/api/admin/atualizar-etapas', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: _editarEtapasData.id, etapas: etapasAtualizadas })
+        });
+        if (!r.ok) {
+            const err = await r.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${r.status}`);
+        }
+        const data = await r.json();
+        if (data.success) {
+            status.textContent = '✅ Salvo com sucesso!';
+            status.style.color = '#16a34a';
+            btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
+            allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
+            renderTabela();
+            setTimeout(() => closeModal('modalEditarEtapas'), 1800);
+        } else {
+            throw new Error(data.error || 'Falha ao salvar.');
+        }
+    } catch (e) {
+        status.textContent = '❌ Erro: ' + (e.message || 'Falha de conexão.');
+        status.style.color = '#dc2626';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+    }
+}
+
+let _emailRapidoData = {};
+function openEmailRapido(email, nome, evento) {
+    _emailRapidoData = { email, nome, evento };
+    document.getElementById('emailRapidoPara').value = email;
+    document.getElementById('emailRapidoAssunto').value = evento ? `Ref.: ${evento} — DAC/UFSC` : 'Contato DAC/UFSC';
+    document.getElementById('emailRapidoMensagem').value = '';
+    document.getElementById('emailRapidoStatus').textContent = '';
+    closeModal('modalContato');
+    openModal('modalEmailRapido');
+}
+
+function adicionarDiasUteis(dataInicial, quantidade) {
+    const data = new Date(dataInicial);
+    let adicionados = 0;
+    while (adicionados < quantidade) {
+        data.setDate(data.getDate() + 1);
+        const dia = data.getDay();
+        if (dia !== 0 && dia !== 6) adicionados++;
+    }
+    return data;
+}
+
+function formatarDataBrasileira(data) {
+    return data.toLocaleDateString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+    });
+}
+
+function abrirEmailFormularioAtividades(idx) {
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p?.email) {
+        alert('Esta inscrição não possui um e-mail válido para envio.');
+        return;
+    }
+
+    const formularioUrl = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
+    const prazo = formatarDataBrasileira(adicionarDiasUteis(new Date(), 5));
+    const mensagem = `Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
+
+As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:
+
+Formulário Atividades DAC 2026
+
+Pedimos que o formulário seja preenchido até o dia ${prazo}.
+
+Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já, pela colaboração.
+
+Atenciosamente,
+
+--
+Comissão de Pauta
+Departamento Artístico Cultural
+Secretaria de Cultura, Arte e Esporte
+Universidade Federal de Santa Catarina`;
+
+    _emailRapidoData = {
+        email: p.email,
+        nome: p.nome || '',
+        evento: p.evento || '',
+        linkLabel: 'Formulário Atividades DAC 2026',
+        linkUrl: formularioUrl
+    };
+    document.getElementById('emailRapidoPara').value = p.email;
+    document.getElementById('emailRapidoAssunto').value = 'Formulário Atividades DAC 2026';
+    document.getElementById('emailRapidoMensagem').value = mensagem;
+    document.getElementById('emailRapidoStatus').textContent = '';
+    openModal('modalEmailRapido');
+}
+
+async function sendEmailRapido() {
+    const assunto = document.getElementById('emailRapidoAssunto').value.trim();
+    const mensagem = document.getElementById('emailRapidoMensagem').value.trim();
+    const status = document.getElementById('emailRapidoStatus');
+    if (!assunto || !mensagem) { status.textContent = 'Preencha o assunto e a mensagem.'; status.style.color = '#dc2626'; return; }
+    const btn = document.getElementById('btnEnviarEmailRapido');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    status.textContent = '';
+    try {
+        const r = await fetch('/api/admin/email-rapido', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                to: _emailRapidoData.email,
+                nome: _emailRapidoData.nome,
+                assunto,
+                mensagem,
+                linkLabel: _emailRapidoData.linkLabel,
+                linkUrl: _emailRapidoData.linkUrl
+            })
+        });
+        const data = await r.json();
+        if (data.success) {
+            status.textContent = '✅ E-mail enviado com sucesso!';
+            status.style.color = '#16a34a';
+            btn.innerHTML = '<i class="fas fa-check"></i> Enviado';
+            setTimeout(() => closeModal('modalEmailRapido'), 1800);
+        } else {
+            status.textContent = '❌ Erro: ' + (data.error || 'Falha no envio.');
+            status.style.color = '#dc2626';
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+        }
+    } catch (e) {
+        status.textContent = '❌ Erro de conexão.';
+        status.style.color = '#dc2626';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar';
+    }
+}
+
+async function deleteInscricao(id) {
+    if (!id || id === 'undefined' || id === 'null') {
+        alert('Não foi possível excluir: esta inscrição não possui um ID individual.');
+        return;
+    }
+    if (!confirm('Excluir esta inscrição?')) return;
+    try {
+        const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        let body = {};
+        try { body = await r.json(); } catch(_) {}
+        if (r.ok && body.success !== false) {
+            loadData();
+        } else {
+            alert('Erro ao excluir: ' + (body.error || body.message || ('HTTP ' + r.status)));
+        }
+    } catch (err) {
+        alert('Erro de conexão ao excluir: ' + err.message);
+    }
+}
+
+function deleteAllInscricoes() {
+    exclusaoSelecionados = [...document.querySelectorAll('.insc-check:checked')]
+        .map(c => allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa)
+        .filter(p => p?.id && p.id !== 'undefined' && p.id !== 'null');
+    if (exclusaoSelecionados.length > 0) {
+        excluirInscricoesSelecionadasDireto();
+        return;
+    }
+    const titulo = document.getElementById('tituloExcluirTudo');
+    const texto = document.getElementById('textoExcluirTudo');
+    if (exclusaoSelecionados.length > 0) {
+        if (titulo) titulo.innerHTML = `<i class="fas fa-exclamation-triangle"></i> Excluir ${exclusaoSelecionados.length} inscrição(ões) selecionada(s)`;
+        if (texto) texto.innerHTML = `Esta ação vai apagar somente as <strong>${exclusaoSelecionados.length} inscrição(ões) selecionada(s)</strong> e seus <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.`;
+    } else {
+        if (titulo) titulo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições';
+        if (texto) texto.innerHTML = 'Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.';
+    }
+    const input = document.getElementById('excluirTudoConfirmInput');
+    if (input) input.value = '';
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (btn) btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
+    onExcluirTudoInputChange();
+    openModal('modalExcluirTudo');
+    setTimeout(() => { input && input.focus(); }, 50);
+}
+
+async function excluirInscricoesSelecionadasDireto() {
+    const inscricoes = [...exclusaoSelecionados];
+    const ids = inscricoes.map(p => String(p.id));
+    const btn = document.getElementById('btnExcluirInscricoes');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo selecionados...';
+    }
+    try {
+        const r = await fetch('/api/agendamentos-selecionados', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inscricoes })
+        });
+        const body = await r.json().catch(() => ({}));
+        if (!r.ok || body.success === false) {
+            const quantidadeFalhas = Array.isArray(body.falhas) ? body.falhas.length : ids.length;
+            throw new Error(`${quantidadeFalhas} inscrição(ões) não puderam ser excluídas.`);
+        }
+        document.getElementById('checkAll').checked = false;
+        document.querySelectorAll('.insc-check').forEach(c => c.checked = false);
+        inscricoesSelecionadas.clear();
+        exclusaoSelecionados = [];
+        if (btn) btn.disabled = false;
+        updateSelCount();
+        loadData();
+    } catch (e) {
+        alert('Erro ao excluir selecionados: ' + e.message);
+        if (btn) {
+            btn.disabled = false;
+            updateSelCount();
+        }
+    }
+}
+
+function closeExcluirTudoModal() {
+    closeModal('modalExcluirTudo');
+    const input = document.getElementById('excluirTudoConfirmInput');
+    if (input) input.value = '';
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (btn) {
+        btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
+    }
+    onExcluirTudoInputChange();
+    exclusaoSelecionados = [];
+    const titulo = document.getElementById('tituloExcluirTudo');
+    const texto = document.getElementById('textoExcluirTudo');
+    if (titulo) titulo.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Excluir TODAS as inscrições';
+    if (texto) texto.innerHTML = 'Esta ação vai apagar <strong>todas as inscrições</strong> do banco de dados e os <strong>eventos correspondentes</strong> dos calendários do Google. Ela <strong>não pode ser desfeita</strong>.';
+}
+
+function onExcluirTudoInputChange() {
+    const input = document.getElementById('excluirTudoConfirmInput');
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (!input || !btn) return;
+    const ok = input.value === 'dac.ufsc.br';
+    btn.disabled = !ok;
+    btn.style.opacity = ok ? '1' : '0.5';
+    btn.style.cursor = ok ? 'pointer' : 'not-allowed';
+}
+
+async function confirmDeleteAllInscricoes() {
+    const input = document.getElementById('excluirTudoConfirmInput');
+    if (!input || input.value !== 'dac.ufsc.br') return;
+    const btn = document.getElementById('btnConfirmExcluirTudo');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Excluindo...';
+    }
+    try {
+        if (exclusaoSelecionados.length > 0) {
+            const quantidadeExcluida = exclusaoSelecionados.length;
+            const falhas = [];
+            for (const id of exclusaoSelecionados) {
+                const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                const body = await r.json().catch(() => ({}));
+                if (!r.ok || body.success === false) falhas.push(id);
+            }
+            if (falhas.length > 0) throw new Error(`${falhas.length} inscrição(ões) não puderam ser excluídas.`);
+            closeExcluirTudoModal();
+            alert(`${quantidadeExcluida} inscrição(ão) selecionada(s) excluída(s) com sucesso.`);
+        } else {
+            const r = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            closeExcluirTudoModal();
+            alert('Limpeza iniciada. Atualize em alguns segundos.');
+        }
+        loadData();
+    } catch (e) {
+        alert('Erro ao iniciar exclusão: ' + e.message);
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
+        }
+    }
+}
+
+// ══════════════════════════════════════════════════
+// ENVIO DE TERMOS
+// ══════════════════════════════════════════════════
+function parseEmails(raw) {
+    return raw.split(/[\n,;]+/)
+        .map(e => e.trim().toLowerCase())
+        .filter(e => e.includes('@'));
+}
+
+function atualizarContadorTermos() {
+    const raw = document.getElementById('termosEmailsInput').value;
+    const emails = parseEmails(raw);
+    const el = document.getElementById('termosContador');
+    el.textContent = `${emails.length} e-mail(s) detectado(s)`;
+    el.style.color = emails.length > 0 ? '#2563eb' : '#888';
+}
+
+async function enviarLinksTermoMassa() {
+    const raw = document.getElementById('termosEmailsInput').value;
+    const emails = parseEmails(raw);
+    const observacao = document.getElementById('termosObservacao').value.trim();
+    const resultado = document.getElementById('termosResultado');
+
+    if (emails.length === 0) { alert('Cole ao menos um e-mail válido.'); return; }
+    if (!confirm(`Enviar link do Termo Digital para ${emails.length} e-mail(s)?`)) return;
+
+    resultado.style.display = 'block';
+    resultado.innerHTML = `<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Enviando ${emails.length} e-mail(s)...</div>`;
+
+    try {
+        const r = await fetch('/api/enviar-links-termo', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ emails, observacao, baseUrl: window.location.origin })
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erro no servidor');
+
+        const enviados = d.detalhes.filter(x => x.status === 'enviado');
+        const erros = d.detalhes.filter(x => x.status === 'erro');
+        const naoEncontrados = d.detalhes.filter(x => x.status === 'nao_encontrado');
+
+        const itemRow = (icon, cor, texto) =>
+            `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px">
+                <i class="${icon}" style="color:${cor};width:16px;text-align:center;flex-shrink:0"></i>
+                <span>${texto}</span>
+            </div>`;
+
+        let html = `<div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px">
+            <h4 style="margin:0 0 14px;font-size:15px;color:#222">Resultado do Envio</h4>
+            <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+                <div style="background:#d1fae5;border-radius:8px;padding:10px 16px;font-size:13px;color:#065f46"><strong>${enviados.length}</strong> enviados</div>
+                <div style="background:#fee2e2;border-radius:8px;padding:10px 16px;font-size:13px;color:#991b1b"><strong>${naoEncontrados.length}</strong> não encontrados</div>
+                ${erros.length > 0 ? `<div style="background:#fef3c7;border-radius:8px;padding:10px 16px;font-size:13px;color:#92400e"><strong>${erros.length}</strong> com erro</div>` : ''}
+            </div>`;
+
+        if (enviados.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#065f46;margin:10px 0 4px">ENVIADOS COM SUCESSO:</p>`;
+            enviados.forEach(x => { html += itemRow('fas fa-check-circle', '#16a34a', `${escapeHtml(x.nome || x.email)} — <span style="color:#888">${escapeHtml(x.evento || '')}</span> &lt;${escapeHtml(x.email)}&gt;`); });
+        }
+        if (naoEncontrados.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#991b1b;margin:14px 0 4px">NÃO ENCONTRADOS NO SISTEMA:</p>`;
+            naoEncontrados.forEach(x => { html += itemRow('fas fa-question-circle', '#dc2626', escapeHtml(x.email)); });
+            html += `<p style="font-size:11px;color:#aaa;margin:6px 0 0">Estes e-mails não têm inscrição cadastrada. Verifique se foram digitados corretamente.</p>`;
+        }
+        if (erros.length) {
+            html += `<p style="font-size:12px;font-weight:700;color:#92400e;margin:14px 0 4px">ERROS DE ENVIO:</p>`;
+            erros.forEach(x => { html += itemRow('fas fa-exclamation-circle', '#d97706', `${escapeHtml(x.email)} — ${escapeHtml(x.msg || 'Erro desconhecido')}`); });
+        }
+        html += `</div>`;
+        resultado.innerHTML = html;
+    } catch(e) {
+        resultado.innerHTML = `<div class="error-msg">Erro ao enviar: ${e.message}</div>`;
+    }
+}
+
+async function enviarTermosSelecionados() {
+    const checks = document.querySelectorAll('.insc-check:checked');
+    if (checks.length === 0) { alert('Selecione ao menos uma inscrição.'); return; }
+    if (!confirm(`Enviar termos para ${checks.length} proponente(s)?`)) return;
+
+    const inscricoes = [];
+    checks.forEach(c => {
+        const idx = parseInt(c.dataset.index);
+        const p = allUnificados[idx]?.primeiraEtapa;
+        if (p) inscricoes.push({ nome: p.nome, email: p.email, evento: p.evento, local: p.local||'teatro' });
+    });
+
+    try {
+        const r = await fetch('/api/enviar-termos-digitais', {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ inscricoes })
+        });
+        const d = await r.json();
+        alert(`✅ Termos enviados!\n\nEnviados: ${d.enviados}\nErros: ${d.erros}\nTotal: ${d.total}`);
+        inscricoesSelecionadas.clear();
+        document.getElementById('checkAll').checked = false;
+        toggleCheckAll();
+    } catch(e) {
+        alert('Erro ao enviar termos: ' + e.message);
+    }
+}
+
+// ══════════════════════════════════════════════════
+// PDF
+// ══════════════════════════════════════════════════
+function generatePDF(idx) {
+    const { jsPDF } = window.jspdf;
+    const item = allUnificados[idx];
+    const p = item.primeiraEtapa;
+    const s = item.segundaEtapa;
+    const doc = new jsPDF({ unit:'mm', format:'a4' });
+    const W = 210, margin = 18;
+    let y = 18;
+
+    const addText = (text, x, yy, opts={}) => { doc.text(text, x, yy, opts); };
+    const addLine = (y1) => { doc.setDrawColor(220); doc.line(margin, y1, W-margin, y1); };
+
+    // Cabeçalho
+    doc.setFillColor(118, 75, 162);
+    doc.rect(0, 0, W, 28, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFont('helvetica','bold'); doc.setFontSize(14);
+    addText('FICHA DE INSCRIÇÃO — DAC/UFSC', W/2, 12, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(9);
+    addText('Sistema de Agendamento de Espaços — Departamento Artístico Cultural', W/2, 20, {align:'center'});
+    y = 38;
+
+    // Dados do proponente
+    doc.setTextColor(0);
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.setFillColor(240,235,255); doc.roundedRect(margin, y, W-2*margin, 8, 2, 2, 'F');
+    addText('DADOS DO PROPONENTE', margin+4, y+5.5);
+    y += 13;
+
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    const info = [
+        ['Proponente', p.nome||'—'], ['E-mail', p.email||'—'],
+        ['Telefone', p.telefone||'—'], ['Local', p.localNome||'Teatro Carmen Fossari'],
+        ['Evento', p.evento||'—'], ['Inscrição', p.timestamp||'—']
+    ];
+    info.forEach(([k,v]) => {
+        doc.setFont('helvetica','bold'); addText(`${k}: `, margin, y);
+        doc.setFont('helvetica','normal');
+        const xOff = margin + doc.getTextWidth(`${k}: `);
+        const lines = doc.splitTextToSize(String(v), W-xOff-margin);
+        addText(lines, xOff, y);
+        y += (lines.length * 5) + 2;
+    });
+    y += 4; addLine(y); y += 6;
+
+    // Cronograma
+    doc.setFont('helvetica','bold'); doc.setFontSize(11);
+    doc.setFillColor(240,235,255); doc.roundedRect(margin, y, W-2*margin, 8, 2, 2, 'F');
+    addText('CRONOGRAMA AGENDADO', margin+4, y+5.5);
+    y += 13;
+
+    const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
+    if (p.etapas && Object.keys(p.etapas).length > 0) {
+        doc.setFont('helvetica','normal'); doc.setFontSize(10);
+        for (const key in p.etapas) {
+            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+            itens.forEach((it, i) => {
+                if (it && it.data && it.horario) {
+                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i+1}` : nomesEtapas[key];
+                    doc.setFont('helvetica','bold'); addText(`${label}: `, margin+4, y);
+                    const xo = margin+4+doc.getTextWidth(`${label}: `);
+                    doc.setFont('helvetica','normal');
+                    addText(`${it.data.split('-').reverse().join('/')}, ${it.horario}`, xo, y);
+                    y += 7;
+                }
+            });
+        }
+    } else {
+        doc.setFont('helvetica','italic'); doc.setFontSize(10); doc.setTextColor(150);
+        addText('Sem etapas agendadas via site.', margin+4, y); doc.setTextColor(0); y += 7;
+    }
+    y += 4; addLine(y); y += 6;
+
+    // Dados do forms
+    if (s && s.headers && s.valores) {
+        doc.setFont('helvetica','bold'); doc.setFontSize(11);
+        doc.setFillColor(240,235,255); doc.roundedRect(margin, y, W-2*margin, 8, 2, 2, 'F');
+        addText('DADOS COMPLEMENTARES (FORMULÁRIO)', margin+4, y+5.5);
+        y += 13;
+        doc.setFont('helvetica','normal'); doc.setFontSize(9);
+        s.headers.forEach((h, i) => {
+            if (y > 270) { doc.addPage(); y = 18; }
+            const val = s.valores[i] || '—';
+            doc.setFont('helvetica','bold'); addText(`${h}: `, margin, y);
+            const xo = margin + doc.getTextWidth(`${h}: `);
+            doc.setFont('helvetica','normal');
+            const lines = doc.splitTextToSize(String(val), W-xo-margin);
+            addText(lines, xo, y);
+            y += (lines.length*4.5)+2;
+        });
+    }
+
+    // Carimbo de data/hora da inscrição
+    doc.setPage(1);
+    const timestamp = p.timestamp || '—';
+    const carimbX = W - margin - 54;
+    const carimbY = 32;
+    doc.setDrawColor(118, 75, 162);
+    doc.setLineWidth(0.5);
+    doc.roundedRect(carimbX, carimbY, 54, 16, 2, 2, 'S');
+    doc.setFont('helvetica','bold'); doc.setFontSize(6); doc.setTextColor(118, 75, 162);
+    addText('INSCRITO EM', carimbX + 27, carimbY + 5, {align:'center'});
+    doc.setFont('helvetica','normal'); doc.setFontSize(7);
+    const tsLinhas = doc.splitTextToSize(timestamp, 50);
+    tsLinhas.forEach((linha, i) => addText(linha, carimbX + 27, carimbY + 10 + i * 4, {align:'center'}));
+
+    // Rodapé
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(150);
+        addText(`DAC/UFSC — Sistema de Agendamento — Página ${i} de ${pageCount}`, W/2, 290, {align:'center'});
+    }
+
+    const safe = (p.evento||'evento').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_');
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+    const win = window.open(blobUrl, '_blank');
+    if (!win) {
+        alert('Por favor, permita pop-ups deste site para visualizar o PDF em outra aba.');
+        doc.save(`inscricao_${safe}.pdf`);
+    }
+}
+
+async function downloadAllPDFs() {
+    const zip = new JSZip();
+    for (let i = 0; i < allUnificados.length; i++) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const p = allUnificados[i].primeiraEtapa;
+        doc.setFontSize(18); doc.text('Ficha - DAC', 105, 20, {align:'center'});
+        doc.setFontSize(12); doc.text(`Evento: ${p.evento||'—'}`, 20, 40);
+        doc.text(`Proponente: ${p.nome||'—'}`, 20, 50);
+        doc.text(`E-mail: ${p.email||'—'}`, 20, 60);
+        doc.text(`Local: ${p.localNome||'—'}`, 20, 70);
+        const safe = (p.evento||'evento').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]/g,'_');
+        zip.file(`${String(i+1).padStart(2,'0')}_${safe}.pdf`, doc.output('arraybuffer'));
+    }
+    const blob = await zip.generateAsync({type:'blob'});
+    saveAs(blob, 'inscricoes_dac.zip');
+}
+
+// ══════════════════════════════════════════════════
+// RELATÓRIO DE AVALIAÇÕES
+// ══════════════════════════════════════════════════
+let relatorioData = null;
+
+async function loadRelatorio() {
+    const content = document.getElementById('relatorioContent');
+    content.innerHTML = '<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando relatório...</div>';
+    try {
+        const r = await fetch('/api/admin/relatorio-avaliacoes');
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || 'Erro ao carregar');
+        relatorioData = d;
+        renderRelatorio();
+    } catch(e) {
+        content.innerHTML = `<div class="error-msg">Erro ao carregar relatório: ${e.message}</div>`;
+    }
+}
+
+function getRelatorioFiltrado() {
+    if (!relatorioData) return [];
+    const fLocal = document.getElementById('filterLocalRel').value;
+    const fStatus = document.getElementById('filterStatusRel').value;
+    return relatorioData.ranking.filter(r => {
+        const matchLocal = !fLocal || (r.local || '').toLowerCase().includes(fLocal.toLowerCase());
+        const matchStatus = !fStatus || r.statusAvaliacao === fStatus;
+        return matchLocal && matchStatus;
+    });
+}
+
+function renderRelatorio() {
+    if (!relatorioData) return;
+    const lista = getRelatorioFiltrado();
+    const resumo = document.getElementById('relatorioResumo');
+    const concluidas = relatorioData.ranking.filter(r => r.statusAvaliacao === 'Concluída').length;
+    const semAv = relatorioData.ranking.filter(r => r.qtdAvaliacoes === 0).length;
+    const card = (label, val, cor) => `<div style="flex:1;min-width:140px;background:#fff;border:1px solid #eef0f3;border-left:4px solid ${cor};border-radius:8px;padding:12px 14px"><div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">${label}</div><div style="font-size:22px;font-weight:700;color:#222;margin-top:2px">${val}</div></div>`;
+    resumo.innerHTML =
+        card('Total de Inscrições', relatorioData.total, '#2563eb') +
+        card('Avaliadas', relatorioData.avaliadas, '#764ba2') +
+        card('Concluídas', concluidas, '#16a34a') +
+        card('Sem Avaliações', semAv, '#9ca3af') +
+        card('Mín. Necessárias', relatorioData.necessarias, '#d97706');
+
+    const content = document.getElementById('relatorioContent');
+    if (lista.length === 0) {
+        content.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada com esses filtros.</div>';
+        return;
+    }
+    const crit = relatorioData.criterios;
+    let html = `<div class="table-wrap"><table><thead><tr>
+        <th style="width:40px">#</th>
+        <th>Evento / Proponente</th>
+        <th>Local</th>
+        <th style="text-align:center">Avaliações</th>
+        <th style="text-align:center">Status</th>
+        ${crit.map(c => `<th style="text-align:center" title="Peso: ${c.peso}">${escapeHtml(c.nome)}<div style="font-size:10px;color:#888;font-weight:400">peso ${c.peso}</div></th>`).join('')}
+        <th style="text-align:center">Média Final</th>
+    </tr></thead><tbody>`;
+    lista.forEach((r, i) => {
+        const isIgrejinha = (r.local || '').toLowerCase().includes('igrej');
+        const localBadge = `<span class="local-badge ${isIgrejinha ? 'local-igrejinha' : 'local-teatro'}" style="padding:2px 8px;font-size:11px">${escapeHtml(r.local || '—')}</span>`;
+        let stClass = 'st-pendente', stTxt = r.statusAvaliacao;
+        if (r.statusAvaliacao === 'Concluída') stClass = 'st-completo';
+        if (r.statusAvaliacao === 'Sem avaliações') stClass = 'st-cancelado';
+        const mediaCell = r.mediaFinal !== null
+            ? `<strong style="color:#764ba2;font-size:16px">${r.mediaFinal.toFixed(2)}</strong><span style="color:#aaa;font-size:11px"> /10</span>`
+            : '<span style="color:#aaa">—</span>';
+        const critCells = crit.map(c => {
+            const m = r.mediasPorCriterio[c.id];
+            return `<td style="text-align:center;font-size:12px">${m && m.media !== null ? m.media.toFixed(1) : '<span style="color:#ccc">—</span>'}</td>`;
+        }).join('');
+        const avTitle = r.avaliadores.length ? `Avaliadores: ${r.avaliadores.join(', ')}` : 'Sem avaliações';
+        html += `<tr>
+            <td style="color:#888;font-size:12px">${i + 1}</td>
+            <td><strong style="color:#222">${escapeHtml(r.evento || 'SEM EVENTO').toUpperCase()}</strong>
+                <div style="font-size:11px;color:#888;margin-top:2px">${escapeHtml(r.proponente || '')} &middot; ${escapeHtml(r.email || '')}</div></td>
+            <td>${localBadge}</td>
+            <td style="text-align:center" title="${escapeHtml(avTitle)}"><strong>${r.qtdAvaliacoes}</strong><span style="color:#aaa;font-size:11px"> /${r.necessarias}</span></td>
+            <td style="text-align:center"><span class="status-badge ${stClass}">${stTxt}</span></td>
+            ${critCells}
+            <td style="text-align:center">${mediaCell}</td>
+        </tr>`;
+    });
+    html += '</tbody></table></div>';
+    content.innerHTML = html;
+}
+
+function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function exportRelatorioCSV() {
+    if (!relatorioData) { alert('Carregue o relatório primeiro.'); return; }
+    const lista = getRelatorioFiltrado();
+    if (lista.length === 0) { alert('Nada para exportar.'); return; }
+    const crit = relatorioData.criterios;
+    const header = ['Posicao','Evento','Proponente','Email','Local','Avaliacoes','Necessarias','Status', ...crit.map(c => `${c.nome} (peso ${c.peso})`), 'Media Final', 'Avaliadores'];
+    const csvCell = v => {
+        const s = String(v == null ? '' : v).replace(/"/g, '""');
+        return /[",;\n\r]/.test(s) ? `"${s}"` : s;
+    };
+    const rows = lista.map((r, i) => [
+        i + 1,
+        r.evento, r.proponente, r.email, r.local,
+        r.qtdAvaliacoes, r.necessarias, r.statusAvaliacao,
+        ...crit.map(c => {
+            const m = r.mediasPorCriterio[c.id];
+            return m && m.media !== null ? m.media.toFixed(2).replace('.', ',') : '';
+        }),
+        r.mediaFinal !== null ? r.mediaFinal.toFixed(2).replace('.', ',') : '',
+        r.avaliadores.join(' | ')
+    ]);
+    const csv = '\uFEFF' + [header, ...rows].map(row => row.map(csvCell).join(';')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const ts = new Date().toISOString().slice(0, 10);
+    a.href = url; a.download = `relatorio_avaliacoes_dac_${ts}.csv`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// ══════════════════════════════════════════════════
+// AVALIADORES
+// ══════════════════════════════════════════════════
+async function loadAvaliadores() {
+    try {
+        const r = await fetch('/api/evaluators');
+        avaliadores = await r.json();
+        renderAvaliadores();
+    } catch(e) { document.getElementById('avaliadoresList').innerHTML = '<div class="error-msg">Erro ao carregar avaliadores.</div>'; }
+}
+
+function renderAvaliadores() {
+    const el = document.getElementById('avaliadoresList');
+    if (!avaliadores.length) { el.innerHTML = '<p style="color:#aaa;font-size:13px">Nenhum avaliador cadastrado.</p>'; return; }
+    el.innerHTML = avaliadores.map(a => `
+        <div class="av-list-item">
+            <div><div class="av-email">${a.email}</div><div class="av-nome">${a.nome||'—'}</div></div>
+            <button class="btn-top btn-danger" style="padding:6px 12px" onclick="removeAvaliador('${a.id}')"><i class="fas fa-trash"></i></button>
+        </div>`).join('');
+}
+
+function openAddAvaliadorModal() { openModal('modalAddAvaliador'); }
+
+async function addAvaliador() {
+    const nome = document.getElementById('newAvNome').value.trim();
+    const email = document.getElementById('newAvEmail').value.trim();
+    if (!email) { alert('E-mail obrigatório.'); return; }
+    avaliadores.push({ id: `av_${Date.now()}`, email, nome });
+    await fetch('/api/evaluators', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ evaluators: avaliadores }) });
+    document.getElementById('newAvNome').value = '';
+    document.getElementById('newAvEmail').value = '';
+    closeModal('modalAddAvaliador');
+    renderAvaliadores();
+}
+
+async function removeAvaliador(id) {
+    if (!confirm('Remover este avaliador?')) return;
+    await fetch(`/api/evaluators/${id}`, { method: 'DELETE' });
+    await loadAvaliadores();
+}
+
+// ══════════════════════════════════════════════════
+// CRITÉRIOS
+// ══════════════════════════════════════════════════
+async function loadCriteria() {
+    try {
+        const r = await fetch('/api/criteria');
+        criterios = await r.json();
+        renderCriteria();
+    } catch(e) {}
+}
+
+function renderCriteria() {
+    const el = document.getElementById('criteriaList');
+    if (!el) return;
+    el.innerHTML = criterios.map((c, i) => `
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <input type="text" value="${c.nome}" class="form-input" style="flex:2" onchange="criterios[${i}].nome=this.value" placeholder="Nome do critério">
+            <input type="number" value="${c.peso||1}" class="form-input" style="width:80px" min="1" max="10" onchange="criterios[${i}].peso=parseFloat(this.value)" placeholder="Peso">
+            <button class="btn-top btn-danger" style="padding:8px 12px" onclick="removeCriterion(${i})"><i class="fas fa-trash"></i></button>
+        </div>`).join('');
+}
+
+function addCriterion() {
+    criterios.push({ id: `C${Date.now()}`, nome: 'Novo Critério', peso: 1 });
+    renderCriteria();
+}
+
+function removeCriterion(i) {
+    criterios.splice(i, 1);
+    renderCriteria();
+}
+
+async function saveCriteria() {
+    try {
+        await fetch('/api/criteria', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ criteria: criterios }) });
+        alert('Critérios salvos!');
+    } catch(e) { alert('Erro ao salvar critérios.'); }
+}
+
+// ══════════════════════════════════════════════════
+// CONFIGURAÇÕES
+// ══════════════════════════════════════════════════
+async function loadConfigs() {
+    try {
+        const r = await fetch('/api/config');
+        const c = await r.json();
+        document.getElementById('cfgFormsLink').value = c.formsLink || '';
+        document.getElementById('cfgSheetId').value = c.spreadsheetId || '';
+        const responsavel = document.getElementById('termoResponsavelNome');
+        if (responsavel) responsavel.value = c.responsavelTermoNome || 'Andréa Búrigo Ventura';
+        const tt = document.getElementById('cfgTituloPagina');
+        if (tt) tt.value = c.tituloPaginaAgendamento || 'Inscrição de Projeto';
+        const an = document.getElementById('cfgAvaliacoesNecessarias');
+        if (an) an.value = c.avaliacoesNecessarias || 3;
+        const bh = c.botoesHome || {};
+        const i = bh.interno || { ativo: false, texto: 'Edital Interno' };
+        const e = bh.externo || { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' };
+        const en= bh.ensaio  || { ativo: false, texto: 'Agendar Apenas Ensaio' };
+        const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+        const setChk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+        setChk('cfgBtnInternoAtivo', i.ativo); set('cfgBtnInternoTexto', i.texto || 'Edital Interno'); set('cfgBtnInternoDataInicio', i.dataInicio || '');
+        setChk('cfgBtnExternoAtivo', e.ativo); set('cfgBtnExternoTexto', e.texto || 'Edital de Ocupação dos Espaços do DAC 2026'); set('cfgBtnExternoDataInicio', e.dataInicio || '');
+        setChk('cfgBtnEnsaioAtivo',  en.ativo); set('cfgBtnEnsaioTexto',  en.texto || 'Agendar Apenas Ensaio'); set('cfgBtnEnsaioDataInicio', en.dataInicio || '');
+        const msgEl = document.getElementById('cfgMensagemBotoesDesativados');
+        if (msgEl) msgEl.value = c.mensagemBotoesDesativados || 'As inscrições estão encerradas no momento.';
+        const disp = document.getElementById('cfgDisputa');
+        if (disp) disp.checked = c.permitirDisputa !== false;
+        const sfin = document.getElementById('cfgSomenteFinSemana');
+        if (sfin) sfin.checked = !!c.somenteFinaisDeSemana;
+        const hl = c.horariosLimites || {};
+        document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
+        document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
+        document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
+        datasBloqueadas = c.datasBloqueadas || [];
+        renderDatasBloqueadas();
+    } catch(e) {}
+}
+
+function switchCfgTab(name) {
+    document.querySelectorAll('.cfg-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.cfg-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById(`cfg-${name}`).classList.add('active');
+    document.querySelectorAll('.cfg-tab').forEach(t => {
+        const map = {forms:'Formulários',regras:'Regras',calendario:'Calendário'};
+        if (t.textContent.trim() === map[name]) t.classList.add('active');
+    });
+    if (name === 'config') loadConfigs();
+}
+
+async function saveAvaliacoesNecessarias() {
+    const v = parseInt(document.getElementById('cfgAvaliacoesNecessarias').value || '3', 10);
+    const num = (Number.isFinite(v) && v > 0) ? Math.min(v, 20) : 3;
+    try {
+        const cur = await fetch('/api/config').then(r => r.json());
+        const body = { ...cur, avaliacoesNecessarias: num };
+        const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (d.success) alert('Regra de avaliação salva!'); else alert('Erro ao salvar.');
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
+}
+
+async function saveConfigs() {
+    const body = {
+        formsLink: document.getElementById('cfgFormsLink').value,
+        spreadsheetId: document.getElementById('cfgSheetId').value,
+        tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
+        avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
+        responsavelTermoNome: (document.getElementById('termoResponsavelNome')?.value || '').trim() || 'Andréa Búrigo Ventura',
+        mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',
+        botoesHome: {
+            interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno', dataInicio: (document.getElementById('cfgBtnInternoDataInicio')?.value || '') || null },
+            externo: { ativo: !!document.getElementById('cfgBtnExternoAtivo')?.checked, texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026', dataInicio: (document.getElementById('cfgBtnExternoDataInicio')?.value || '') || null },
+            ensaio:  { ativo: !!document.getElementById('cfgBtnEnsaioAtivo')?.checked,  texto: (document.getElementById('cfgBtnEnsaioTexto')?.value || '').trim() || 'Agendar Apenas Ensaio', dataInicio: (document.getElementById('cfgBtnEnsaioDataInicio')?.value || '') || null }
+        },
+        permitirDisputa: document.getElementById('cfgDisputa').checked,
+        somenteFinaisDeSemana: document.getElementById('cfgSomenteFinSemana').checked,
+        horariosLimites: {
+            ensaio:     { fim: document.getElementById('h-ensaio-fim').value },
+            montagem:   { fim: document.getElementById('h-montagem-fim').value },
+            desmontagem:{ fim: document.getElementById('h-desmontagem-fim').value }
+        },
+        datasBloqueadas
+    };
+    try {
+        const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
+        const d = await r.json();
+        if (r.ok && d.success) alert('Configurações salvas!');
+        else alert('Erro ao salvar: ' + (d.error || 'Falha desconhecida. Verifique o console.'));
+    } catch(e) { alert('Erro de conexão: ' + e.message); }
+}
+
+async function salvarNomeResponsavelTermo() {
+    const input = document.getElementById('termoResponsavelNome');
+    const status = document.getElementById('termoResponsavelStatus');
+    const nome = (input?.value || '').trim();
+    if (!nome) {
+        status.style.color = '#b91c1c';
+        status.textContent = 'Informe o nome completo da representante.';
+        return;
+    }
+    try {
+        status.style.color = '#666';
+        status.textContent = 'Salvando...';
+        const r = await fetch('/api/admin/termo-responsavel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ responsavelTermoNome: nome })
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar o nome.');
+        status.style.color = '#15803d';
+        status.textContent = 'Nome salvo. Os próximos PDFs usarão esta informação.';
+    } catch (e) {
+        status.style.color = '#b91c1c';
+        status.textContent = e.message;
+    }
+}
+
+function toggleBloqueioData() {
+    const data = document.getElementById('bloqueioData').value;
+    if (!data) { alert('Selecione uma data.'); return; }
+    const idx = datasBloqueadas.indexOf(data);
+    if (idx >= 0) datasBloqueadas.splice(idx, 1); else datasBloqueadas.push(data);
+    datasBloqueadas.sort();
+    renderDatasBloqueadas();
+}
+
+function renderDatasBloqueadas() {
+    const el = document.getElementById('listaDatasBloqueadas');
+    if (!el) return;
+    if (!datasBloqueadas.length) { el.textContent = 'Nenhuma data bloqueada.'; return; }
+    el.innerHTML = datasBloqueadas.map(d => {
+        const [y,m,dia] = d.split('-');
+        return `<span style="display:inline-flex;align-items:center;gap:6px;background:#fee2e2;color:#991b1b;border-radius:6px;padding:3px 10px;margin:3px;font-size:12px;font-weight:600">
+            📅 ${dia}/${m}/${y}
+            <button onclick="desbloquearData('${d}')" style="background:none;border:none;cursor:pointer;color:#991b1b;padding:0;font-size:14px;line-height:1">×</button>
+        </span>`;
+    }).join('');
+}
+
+function desbloquearData(d) {
+    datasBloqueadas = datasBloqueadas.filter(x => x !== d);
+    renderDatasBloqueadas();
+}
+
+// ══════════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
+
+// ══════════════════════════════════════════════════
+// DOCUMENTOS DA INSCRIÇÃO DE TESTE
+// ══════════════════════════════════════════════════
+function formatarTamanhoDocumento(bytes) {
+    const tamanho = Number(bytes) || 0;
+    if (tamanho < 1024) return `${tamanho} B`;
+    if (tamanho < 1024 * 1024) return `${(tamanho / 1024).toFixed(1)} KB`;
+    return `${(tamanho / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function escapeAtributoDocumento(value) {
+    return escapeHtml(value).replace(/`/g, '&#96;');
+}
+
+async function abrirDocumentos(idx) {
+    if (userRole !== 'admin') return;
+    const item = allUnificados[idx];
+    const p = item?.primeiraEtapa;
+    if (!p?.id || !p.inscricaoTeste) return;
+
+    documentosInscricaoIndex = idx;
+    document.getElementById('documentosInscricaoTitulo').textContent =
+        `Documentos — ${p.evento || 'Inscrição'}`;
+    document.getElementById('documentosInscricaoResumo').innerHTML =
+        `<strong>${escapeHtml(p.nome || 'Proponente não informado')}</strong>` +
+        ` <span style="color:#999">·</span> ${escapeHtml(p.email || 'E-mail não informado')}`;
+    document.getElementById('documentosInscricaoStatus').style.color = '#666';
+    document.getElementById('documentosInscricaoStatus').textContent = 'Carregando documentos...';
+    document.getElementById('documentosInscricaoLista').innerHTML =
+        '<div class="loading-msg" style="padding:28px"><i class="fas fa-spinner fa-spin"></i></div>';
+    openModal('modalDocumentosInscricao');
+
+    try {
+        const response = await fetch(`/api/admin/inscricoes/${encodeURIComponent(p.id)}/documentos?_=${Date.now()}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível carregar os documentos.');
+        renderDocumentosInscricao(data.documentos || [], p.id);
+    } catch (error) {
+        document.getElementById('documentosInscricaoStatus').style.color = '#b91c1c';
+        document.getElementById('documentosInscricaoStatus').textContent = error.message;
+        document.getElementById('documentosInscricaoLista').innerHTML = '';
+    }
+}
+
+function renderDocumentosInscricao(documentos, inscricaoId) {
+    const status = document.getElementById('documentosInscricaoStatus');
+    const lista = document.getElementById('documentosInscricaoLista');
+    status.style.color = '#666';
+    status.textContent = documentos.length
+        ? `${documentos.length} arquivo(s) armazenado(s) de forma privada.`
+        : 'Nenhum documento enviado para esta inscrição.';
+
+    if (!documentos.length) {
+        lista.innerHTML = '<div class="empty-msg" style="padding:32px 10px">A pasta está vazia.</div>';
+        return;
+    }
+
+    const porCategoria = documentos.reduce((grupos, documento) => {
+        const categoria = documento.categoria || 'Documentos';
+        (grupos[categoria] ||= []).push(documento);
+        return grupos;
+    }, {});
+
+    lista.innerHTML = Object.entries(porCategoria).map(([categoria, itens]) => `
+        <section style="margin-bottom:18px">
+            <h4 style="font-size:13px;color:#4b5563;margin:0 0 8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb">
+                <i class="fas fa-folder" style="color:#f59e0b;margin-right:6px"></i>${escapeHtml(categoria)}
+            </h4>
+            <div style="display:grid;gap:8px">
+                ${itens.map(documento => {
+                    const url = `/api/admin/documentos/${encodeURIComponent(inscricaoId)}/${encodeURIComponent(documento.id)}`;
+                    const nome = escapeHtml(documento.nome || 'Documento sem nome');
+                    return `<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;flex-wrap:wrap">
+                        <i class="far fa-file-alt" style="color:#64748b;font-size:18px"></i>
+                        <div style="flex:1;min-width:180px">
+                            <div style="font-size:13px;font-weight:600;color:#334155;word-break:break-word">${nome}</div>
+                            <div style="font-size:11px;color:#94a3b8;margin-top:2px">${formatarTamanhoDocumento(documento.tamanho)} · ${escapeHtml(documento.mimeType || 'tipo desconhecido')}</div>
+                        </div>
+                        <div style="display:flex;gap:6px">
+                            <a class="btn-top" href="${url}" target="_blank" rel="noopener" style="padding:7px 10px;background:#2563eb;color:#fff;text-decoration:none" title="Visualizar ou baixar">
+                                <i class="fas fa-external-link-alt"></i> Abrir
+                            </a>
+                            <button class="btn-top btn-danger" style="padding:7px 10px" onclick="excluirDocumento('${escapeAtributoDocumento(inscricaoId)}','${escapeAtributoDocumento(documento.id)}')">
+                                <i class="far fa-trash-alt"></i> Excluir
+                            </button>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </section>
+    `).join('');
+}
+
+async function excluirDocumento(inscricaoId, documentoId) {
+    if (userRole !== 'admin') return;
+    if (!confirm('Excluir este documento permanentemente? Esta ação não pode ser desfeita.')) return;
+    const status = document.getElementById('documentosInscricaoStatus');
+    status.style.color = '#666';
+    status.textContent = 'Excluindo documento...';
+    try {
+        const response = await fetch(`/api/admin/inscricoes/${encodeURIComponent(inscricaoId)}/documentos/${encodeURIComponent(documentoId)}`, { method: 'DELETE' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível excluir o documento.');
+        const responseLista = await fetch(`/api/admin/inscricoes/${encodeURIComponent(inscricaoId)}/documentos?_=${Date.now()}`);
+        const lista = await responseLista.json().catch(() => ({}));
+        if (!responseLista.ok) throw new Error(lista.error || 'Documento excluído, mas não foi possível atualizar a lista.');
+        const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(inscricaoId));
+        if (item) item.primeiraEtapa.documentos = lista.documentos || [];
+        renderDocumentosInscricao(lista.documentos || [], inscricaoId);
+        renderTabela();
+    } catch (error) {
+        status.style.color = '#b91c1c';
+        status.textContent = error.message;
+    }
+}
+
+// ══════════════════════════════════════════════════
+// AUTO-LOGIN (sessão salva)
+// ══════════════════════════════════════════════════
+(function checkSavedSession() {
+    const role = localStorage.getItem('dac_role');
+    const ts = parseInt(localStorage.getItem('dac_ts') || '0');
+    const TTL = 8 * 60 * 60 * 1000; // 8 horas
+    if (role && (Date.now() - ts) < TTL) {
+        userRole = role;
+        if (role === 'viewer') viewerEmail = localStorage.getItem('dac_viewer_email');
+        initApp();
+    }
+})();
+
+// Carregar configs quando aba de config for aberta
+document.addEventListener('DOMContentLoaded', () => {
+    // Nada adicional necessário, tudo controlado por eventos
+});
+
+</script>
+</body>
+</html>

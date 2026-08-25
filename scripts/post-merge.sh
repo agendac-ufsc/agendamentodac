@@ -1,4 +1,8 @@
 #!/bin/bash
 set -e
-pnpm install --frozen-lockfile
-pnpm --filter db push
+
+if [ -f package.json ]; then
+  npm install --no-audit --no-fund --prefer-offline
+fi
+
+echo "post-merge setup ok"

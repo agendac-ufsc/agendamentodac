@@ -1,0 +1,51 @@
+~/workspace$ rm /home/runner/workspace/.git/ORIG_HEAD.lock
+git merge origin/main -X ours --no-edit
+git push origin main
+Auto-merging server.js
+Merge made by the 'ort' strategy.
+ .replit                                                  |   2 +-
+ attached_assets/agendamento-dac-backup_1777043837125.zip | Bin 0 -> 3886652 bytes
+ attached_assets/image_1777044312396.png                  | Bin 0 -> 30238 bytes
+ attached_assets/image_1778246586023.png                  | Bin 0 -> 159627 bytes
+ attached_assets/image_1778248450140.png                  | Bin 0 -> 50506 bytes
+ attached_assets/image_1778249627779.png                  | Bin 0 -> 55508 bytes
+ attached_assets/image_1778251974068.png                  | Bin 0 -> 42060 bytes
+ attached_assets/image_1778252008224.png                  | Bin 0 -> 85168 bytes
+ attached_assets/image_1778252710923.png                  | Bin 0 -> 234525 bytes
+ attached_assets/image_1778253506988.png                  | Bin 0 -> 35012 bytes
+ attached_assets/image_1778254338349.png                  | Bin 0 -> 9092 bytes
+ attached_assets/image_1778254812467.png                  | Bin 0 -> 28373 bytes
+ attached_assets/image_1778255253465.png                  | Bin 0 -> 30315 bytes
+ attached_assets/image_1779984590722.png                  | Bin 0 -> 61884 bytes
+ attached_assets/image_1779986165451.png                  | Bin 0 -> 44665 bytes
+ attached_assets/image_1780495705465.png                  | Bin 0 -> 41405 bytes
+ attached_assets/image_1780498245040.png                  | Bin 0 -> 48512 bytes
+ attached_assets/image_1780499857937.png                  | Bin 0 -> 11932 bytes
+ 18 files changed, 1 insertion(+), 1 deletion(-)
+ create mode 100644 attached_assets/agendamento-dac-backup_1777043837125.zip
+ create mode 100644 attached_assets/image_1777044312396.png
+ create mode 100644 attached_assets/image_1778246586023.png
+ create mode 100644 attached_assets/image_1778248450140.png
+ create mode 100644 attached_assets/image_1778249627779.png
+ create mode 100644 attached_assets/image_1778251974068.png
+ create mode 100644 attached_assets/image_1778252008224.png
+ create mode 100644 attached_assets/image_1778252710923.png
+ create mode 100644 attached_assets/image_1778253506988.png
+ create mode 100644 attached_assets/image_1778254338349.png
+ create mode 100644 attached_assets/image_1778254812467.png
+ create mode 100644 attached_assets/image_1778255253465.png
+ create mode 100644 attached_assets/image_1779984590722.png
+ create mode 100644 attached_assets/image_1779986165451.png
+ create mode 100644 attached_assets/image_1780495705465.png
+ create mode 100644 attached_assets/image_1780498245040.png
+ create mode 100644 attached_assets/image_1780499857937.png
+Enumerating objects: 50, done.
+Counting objects: 100% (50/50), done.
+Delta compression using up to 4 threads
+Compressing objects: 100% (36/36), done.
+Writing objects: 100% (36/36), 521.88 KiB | 20.88 MiB/s, done.
+Total 36 (delta 23), reused 0 (delta 0), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (23/23), completed with 8 local objects.
+To https://github.com/agendac-ufsc/agendamentodac
+   42cd4a0..40c10b6  main -> main
+~/workspace$ 

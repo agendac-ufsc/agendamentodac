@@ -1,0 +1,2 @@
+- [Sincronização de termos](term-sync.md) — o painel administrativo precisa buscar o estado do servidor, pois o proponente pode concluir o termo em outro navegador.
+- [Provisionamento do App Storage](object-storage.md) — o SDK só aceita uploads depois que um bucket é provisionado no ambiente.
