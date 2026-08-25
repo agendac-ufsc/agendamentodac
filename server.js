@@ -15,8 +15,9 @@ const axios = require('axios');
 const { google } = require('googleapis');
 const { Redis } = require('@upstash/redis');
 const multer = require('multer');
-const { Client: ObjectStorageClient } = require('@replit/object-storage');
+const { put: putBlob, get: getBlob, del: deleteBlob } = require('@vercel/blob');
 const { randomUUID } = require('crypto');
+const { Readable } = require('stream');
 
 const app = express();
 app.use(cors());
@@ -25,14 +26,10 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
 app.use(express.static(path.join(__dirname)));
 
-const objectStorage = new ObjectStorageClient();
-// O SDK inicializa o bucket de forma assíncrona. Anexar o tratamento aqui
-// evita uma rejeição não tratada quando o App Storage ainda não foi provisionado
-// neste ambiente; as rotas retornam um erro explicativo nesse caso.
-const objectStorageReady = objectStorage.getBucket().catch(error => {
-    console.warn('⚠️ [Object Storage] Armazenamento indisponível:', error.message);
-    return null;
-});
+const blobStorageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+if (!blobStorageReady) {
+    console.warn('⚠️ [Vercel Blob] BLOB_READ_WRITE_TOKEN não configurado; uploads ficarão indisponíveis.');
+}
 const uploadDocumentosTeste = multer({
     storage: multer.memoryStorage(),
     limits: { files: 30, fileSize: 100 * 1024 * 1024 }
@@ -1329,8 +1326,8 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
     }
 });
 
-// Upload privado dos documentos do ambiente de teste. Os bytes ficam no App
-// Storage; o Redis guarda apenas os metadados e o caminho do objeto.
+// Upload privado dos documentos do ambiente de teste. Os bytes ficam no
+// Vercel Blob; o Redis guarda apenas os metadados e a URL do blob.
 app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos', 30), async (req, res) => {
     const id = String(req.body?.id || '');
     if (!id) return res.status(400).json({ error: 'ID da inscrição não informado.' });
@@ -1340,8 +1337,8 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
         if (!agendamento || agendamento.inscricaoTeste !== true) {
             return res.status(404).json({ error: 'Inscrição de teste não encontrada.' });
         }
-        if (!await objectStorageReady) {
-            return res.status(503).json({ error: 'O armazenamento de documentos ainda não está provisionado.' });
+        if (!blobStorageReady) {
+            return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
         }
         let metadata;
         try {
@@ -1389,14 +1386,17 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
             const info = metadata[index] || {};
             const nomeSeguro = String(file.originalname || 'arquivo')
                 .replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-150);
-            const objectPath = `inscricoes/${id}/${randomUUID()}-${nomeSeguro}`;
-            const uploaded = await objectStorage.uploadFromBytes(objectPath, file.buffer, {
-                contentType: file.mimetype
+            const pathname = `inscricoes/${id}/${randomUUID()}-${nomeSeguro}`;
+            const uploaded = await putBlob(pathname, file.buffer, {
+                access: 'private',
+                addRandomSuffix: false,
+                contentType: file.mimetype,
+                multipart: file.size > 50 * 1024 * 1024
             });
-            if (!uploaded?.ok) throw new Error(uploaded?.error?.message || 'Falha ao salvar arquivo.');
             arquivos.push({
                 id: randomUUID(),
-                objectPath,
+                pathname: uploaded.pathname,
+                blobUrl: uploaded.url,
                 nome: file.originalname,
                 mimeType: file.mimetype,
                 tamanho: file.size,
@@ -1427,15 +1427,17 @@ app.get('/api/admin/inscricoes/:id/documentos', async (req, res) => {
 
 app.get('/api/admin/documentos/:id/:documentoId', async (req, res) => {
     try {
-        if (!await objectStorageReady) return res.status(503).send('O armazenamento de documentos ainda não está provisionado.');
+        if (!blobStorageReady) return res.status(503).send('O armazenamento de documentos ainda não está configurado.');
         const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
         const documento = agendamento?.documentos?.find(item => String(item.id) === String(req.params.documentoId));
         if (!documento) return res.status(404).send('Documento não encontrado.');
-        const resultado = await objectStorage.downloadAsBytes(documento.objectPath);
-        if (!resultado?.ok) return res.status(404).send('Arquivo removido ou indisponível.');
-        res.set('Content-Type', documento.mimeType || 'application/octet-stream');
+        const blobUrl = documento.blobUrl || documento.url;
+        if (!blobUrl) return res.status(404).send('Documento sem referência de armazenamento.');
+        const resultado = await getBlob(blobUrl, { access: 'private', useCache: false });
+        if (resultado.statusCode !== 200 || !resultado.stream) return res.status(404).send('Arquivo removido ou indisponível.');
+        res.set('Content-Type', documento.mimeType || resultado.blob.contentType || 'application/octet-stream');
         res.set('Content-Disposition', `inline; filename="${encodeURIComponent(documento.nome || 'documento')}"`);
-        res.send(resultado.value);
+        Readable.fromWeb(resultado.stream).pipe(res);
     } catch (error) {
         console.error('❌ [/api/admin/documentos] erro:', error.message);
         res.status(500).send('Não foi possível abrir o documento.');
@@ -1444,12 +1446,13 @@ app.get('/api/admin/documentos/:id/:documentoId', async (req, res) => {
 
 app.delete('/api/admin/inscricoes/:id/documentos/:documentoId', async (req, res) => {
     try {
-        if (!await objectStorageReady) return res.status(503).json({ error: 'O armazenamento de documentos ainda não está provisionado.' });
+        if (!blobStorageReady) return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
         const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
         const documento = agendamento?.documentos?.find(item => String(item.id) === String(req.params.documentoId));
         if (!agendamento || !documento) return res.status(404).json({ error: 'Documento não encontrado.' });
-        const resultado = await objectStorage.delete(documento.objectPath);
-        if (!resultado?.ok) return res.status(502).json({ error: 'Não foi possível excluir o arquivo.' });
+        const blobUrl = documento.blobUrl || documento.url;
+        if (!blobUrl) return res.status(404).json({ error: 'Documento sem referência de armazenamento.' });
+        await deleteBlob(blobUrl);
         await updateAgendamento(req.params.id, {
             documentos: agendamento.documentos.filter(item => String(item.id) !== String(req.params.documentoId))
         });
