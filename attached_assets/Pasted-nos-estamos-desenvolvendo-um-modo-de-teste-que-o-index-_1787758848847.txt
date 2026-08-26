@@ -1,0 +1,23 @@
+nos estamos desenvolvendo um modo de teste que é o index-teste.html e ja vamos oficializa-lo. quero que no painel administrativo, nessa parte dos formularios em configurações, entre a opção para mudar com uma chave para manter o modo normal ( etapa1 + etapa no google forms) e o modo novo, que é tudo feito no mesmo local ( modo teste index-teste.html). mas, como vamos oficializar, nao vai mais se chamar modo teste e sim, modo unificado. Então as opções serão modo 2 etapas e modo unificado. sem aquela tarja amarela no topo dizendo que é teste. o adm mudou ali e clicou em salvar, a tela principal passa a ser a unificada (antigo modo teste). Entendeu? e mantendo todas as funcionalidades
+
+Free
+5 minutes ago
+Analyzing user request
+
+Analyzing user request
+Entendi. Vou transformar o antigo index-teste.html no “modo unificado”, criar a chave de alternância dentro de Configurações → Formulários e fazer a página / respeitar essa escolha após o administrador salvar, sem a faixa amarela de teste. Primeiro vou localizar como a configuração atual é carregada/salva e como os dois formulários diferem, preservando as funcionalidades existentes.
+
+
+
+10 actions
+Já identifiquei o caminho: hoje o servidor sempre entrega index.html, enquanto o fluxo unificado existe separado em index-teste.html e usa rotas próprias de rascunho/finalização. Vou integrar a seleção no mesmo objeto de configurações, fazer a rota / escolher o arquivo correto e adaptar os textos/rotas do fluxo unificado para não expor “teste”, sem duplicar o formulário.
+
+
+
+23 actions
+A primeira alteração não foi aplicada porque o trecho de contexto do arquivo mudou em relação à busca anterior; nada foi modificado nessa tentativa. Vou reaplicar em partes menores e bem delimitadas para evitar tocar em trechos não relacionados.
+
+
+
+12 actions
+A lógica foi aplicada. A checagem ainda consultou o processo antigo, então o campo novo não apareceu até reiniciar o workflow; também confirmei que a tarja não existe mais no HTML unificado. Vou reiniciar agora e validar o novo campo, o painel e a seleção real da página principal.
