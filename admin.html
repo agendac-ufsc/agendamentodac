@@ -422,6 +422,20 @@
                     <button class="btn-top btn-purple" style="margin-top:12px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Título</button>
                 </div>
 
+                <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:18px">
+                    <h4 style="font-size:15px;color:#222;margin:0 0 8px;display:flex;align-items:center;gap:8px"><i class="fas fa-layer-group" style="color:#2563eb"></i> Modo do Formulário de Inscrição</h4>
+                    <p style="font-size:12px;color:#666;margin:0 0 14px;line-height:1.5">Escolha como o proponente concluirá a inscrição. A alteração passa a valer na página principal depois de salvar.</p>
+                    <div style="display:flex;align-items:center;justify-content:center;gap:14px;flex-wrap:wrap;padding:12px 14px;background:#f8f9fa;border:1px solid #eef0f3;border-radius:10px">
+                        <span style="font-size:14px;color:#444;font-weight:600">Modo 2 etapas</span>
+                        <label class="switch" title="Alternar modo de inscrição">
+                            <input type="checkbox" id="cfgModoUnificado" onchange="atualizarDescricaoModoInscricao()" aria-label="Alternar para modo unificado">
+                            <span class="slider"></span>
+                        </label>
+                        <span style="font-size:14px;color:#2563eb;font-weight:700">Modo unificado</span>
+                    </div>
+                    <p id="cfgModoInscricaoDescricao" style="font-size:12px;color:#666;margin:10px 0 0;text-align:center">O proponente preencherá os dados iniciais e concluirá a segunda etapa no Google Forms.</p>
+                </div>
+
                 <!-- Controle dos botões da tela inicial -->
                 <div style="background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:18px">
                     <h4 style="font-size:15px;color:#222;margin:0 0 14px;display:flex;align-items:center;gap:8px"><i class="fas fa-cog" style="color:#2563eb"></i> Controle da Página Inicial</h4>
@@ -485,7 +499,7 @@
                     </div>
                     <button class="btn-top btn-purple" style="margin-top:10px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
                 </div>
-                <label class="form-label">Link do Google Forms (2ª Etapa)</label>
+                <label class="form-label">Link do Google Forms (usado no modo 2 etapas)</label>
                 <input type="text" id="cfgFormsLink" class="form-input" placeholder="https://docs.google.com/forms/...">
                 <label class="form-label">Link / ID da Planilha Google Sheets</label>
                 <input type="text" id="cfgSheetId" class="form-input" placeholder="Cole o link completo ou o ID da planilha">
@@ -2452,6 +2466,9 @@ async function loadConfigs() {
         if (responsavel) responsavel.value = c.responsavelTermoNome || 'Andréa Búrigo Ventura';
         const tt = document.getElementById('cfgTituloPagina');
         if (tt) tt.value = c.tituloPaginaAgendamento || 'Inscrição de Projeto';
+        const modoUnificado = document.getElementById('cfgModoUnificado');
+        if (modoUnificado) modoUnificado.checked = c.modoInscricao === 'unificado';
+        atualizarDescricaoModoInscricao();
         const an = document.getElementById('cfgAvaliacoesNecessarias');
         if (an) an.value = c.avaliacoesNecessarias || 3;
         const bh = c.botoesHome || {};
@@ -2476,6 +2493,15 @@ async function loadConfigs() {
         datasBloqueadas = c.datasBloqueadas || [];
         renderDatasBloqueadas();
     } catch(e) {}
+}
+
+function atualizarDescricaoModoInscricao() {
+    const checkbox = document.getElementById('cfgModoUnificado');
+    const descricao = document.getElementById('cfgModoInscricaoDescricao');
+    if (!checkbox || !descricao) return;
+    descricao.textContent = checkbox.checked
+        ? 'O proponente preencherá todas as informações e enviará os documentos no mesmo formulário.'
+        : 'O proponente preencherá os dados iniciais e concluirá a segunda etapa no Google Forms.';
 }
 
 function switchCfgTab(name) {
@@ -2506,6 +2532,7 @@ async function saveConfigs() {
         formsLink: document.getElementById('cfgFormsLink').value,
         spreadsheetId: document.getElementById('cfgSheetId').value,
         tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
+        modoInscricao: document.getElementById('cfgModoUnificado')?.checked ? 'unificado' : 'duas-etapas',
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
         responsavelTermoNome: (document.getElementById('termoResponsavelNome')?.value || '').trim() || 'Andréa Búrigo Ventura',
         mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',

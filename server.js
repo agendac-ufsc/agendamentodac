@@ -24,7 +24,7 @@ app.use(cors());
 // O termo assinado é enviado como PDF em base64; manter margem suficiente para o anexo.
 app.use(express.json({ limit: '10mb' }));
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
-app.use(express.static(path.join(__dirname)));
+app.use(express.static(path.join(__dirname), { index: false }));
 
 // O token precisa ser o Read-Write Token criado na loja do Vercel Blob.
 // Remover aspas externas evita que um valor copiado como "token" seja recusado.
@@ -408,6 +408,7 @@ let HORARIOS_LIMITES = {
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 let AVALIACOES_NECESSARIAS = 3;
+let MODO_INSCRICAO = 'duas-etapas';
 const RESPONSAVEL_TERMO_NOME_PADRAO = 'Andréa Búrigo Ventura';
 let RESPONSAVEL_TERMO_NOME = RESPONSAVEL_TERMO_NOME_PADRAO;
 let BOTOES_HOME = {
@@ -419,6 +420,7 @@ let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.
 let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
 const CONFIG_KEY = 'agendamentos_config';
+const normalizarModoInscricao = modo => modo === 'unificado' ? 'unificado' : 'duas-etapas';
 
 const getConfigs = async (caller = 'unknown') => {
     console.log(`[getConfigs] chamado por: ${caller} | redis disponível: ${!!redis}`);
@@ -437,6 +439,7 @@ const getConfigs = async (caller = 'unknown') => {
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
+                MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao);
                 if (configs.avaliacoesNecessarias !== undefined) {
                     const n = parseInt(configs.avaliacoesNecessarias, 10);
                     if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
@@ -467,6 +470,7 @@ const getConfigs = async (caller = 'unknown') => {
                     horariosLimites: HORARIOS_LIMITES,
                     datasBloqueadas: DATAS_BLOQUEADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                    modoInscricao: MODO_INSCRICAO,
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                     responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
                     botoesHome: BOTOES_HOME,
@@ -490,6 +494,7 @@ const getConfigs = async (caller = 'unknown') => {
         horariosLimites: HORARIOS_LIMITES,
         datasBloqueadas: DATAS_BLOQUEADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+        modoInscricao: MODO_INSCRICAO,
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
         responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
         botoesHome: BOTOES_HOME,
@@ -539,6 +544,9 @@ const saveConfigs = async (configs) => {
         if (configs.tituloPaginaAgendamento !== undefined) {
             TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
         }
+        if (configs.modoInscricao !== undefined) {
+            MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao);
+        }
         if (configs.avaliacoesNecessarias !== undefined) {
             const n = parseInt(configs.avaliacoesNecessarias, 10);
             if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
@@ -572,6 +580,7 @@ const saveConfigs = async (configs) => {
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                modoInscricao: MODO_INSCRICAO,
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                 responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                 botoesHome: BOTOES_HOME,
@@ -681,12 +690,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, avaliacoesNecessarias, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, botoesHome, avaliacoesNecessarias, responsavelTermoNome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
@@ -1189,7 +1198,7 @@ app.post('/api/agendar', async (req, res) => {
         const idAgendamento = Date.now().toString();
 
         // Salvar no Redis ANTES dos e-mails — garante que a inscrição não se perde se o e-mail falhar
-        // No ambiente de teste, esta chamada cria apenas um rascunho: e-mails,
+        // No modo unificado, esta chamada cria apenas um rascunho: e-mails,
         // painel e Google Calendar só são acionados na conclusão da inscrição.
         await saveAgendamento({
             id: idAgendamento, nome, email, telefone, evento, etapas,
@@ -1297,7 +1306,7 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
                     const label = itens.length > 1 ? `${nomesEtapas[tipo] || tipo} ${index + 1}` : (nomesEtapas[tipo] || tipo);
                     const eventoCalendario = await createCalendarEvent(
                         `${label}: ${dados.evento}`,
-                        `Inscrição validada pelo sistema de teste.\nProponente: ${dados.nome}\nE-mail: ${email}\nLocal: ${agendamento.localNome || agendamento.local || 'Teatro Carmen Fossari'}`,
+                        `Inscrição validada pelo sistema unificado.\nProponente: ${dados.nome}\nE-mail: ${email}\nLocal: ${agendamento.localNome || agendamento.local || 'Teatro Carmen Fossari'}`,
                         item.data,
                         item.horario,
                         calendarId,
@@ -1338,7 +1347,7 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
     }
 });
 
-// Upload privado dos documentos do ambiente de teste. Os bytes ficam no
+// Upload privado dos documentos do modo unificado. Os bytes ficam no
 // Vercel Blob; o Redis guarda apenas os metadados e a URL do blob.
 app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos', 30), async (req, res) => {
     const id = String(req.body?.id || '');
@@ -1347,7 +1356,7 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
         const agendamentos = await getAgendamentos();
         const agendamento = agendamentos.find(item => String(item.id) === id);
         if (!agendamento || agendamento.inscricaoTeste !== true) {
-            return res.status(404).json({ error: 'Inscrição de teste não encontrada.' });
+            return res.status(404).json({ error: 'Inscrição do modo unificado não encontrada.' });
         }
         if (!blobStorageReady) {
             return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
@@ -1480,7 +1489,11 @@ app.delete('/api/admin/inscricoes/:id/documentos/:documentoId', async (req, res)
     }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
+app.get('/', async (req, res) => {
+    const configs = await getConfigs('GET /');
+    const paginaPrincipal = configs.modoInscricao === 'unificado' ? 'index-teste.html' : 'index.html';
+    res.sendFile(path.join(__dirname, paginaPrincipal));
+});
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/avaliador', (req, res) => res.sendFile(path.join(__dirname, 'avaliador.html')));
 app.get('/termo', (req, res) => res.sendFile(path.join(__dirname, 'termo.html')));
@@ -1801,16 +1814,16 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
             const localNomeResolvido = p.localNome || mapeamentoLocais[p.local] || mapeamentoLocais[p.calendarId] || 'Teatro';
             const calIdInscricao = p.calendarId || CALENDAR_IDS[(p.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
 
-            // Inscrições concluídas pelo ambiente de teste já possuem a segunda etapa
+            // Inscrições concluídas pelo modo unificado já possuem todas as etapas
             // salva no Redis e devem aparecer no painel sem depender do Google Forms.
             if (!correspondencia && p.inscricaoTesteConcluida === true) {
                 unificados.push({
                     primeiraEtapa: { ...p, localNome: localNomeResolvido },
                     segundaEtapa: {
                         headers: ['Segunda etapa', 'Status'],
-                        valores: ['Ambiente de teste', 'Concluída']
+                        valores: ['Modo unificado', 'Concluída']
                     },
-                    status: 'Completo (Teste)',
+                    status: 'Completo (Unificado)',
                     eventosExistem: true
                 });
                 continue;

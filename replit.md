@@ -52,7 +52,7 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 
 ## Arquitetura
 - **Backend**: Node.js + Express (`server.js`)
-- **Frontend**: HTML/CSS/JS puro (`index.html`, `admin.html`)
+- **Frontend**: HTML/CSS/JS puro (`index.html`, `index-teste.html`, `admin.html`)
 - **Banco de Dados**: Upstash Redis (REST API via `@upstash/redis`)
 - **Calendário**: Google Calendar API (via Service Account)
 - **E-mail**: Brevo (Sendinblue) REST API
@@ -66,6 +66,10 @@ Sistema de agendamento de espaços do Departamento Artístico Cultural (DAC) da 
 - `GET /api/config` → Configurações públicas (links, horários)
 - `GET /api/disponibilidade?local=teatro|igrejinha` → Eventos do Google Calendar
 - `POST /api/agendar` → Criar inscrição + eventos no Calendar + enviar e-mails
+
+O painel administrativo define em **Configurações → Formulários** qual página a rota `/` entrega:
+- **Modo 2 etapas**: usa `index.html`; a segunda etapa é concluída no Google Forms.
+- **Modo unificado**: usa o fluxo completo de `index-teste.html`, com dados, documentos e proposta no mesmo formulário.
 
 ### Autenticação
 - `POST /api/auth/admin` → Login admin (senha via env `ADMIN_PASSWORD`, padrão: `admin.dac.ufsc`)
