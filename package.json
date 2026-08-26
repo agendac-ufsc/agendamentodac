@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Sistema de agendamento com envio de e-mail via Brevo",
   "main": "server.js",
+  "packageManager": "pnpm@9.15.9",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js"

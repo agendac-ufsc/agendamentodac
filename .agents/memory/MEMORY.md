@@ -1,3 +1,4 @@
 - [Sincronização de termos](term-sync.md) — o painel administrativo precisa buscar o estado do servidor, pois o proponente pode concluir o termo em outro navegador.
 - [Armazenamento de documentos](object-storage.md) — documentos privados usam Vercel Blob; o token precisa existir no preview e na Vercel.
 - [Roteamento do preview](preview-routing.md) — artefatos auxiliares não devem declarar caminhos usados pela API do aplicativo principal.
+- [Lockfile da Vercel](pnpm-vercel-lockfile.md) — builds congelados exigem lockfile gerado pela mesma linha de pnpm usada no build e especificadores sincronizados.
