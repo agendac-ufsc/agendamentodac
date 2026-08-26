@@ -434,6 +434,12 @@
                         <span style="font-size:14px;color:#2563eb;font-weight:700">Modo unificado</span>
                     </div>
                     <p id="cfgModoInscricaoDescricao" style="font-size:12px;color:#666;margin:10px 0 0;text-align:center">O proponente preencherá os dados iniciais e concluirá a segunda etapa no Google Forms.</p>
+                    <div style="text-align:center;margin-top:14px">
+                        <button type="button" id="btnSalvarModoInscricao" class="btn-top btn-purple" style="background:#2563eb;border-color:#2563eb" onclick="salvarModoInscricao()">
+                            <i class="fas fa-save"></i> Salvar modo do formulário
+                        </button>
+                        <p id="cfgModoInscricaoStatus" role="status" aria-live="polite" style="font-size:12px;min-height:16px;margin:8px 0 0;color:#666"></p>
+                    </div>
                 </div>
 
                 <!-- Controle dos botões da tela inicial -->
@@ -2502,6 +2508,55 @@ function atualizarDescricaoModoInscricao() {
     descricao.textContent = checkbox.checked
         ? 'O proponente preencherá todas as informações e enviará os documentos no mesmo formulário.'
         : 'O proponente preencherá os dados iniciais e concluirá a segunda etapa no Google Forms.';
+}
+
+async function salvarModoInscricao() {
+    const checkbox = document.getElementById('cfgModoUnificado');
+    const btn = document.getElementById('btnSalvarModoInscricao');
+    const status = document.getElementById('cfgModoInscricaoStatus');
+    if (!checkbox || !btn || !status) return;
+
+    const modoInscricao = checkbox.checked ? 'unificado' : 'duas-etapas';
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+    status.style.color = '#666';
+    status.textContent = 'Salvando a configuração atual...';
+
+    try {
+        const configResponse = await fetch('/api/config?_=' + Date.now(), { cache: 'no-store' });
+        const configAtual = await configResponse.json().catch(() => ({}));
+        if (!configResponse.ok || !configAtual.spreadsheetId || !configAtual.formsLink) {
+            throw new Error(configAtual.error || 'Não foi possível carregar a configuração atual.');
+        }
+
+        const response = await fetch('/api/admin/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...configAtual, modoInscricao })
+        });
+        const resultado = await response.json().catch(() => ({}));
+        if (!response.ok || !resultado.success) {
+            throw new Error(resultado.error || 'Não foi possível salvar o modo do formulário.');
+        }
+
+        const confirmResponse = await fetch('/api/config?_=' + Date.now(), { cache: 'no-store' });
+        const confirmConfig = await confirmResponse.json().catch(() => ({}));
+        if (!confirmResponse.ok || confirmConfig.modoInscricao !== modoInscricao) {
+            throw new Error('O servidor não confirmou o modo selecionado.');
+        }
+
+        status.style.color = '#15803d';
+        status.textContent = modoInscricao === 'unificado'
+            ? 'Modo unificado salvo. A página principal já usará o formulário completo.'
+            : 'Modo 2 etapas salvo. A página principal usará o Google Forms na segunda etapa.';
+    } catch (error) {
+        status.style.color = '#b91c1c';
+        status.textContent = error.message;
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = textoOriginal;
+    }
 }
 
 function switchCfgTab(name) {
