@@ -81,8 +81,11 @@
         #inscricoesTable th:nth-child(5),#inscricoesTable td:nth-child(5){width:auto;overflow:hidden}
         #inscricoesTable td:nth-child(5) span{white-space:normal!important}
         #inscricoesTable th:nth-child(6),#inscricoesTable td:nth-child(6){width:88px}
-        #inscricoesTable th:nth-child(7){width:140px;text-align:center}
-        #inscricoesTable td:nth-child(7){width:140px;text-align:center;padding-right:16px}
+        #inscricoesTable th:nth-child(7){width:140px;text-align:right}
+        #inscricoesTable td:nth-child(7){width:140px;padding:6px 4px;overflow:hidden}
+        #inscricoesTable .acoes-list{display:flex;align-items:center;justify-content:flex-end;gap:0;flex-wrap:nowrap;direction:ltr;min-width:0}
+        #inscricoesTable .acoes-list .btn-action{flex:0 0 21px;width:21px;padding:3px 0;font-size:14px;line-height:1;white-space:nowrap}
+        #inscricoesTable .acoes-list .btn-action small{font-size:9px;margin-left:-2px}
         .col-evento{font-weight:700;color:#333}
         .local-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
         .local-teatro{background:#ede9fe;color:#7c3aed}
@@ -1198,7 +1201,7 @@ function renderTabela() {
             <td>${localBadge}</td>
             <td style="font-size:12px;line-height:1.7">${etapasHtml||'<span style="color:#aaa">—</span>'}${editEtapasBtn}</td>
             <td><span class="status-badge ${stClass}">${stText}</span></td>
-            <td style="text-align:center;white-space:nowrap">${acoes}</td>
+            <td class="acoes-cell"><div class="acoes-list">${acoes}</div></td>
         `;
         tbody.appendChild(row);
     });
