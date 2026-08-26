@@ -26,10 +26,19 @@ app.use(express.json({ limit: '10mb' }));
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
 app.use(express.static(path.join(__dirname)));
 
-const blobStorageReady = Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+// O token precisa ser o Read-Write Token criado na loja do Vercel Blob.
+// Remover aspas externas evita que um valor copiado como "token" seja recusado.
+const blobReadWriteToken = String(process.env.BLOB_READ_WRITE_TOKEN || '')
+    .trim()
+    .replace(/^(['"])(.*)\1$/s, '$2')
+    .trim();
+const blobStorageReady = blobReadWriteToken.startsWith('vercel_blob_rw_');
 if (!blobStorageReady) {
-    console.warn('⚠️ [Vercel Blob] BLOB_READ_WRITE_TOKEN não configurado; uploads ficarão indisponíveis.');
+    console.warn('⚠️ [Vercel Blob] BLOB_READ_WRITE_TOKEN ausente ou não é um Read-Write Token; uploads ficarão indisponíveis.');
+} else {
+    console.log('✅ [Vercel Blob] Read-Write Token detectado.');
 }
+const blobOptions = options => ({ ...options, token: blobReadWriteToken });
 const uploadDocumentosTeste = multer({
     storage: multer.memoryStorage(),
     limits: { files: 30, fileSize: 100 * 1024 * 1024 }
@@ -1387,12 +1396,12 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
             const nomeSeguro = String(file.originalname || 'arquivo')
                 .replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-150);
             const pathname = `inscricoes/${id}/${randomUUID()}-${nomeSeguro}`;
-            const uploaded = await putBlob(pathname, file.buffer, {
+            const uploaded = await putBlob(pathname, file.buffer, blobOptions({
                 access: 'private',
                 addRandomSuffix: false,
                 contentType: file.mimetype,
                 multipart: file.size > 50 * 1024 * 1024
-            });
+            }));
             arquivos.push({
                 id: randomUUID(),
                 pathname: uploaded.pathname,
@@ -1411,6 +1420,11 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
         res.json({ success: true, documentos: arquivos });
     } catch (error) {
         console.error('❌ [/api/documentos-teste/upload] erro:', error.message);
+        if (/access denied|valid token/i.test(error.message || '')) {
+            return res.status(503).json({
+                error: 'O token do Vercel Blob foi recusado. Configure o Read-Write Token da loja correta em BLOB_READ_WRITE_TOKEN.'
+            });
+        }
         res.status(500).json({ error: 'Não foi possível armazenar os documentos.' });
     }
 });
@@ -1433,7 +1447,7 @@ app.get('/api/admin/documentos/:id/:documentoId', async (req, res) => {
         if (!documento) return res.status(404).send('Documento não encontrado.');
         const blobUrl = documento.blobUrl || documento.url;
         if (!blobUrl) return res.status(404).send('Documento sem referência de armazenamento.');
-        const resultado = await getBlob(blobUrl, { access: 'private', useCache: false });
+        const resultado = await getBlob(blobUrl, blobOptions({ access: 'private', useCache: false }));
         if (resultado.statusCode !== 200 || !resultado.stream) return res.status(404).send('Arquivo removido ou indisponível.');
         res.set('Content-Type', documento.mimeType || resultado.blob.contentType || 'application/octet-stream');
         res.set('Content-Disposition', `inline; filename="${encodeURIComponent(documento.nome || 'documento')}"`);
@@ -1452,7 +1466,7 @@ app.delete('/api/admin/inscricoes/:id/documentos/:documentoId', async (req, res)
         if (!agendamento || !documento) return res.status(404).json({ error: 'Documento não encontrado.' });
         const blobUrl = documento.blobUrl || documento.url;
         if (!blobUrl) return res.status(404).json({ error: 'Documento sem referência de armazenamento.' });
-        await deleteBlob(blobUrl);
+        await deleteBlob(blobUrl, blobOptions());
         await updateAgendamento(req.params.id, {
             documentos: agendamento.documentos.filter(item => String(item.id) !== String(req.params.documentoId))
         });
