@@ -1,2 +1,3 @@
 - [Sincronização de termos](term-sync.md) — o painel administrativo precisa buscar o estado do servidor, pois o proponente pode concluir o termo em outro navegador.
 - [Armazenamento de documentos](object-storage.md) — documentos privados usam Vercel Blob; o token precisa existir no preview e na Vercel.
+- [Roteamento do preview](preview-routing.md) — artefatos auxiliares não devem declarar caminhos usados pela API do aplicativo principal.
