@@ -928,7 +928,7 @@ function logout() {
     localStorage.removeItem('dac_role');
     localStorage.removeItem('dac_viewer_email');
     localStorage.removeItem('dac_ts');
-    location.reload();
+    window.location.assign('/');
 }
 
 // ══════════════════════════════════════════════════
