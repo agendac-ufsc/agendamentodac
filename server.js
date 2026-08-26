@@ -32,11 +32,14 @@ const blobReadWriteToken = String(process.env.BLOB_READ_WRITE_TOKEN || '')
     .trim()
     .replace(/^(['"])(.*)\1$/s, '$2')
     .trim();
-const blobStorageReady = blobReadWriteToken.startsWith('vercel_blob_rw_');
+const blobStorageReady = Boolean(blobReadWriteToken);
 if (!blobStorageReady) {
-    console.warn('⚠️ [Vercel Blob] BLOB_READ_WRITE_TOKEN ausente ou não é um Read-Write Token; uploads ficarão indisponíveis.');
+    console.warn('⚠️ [Vercel Blob] BLOB_READ_WRITE_TOKEN não configurado; uploads ficarão indisponíveis.');
 } else {
     console.log('✅ [Vercel Blob] Read-Write Token detectado.');
+    if (!blobReadWriteToken.startsWith('vercel_blob_rw_')) {
+        console.warn('⚠️ [Vercel Blob] O valor não começa com vercel_blob_rw_; confirme que é o Read-Write Token da loja, não um token de cliente ou uma URL.');
+    }
 }
 const blobOptions = options => ({ ...options, token: blobReadWriteToken });
 const uploadDocumentosTeste = multer({
