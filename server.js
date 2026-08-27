@@ -1492,6 +1492,7 @@ app.delete('/api/admin/inscricoes/:id/documentos/:documentoId', async (req, res)
 app.get('/', async (req, res) => {
     const configs = await getConfigs('GET /');
     const paginaPrincipal = configs.modoInscricao === 'unificado' ? 'index-teste.html' : 'index.html';
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, paginaPrincipal));
 });
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
