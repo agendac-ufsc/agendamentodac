@@ -11,6 +11,7 @@ process.on('unhandledRejection', (reason) => {
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const axios = require('axios');
 const { google } = require('googleapis');
 const { Redis } = require('@upstash/redis');
@@ -422,6 +423,46 @@ let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui 
 
 const CONFIG_KEY = 'agendamentos_config';
 const normalizarModoInscricao = modo => modo === 'unificado' ? 'unificado' : 'duas-etapas';
+
+const escaparTextoHtml = valor => String(valor ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+// A página ainda sincroniza as configurações pelo JavaScript, mas os valores
+// principais também são aplicados no HTML inicial para evitar o flash dos
+// padrões enquanto a primeira chamada à API não termina.
+const prepararPaginaInicial = (html, configs) => {
+    const padroes = {
+        interno: { ativo: false, texto: 'Edital Interno', id: 'btnHomeInterno' },
+        externo: { ativo: true, texto: 'Edital de Ocupação dos Espaços do DAC 2026', id: 'btnHomeExterno' },
+        ensaio: { ativo: false, texto: 'Agendar Apenas Ensaio', id: 'btnHomeEnsaio' }
+    };
+    const botoes = configs.botoesHome || {};
+    const mostrarDesativados = configs.mostrarBotoesDesativados !== false;
+    let pagina = html;
+
+    Object.values(padroes).forEach(padrao => {
+        const botao = { ...padrao, ...(botoes[padrao.id.replace('btnHome', '').toLowerCase()] || {}) };
+        const seletor = new RegExp(`(<button\\b[^>]*\\bid="${padrao.id}"[^>]*>)[\\s\\S]*?(</button>)`, 'i');
+        pagina = pagina.replace(seletor, (_match, abertura, fechamento) => (
+            `${abertura}${escaparTextoHtml(botao.texto || padrao.texto)}${fechamento}`
+        ));
+    });
+
+    if (!mostrarDesativados) {
+        const idsOcultos = Object.values(padroes)
+            .filter(padrao => !(botoes[padrao.id.replace('btnHome', '').toLowerCase()] || {}).ativo)
+            .map(padrao => `#${padrao.id}`)
+            .join(',');
+        if (idsOcultos) {
+            pagina = pagina.replace('</head>', `<style id="server-home-config">${idsOcultos}{display:none !important}</style></head>`);
+        }
+    }
+    return pagina;
+};
 
 const getConfigs = async (caller = 'unknown') => {
     console.log(`[getConfigs] chamado por: ${caller} | redis disponível: ${!!redis}`);
@@ -1503,7 +1544,8 @@ app.get('/', async (req, res) => {
     const configs = await getConfigs('GET /');
     const paginaPrincipal = configs.modoInscricao === 'unificado' ? 'index-teste.html' : 'index.html';
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-    res.sendFile(path.join(__dirname, paginaPrincipal));
+    const html = await fs.promises.readFile(path.join(__dirname, paginaPrincipal), 'utf8');
+    res.send(prepararPaginaInicial(html, configs));
 });
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/avaliador', (req, res) => res.sendFile(path.join(__dirname, 'avaliador.html')));
