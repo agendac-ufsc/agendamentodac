@@ -567,12 +567,12 @@
                 const elTopo = document.getElementById('tituloPaginaAgendamento');
                 if (elTopo) elTopo.textContent = titulo;
                 document.querySelectorAll('.tituloPaginaAgendamentoEl').forEach(el => el.textContent = titulo);
-                aplicarBotoesHome(c.botoesHome);
+                aplicarBotoesHome(c.botoesHome, c.mostrarBotoesDesativados !== false);
                 if (c.mensagemBotoesDesativados) mensagemBotoesDesativados = c.mensagemBotoesDesativados;
             } catch (e) {}
         }
 
-        function aplicarBotoesHome(bh) {
+        function aplicarBotoesHome(bh, mostrarBotoesDesativados = true) {
             const padrao = {
                 interno: { ativo: false, texto: 'Edital Interno' },
                 externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
@@ -592,6 +592,7 @@
             const aplicar = (el, def, tipo) => {
                 if (!el) return;
                 el.textContent = def.texto;
+                 el.style.display = def.ativo || mostrarBotoesDesativados ? '' : 'none';
                 if (def.ativo) {
                     el.disabled = false;
                     el.removeAttribute('title');

@@ -503,6 +503,18 @@
                         <textarea id="cfgMensagemBotoesDesativados" class="form-input" rows="3" maxlength="300" placeholder="Ex: As inscrições estão encerradas no momento." style="resize:vertical;font-size:13px"></textarea>
                         <p style="font-size:11px;color:#999;margin:4px 0 0">Esta mensagem aparece em um aviso quando o proponente clicar em um botão desativado.</p>
                     </div>
+                     <div style="margin-top:14px;padding:12px 14px;background:#fff;border:1px solid #eef0f3;border-radius:10px">
+                         <div class="home-btn-head">
+                             <div>
+                                 <label class="form-label" style="font-size:13px;color:#333;font-weight:600;margin:0;display:block">Mostrar botões desativados na página inicial</label>
+                                 <p style="font-size:11px;color:#999;margin:4px 0 0;line-height:1.4">Se desativado, os botões inativos ficam ocultos e aparecem apenas as opções acessíveis.</p>
+                             </div>
+                             <label class="switch" title="Mostrar ou ocultar botões desativados">
+                                 <input type="checkbox" id="cfgMostrarBotoesDesativados" aria-label="Mostrar botões desativados na página inicial">
+                                 <span class="slider"></span>
+                             </label>
+                         </div>
+                     </div>
                     <button class="btn-top btn-purple" style="margin-top:10px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
                 </div>
                 <label class="form-label">Link do Google Forms (usado no modo 2 etapas)</label>
@@ -2488,6 +2500,7 @@ async function loadConfigs() {
         setChk('cfgBtnEnsaioAtivo',  en.ativo); set('cfgBtnEnsaioTexto',  en.texto || 'Agendar Apenas Ensaio'); set('cfgBtnEnsaioDataInicio', en.dataInicio || '');
         const msgEl = document.getElementById('cfgMensagemBotoesDesativados');
         if (msgEl) msgEl.value = c.mensagemBotoesDesativados || 'As inscrições estão encerradas no momento.';
+         setChk('cfgMostrarBotoesDesativados', c.mostrarBotoesDesativados !== false);
         const disp = document.getElementById('cfgDisputa');
         if (disp) disp.checked = c.permitirDisputa !== false;
         const sfin = document.getElementById('cfgSomenteFinSemana');
@@ -2591,6 +2604,7 @@ async function saveConfigs() {
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
         responsavelTermoNome: (document.getElementById('termoResponsavelNome')?.value || '').trim() || 'Andréa Búrigo Ventura',
         mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',
+         mostrarBotoesDesativados: document.getElementById('cfgMostrarBotoesDesativados')?.checked !== false,
         botoesHome: {
             interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno', dataInicio: (document.getElementById('cfgBtnInternoDataInicio')?.value || '') || null },
             externo: { ativo: !!document.getElementById('cfgBtnExternoAtivo')?.checked, texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026', dataInicio: (document.getElementById('cfgBtnExternoDataInicio')?.value || '') || null },

@@ -417,6 +417,7 @@ let BOTOES_HOME = {
     ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
 };
 let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.';
+let MOSTRAR_BOTOES_DESATIVADOS = true;
 let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
 const CONFIG_KEY = 'agendamentos_config';
@@ -457,6 +458,9 @@ const getConfigs = async (caller = 'unknown') => {
                 if (configs.mensagemBotoesDesativados !== undefined) {
                     MENSAGEM_BOTOES_DESATIVADOS = configs.mensagemBotoesDesativados || MENSAGEM_BOTOES_DESATIVADOS;
                 }
+                if (configs.mostrarBotoesDesativados !== undefined) {
+                    MOSTRAR_BOTOES_DESATIVADOS = configs.mostrarBotoesDesativados !== false;
+                }
                 if (prevSheet !== SPREADSHEET_ID || prevForms !== FORMS_LINK) {
                     console.log(`[getConfigs] ✅ Config carregada do Redis — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
                 } else {
@@ -474,7 +478,8 @@ const getConfigs = async (caller = 'unknown') => {
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                     responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
                     botoesHome: BOTOES_HOME,
-                    mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
+                    mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
+                    mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS
                 };
             } else {
                 console.warn(`[getConfigs] ⚠️ Nenhum valor encontrado no Redis para chave "${CONFIG_KEY}" — usando padrões em memória`);
@@ -498,7 +503,8 @@ const getConfigs = async (caller = 'unknown') => {
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
         responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
         botoesHome: BOTOES_HOME,
-        mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
+        mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
+        mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS
     };
 };
 
@@ -570,6 +576,9 @@ const saveConfigs = async (configs) => {
         if (configs.mensagemBotoesDesativados !== undefined) {
             MENSAGEM_BOTOES_DESATIVADOS = (configs.mensagemBotoesDesativados || '').trim() || MENSAGEM_BOTOES_DESATIVADOS;
         }
+        if (configs.mostrarBotoesDesativados !== undefined) {
+            MOSTRAR_BOTOES_DESATIVADOS = configs.mostrarBotoesDesativados !== false;
+        }
 
         if (redis) {
             const configToSave = {
@@ -584,7 +593,8 @@ const saveConfigs = async (configs) => {
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                 responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                 botoesHome: BOTOES_HOME,
-                mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS
+                mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
+                mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS
             };
             console.log(`[saveConfigs] gravando no Redis — sheet: ${cleanSpreadsheetId} | forms: ${FORMS_LINK?.slice(0,60)}`);
             const setResult = await redis.set(CONFIG_KEY, configToSave);
@@ -690,12 +700,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, avaliacoesNecessarias, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, avaliacoesNecessarias, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, avaliacoesNecessarias, responsavelTermoNome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
