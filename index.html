@@ -664,6 +664,12 @@
                     if (!isShowing) {
                         fetchAvailability();
                         renderStepCalendar(s);
+                        const calendarElement = document.getElementById(`calendar-${s}`);
+                        if (calendarElement) {
+                            setTimeout(() => {
+                                calendarElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                            }, 100);
+                        }
                     }
                 } else {
                     content.classList.remove('show');
