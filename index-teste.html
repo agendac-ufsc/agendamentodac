@@ -267,6 +267,47 @@
         .btn-success:hover {
             background: linear-gradient(135deg, #16a34a 0%, #166534 100%);
         }
+        .processing-page {
+            text-align: center;
+        }
+        .processing-visual {
+            width: 72px;
+            height: 72px;
+            display: grid;
+            place-items: center;
+            margin: 0 auto 18px;
+            border-radius: 50%;
+            background: #eef2ff;
+        }
+        .processing-spinner {
+            width: 34px;
+            height: 34px;
+            border: 4px solid #c7d2fe;
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: processing-spin .8s linear infinite;
+        }
+        .processing-page h2 {
+            margin-bottom: 12px;
+        }
+        .processing-page .step-description {
+            max-width: 520px;
+            margin: 0 auto;
+        }
+        .processing-message {
+            max-width: 560px;
+            margin: 20px auto 0;
+            padding: 15px 18px;
+            border: 1px solid #c7d2fe;
+            border-radius: 10px;
+            background: #f5f7ff;
+            color: #4b5563;
+            font-size: 14px;
+            line-height: 1.55;
+        }
+        @keyframes processing-spin {
+            to { transform: rotate(360deg); }
+        }
         .rental-fee-explanation {
             background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
             overflow: hidden; margin-bottom: 16px;
@@ -950,6 +991,17 @@
         </div>
     </div>
 
+    <div class="full-page-step processing-page" id="inscricaoProcessandoSection" role="status" aria-live="polite">
+        <div class="processing-visual" aria-hidden="true">
+            <div class="processing-spinner"></div>
+        </div>
+        <h2>Inscrição em processamento</h2>
+        <p class="step-description">Estamos registrando e validando os dados da sua inscrição.</p>
+        <div class="processing-message">
+            Isso pode levar alguns instantes. Aguarde, por favor: a confirmação aparecerá automaticamente assim que o processamento for concluído.
+        </div>
+    </div>
+
     <div class="full-page-step" id="inscricaoValidadaSection">
         <h2 class="success-title">
             <span class="success-title-icon" aria-hidden="true">🎉</span>
@@ -1103,6 +1155,7 @@
         let formsLinkProximaEtapaTeste = '';
         let tipoPessoaTesteAtual = null;
         let inscricaoTesteId = null;
+        let finalizacaoInscricaoEmAndamento = false;
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -1775,7 +1828,7 @@
         }
 
         function mostrarTelaTeste(id) {
-            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'taxaLocacaoSection', 'inscricaoValidadaSection', 'projetosDacSection']
+            ['homeContainer', 'localSelectionContainer', 'mainFormContainer', 'tipoProponenteSection', 'pessoaFisicaSection', 'pessoaJuridicaSection', 'categoriaPropostaSection', 'vinculoInstitucionalSection', 'dadosPropostaSection', 'acessibilidadeComunicacionalSection', 'gratuidadeEventoSection', 'taxaLocacaoSection', 'inscricaoProcessandoSection', 'inscricaoValidadaSection', 'projetosDacSection']
                 .forEach(telaId => {
                     const tela = document.getElementById(telaId);
                     if (tela) tela.style.display = 'none';
@@ -2028,6 +2081,10 @@
                 alert('Não foi possível identificar a inscrição inicial. Volte e tente novamente.');
                 return;
             }
+            if (finalizacaoInscricaoEmAndamento) return;
+            finalizacaoInscricaoEmAndamento = true;
+            const telaAnterior = projetoDac ? 'projetosDacSection' : 'taxaLocacaoSection';
+            mostrarTelaTeste('inscricaoProcessandoSection');
             try {
                 const arquivos = coletarArquivosFinaisInscricaoTeste();
                 if (arquivos.length) {
@@ -2053,7 +2110,10 @@
                 }
                 mostrarTelaTeste('inscricaoValidadaSection');
             } catch (error) {
+                mostrarTelaTeste(telaAnterior);
                 alert(error.message);
+            } finally {
+                finalizacaoInscricaoEmAndamento = false;
             }
         }
 
