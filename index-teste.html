@@ -239,6 +239,34 @@
         }
         .category-explanation-body p { margin: 0 0 18px; }
         .category-explanation-body p:last-child { margin-bottom: 0; }
+        .success-confirmation {
+            border-color: #b8e3c5;
+            box-shadow: 0 8px 24px rgba(22, 163, 74, .08);
+        }
+        .success-confirmation h3 {
+            background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+        }
+        .success-confirmation .category-explanation-body {
+            text-align: center;
+        }
+        .success-title {
+            color: #166534 !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        .success-title-icon {
+            font-size: 30px;
+            line-height: 1;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #22c55e 0%, #15803d 100%);
+            box-shadow: 0 6px 14px rgba(22, 163, 74, .24);
+        }
+        .btn-success:hover {
+            background: linear-gradient(135deg, #16a34a 0%, #166534 100%);
+        }
         .rental-fee-explanation {
             background: #fff; border: 1px solid #e0e0e0; border-radius: 10px;
             overflow: hidden; margin-bottom: 16px;
@@ -923,17 +951,19 @@
     </div>
 
     <div class="full-page-step" id="inscricaoValidadaSection">
-        <h2>Inscrição validada com sucesso!</h2>
-        <div class="category-explanation">
+        <h2 class="success-title">
+            <span class="success-title-icon" aria-hidden="true">🎉</span>
+            <span>Inscrição validada com sucesso!</span>
+        </h2>
+        <div class="category-explanation success-confirmation">
             <h3>Inscrição concluída</h3>
             <div class="category-explanation-body">
                 <p>Os dados da sua inscrição foram registrados e validados com sucesso.</p>
-                <p>Enviamos uma cópia/comprovante para o e-mail informado e para a equipe do DAC.</p>
-                <p style="margin-bottom:0;">A inscrição já está disponível para consulta no painel administrativo, na aba <strong>Inscrições</strong>.</p>
+                <p style="margin-bottom:0;">Enviamos uma cópia/comprovante para o e-mail informado e para a equipe do DAC.</p>
             </div>
         </div>
         <div class="step-actions">
-            <button type="button" class="btn-next-step" onclick="mostrarTelaTeste('homeContainer')">OK</button>
+            <button type="button" class="btn-next-step btn-success" onclick="mostrarTelaTeste('homeContainer')">OK</button>
         </div>
     </div>
 
