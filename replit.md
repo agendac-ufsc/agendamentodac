@@ -4,6 +4,13 @@
 
 Este projeto compartilha o **mesmo backend** que a versão de produção no Vercel (mesmo Redis Upstash, mesmo Google Calendar, mesmo Brevo).
 
+### Execução no Replit
+
+- Workflow: `Start application`
+- Comando: `npm run dev`
+- Porta do preview: `5000`
+- Acesso local: `/` (público), `/admin` (administrativo) e `/avaliador` (avaliadores)
+
 > **⚠️ IMPORTANTE — Política de credenciais:** as 6 chaves de API **NUNCA** devem ser gravadas em arquivos do repositório (`.env`, `.replit`, `attached_assets/`, etc). Elas ficam APENAS em **Replit Secrets** (aba 🔒 Secrets) e nas **Environment Variables do Vercel**. O `.gitignore` já bloqueia `.env`. Qualquer agente ou colaborador que precisar operar neste projeto deve usar o fluxo abaixo — jamais commitar chaves.
 
 ### ✅ Abrir o projeto em um novo ambiente Replit: Fork
