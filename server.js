@@ -384,7 +384,8 @@ const initGoogleAuth = async () => {
                 },
                 scopes: [
                     'https://www.googleapis.com/auth/calendar',
-                    'https://www.googleapis.com/auth/spreadsheets.readonly'
+                    'https://www.googleapis.com/auth/spreadsheets.readonly',
+                    'https://www.googleapis.com/auth/drive.readonly'
                 ],
             });
             googleAuthClient = await auth.getClient();
@@ -399,6 +400,7 @@ initGoogleAuth().catch(err => console.error('❌ [initGoogleAuth] Falha na inici
 
 const calendar = google.calendar({ version: 'v3' });
 const sheets = google.sheets({ version: 'v4' });
+const drive = google.drive({ version: 'v3' });
 let SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
 let FORMS_LINK = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
 let PERMITIR_DISPUTA = true; // Padrão é permitir disputa conforme comportamento atual
@@ -1584,6 +1586,123 @@ async function streamParaBuffer(stream) {
     return Buffer.concat(chunks);
 }
 
+function normalizarTextoDocumentoForms(value) {
+    return String(value || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+}
+
+function extrairReferenciasDrive(value) {
+    const referencias = [];
+    const urls = String(value || '').match(/https?:\/\/[^\s,;]+/gi) || [];
+    for (const urlTexto of urls) {
+        try {
+            const url = new URL(urlTexto.replace(/[)\]}>.,;]+$/g, ''));
+            const idPorCaminho = url.pathname.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1];
+            const idPorQuery = url.searchParams.get('id');
+            const fileId = idPorCaminho || idPorQuery;
+            if (!fileId || referencias.some(item => item.fileId === fileId)) continue;
+            if (url.hostname !== 'google.com' && !url.hostname.endsWith('.google.com')) continue;
+            referencias.push({ fileId });
+        } catch {
+            // Células do Forms podem conter texto misturado com links.
+        }
+    }
+    return referencias;
+}
+
+function categoriaDocumentoForms(header) {
+    const titulo = normalizarTextoDocumentoForms(header);
+    if (titulo.includes('curricul')) return { campo: 'formsCurriculo', categoria: 'Pessoa Física — Currículo' };
+    if (titulo.includes('documento') && (titulo.includes('oficial') || titulo.includes('identidade') || titulo.includes('cpf') || titulo.includes('rg'))) {
+        return { campo: 'formsDocumentoOficial', categoria: 'Pessoa Física — Documento oficial' };
+    }
+    if (titulo.includes('portfolio')) return { campo: 'formsPortfolio', categoria: 'Pessoa Jurídica — Portfólio' };
+    if (titulo.includes('contrato')) return { campo: 'formsContrato', categoria: 'Pessoa Jurídica — Contrato' };
+    if (titulo.includes('representante')) return { campo: 'formsDocumentoRepresentante', categoria: 'Pessoa Jurídica — Documento do representante' };
+    if (titulo.includes('cnpj')) return { campo: 'formsDocumentoCnpj', categoria: 'Pessoa Jurídica — Documento do CNPJ' };
+    if (titulo.includes('vinculo') || titulo.includes('ufsc')) return { campo: 'formsComprovanteVinculo', categoria: 'Pessoa Jurídica — Comprovante de vínculo UFSC' };
+    if (titulo.includes('ficha tecnica')) return { campo: 'formsFichaTecnica', categoria: 'Proposta — Ficha técnica' };
+    if (titulo.includes('video') || titulo.includes('foto')) return { campo: 'formsLinksVideo', categoria: 'Proposta — Links de vídeo/fotos' };
+    return { campo: 'formsDocumento', categoria: 'Proposta — Outros documentos' };
+}
+
+async function sincronizarDocumentosForms(agendamento, headers, valores) {
+    if (!blobStorageReady || !googleAuthClient || !agendamento?.id) return;
+    const documentosAtuais = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
+    const referencias = [];
+    headers.forEach((header, index) => {
+        extrairReferenciasDrive(valores[index]).forEach(referencia => {
+            referencias.push({
+                ...referencia,
+                ...categoriaDocumentoForms(header),
+                header: String(header || '').trim()
+            });
+        });
+    });
+    const referenciasUnicas = referencias.filter((referencia, index, lista) =>
+        lista.findIndex(item => item.fileId === referencia.fileId) === index
+    );
+    const novasReferencias = referenciasUnicas.filter(referencia =>
+        !documentosAtuais.some(documento =>
+            documento.driveFileId === referencia.fileId || documento.sourceFileId === referencia.fileId
+        )
+    );
+    if (!novasReferencias.length) return;
+
+    const arquivosNovos = [];
+    const blobsCriados = [];
+    try {
+        for (const referencia of novasReferencias) {
+            const metadataResponse = await drive.files.get({
+                fileId: referencia.fileId,
+                fields: 'id,name,mimeType,size,modifiedTime',
+                supportsAllDrives: true
+            });
+            const metadata = metadataResponse.data || {};
+            const nomeOriginal = metadata.name || `documento-${referencia.fileId}`;
+            const nomeSeguro = nomeSeguroParaZip(nomeOriginal, 'documento');
+            const mediaResponse = await drive.files.get(
+                { fileId: referencia.fileId, alt: 'media', supportsAllDrives: true },
+                { responseType: 'stream' }
+            );
+            const pathname = `inscricoes/${agendamento.id}/forms-${referencia.fileId}-${nomeSeguro}`;
+            const uploaded = await putBlob(pathname, mediaResponse.data, blobOptions({
+                access: 'private',
+                addRandomSuffix: false,
+                contentType: metadata.mimeType || 'application/octet-stream',
+                multipart: Number(metadata.size || 0) > 50 * 1024 * 1024
+            }));
+            blobsCriados.push(uploaded.url);
+            arquivosNovos.push({
+                id: randomUUID(),
+                pathname: uploaded.pathname,
+                blobUrl: uploaded.url,
+                nome: nomeOriginal,
+                mimeType: metadata.mimeType || 'application/octet-stream',
+                tamanho: Number(metadata.size) || 0,
+                campo: referencia.campo,
+                categoria: referencia.categoria,
+                origem: 'google-forms',
+                driveFileId: referencia.fileId,
+                colunaForms: referencia.header,
+                enviadoEm: new Date().toISOString()
+            });
+        }
+
+        const documentosAtualizados = [...documentosAtuais, ...arquivosNovos];
+        if (!await updateAgendamento(agendamento.id, { documentos: documentosAtualizados })) {
+            throw new Error('Não foi possível salvar os metadados dos documentos no Redis.');
+        }
+        agendamento.documentos = documentosAtualizados;
+        console.log(`✅ [Forms/Documentos] ${arquivosNovos.length} arquivo(s) sincronizado(s) para ${agendamento.id}.`);
+    } catch (error) {
+        await Promise.all(blobsCriados.map(url => deleteBlob(url, blobOptions()).catch(() => null)));
+        console.warn(`⚠️ [Forms/Documentos] Não foi possível sincronizar documentos de ${agendamento.id}:`, error.message);
+    }
+}
+
 app.get('/api/admin/inscricoes/:id/documentos.zip', async (req, res) => {
     try {
         if (!blobStorageReady) return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
@@ -2014,6 +2133,9 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
             if (correspondencia) {
                 usedSheetIndices.add(correspondenciaIdx);
+                if (p.inscricaoTeste !== true) {
+                    await sincronizarDocumentosForms(p, headers, correspondencia);
+                }
                 // Etapa 2 encontrada — criar eventos no Calendar se ainda não foram criados
                 if (p.calendarSynced !== true) {
                     try {

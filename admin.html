@@ -1206,7 +1206,7 @@ function renderTabela() {
             : '';
         const termoClick = `abrirEditorTermo(${originalIndex})`;
         const documentosTeste = Array.isArray(p.documentos) ? p.documentos : [];
-        const documentosBtn = p.inscricaoTeste
+        const documentosBtn = p.inscricaoTeste || documentosTeste.length > 0
             ? `<button class="btn-action" title="Documentos (${documentosTeste.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:#16a34a"><i class="fas fa-folder-open"></i>${documentosTeste.length ? ` <small>${documentosTeste.length}</small>` : ''}</button>`
             : '';
 
@@ -2756,7 +2756,7 @@ async function abrirDocumentos(idx) {
     if (userRole !== 'admin') return;
     const item = allUnificados[idx];
     const p = item?.primeiraEtapa;
-    if (!p?.id || !p.inscricaoTeste) return;
+    if (!p?.id || (p.inscricaoTeste !== true && !Array.isArray(p.documentos))) return;
 
     documentosInscricaoIndex = idx;
     documentosInscricaoId = String(p.id);

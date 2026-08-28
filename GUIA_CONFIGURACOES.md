@@ -27,6 +27,12 @@ Para que o sistema consiga ler os dados da sua nova planilha, você **DEVE** com
     `agendamento-dac-service@agendamento-dac.iam.gserviceaccount.com`
 3.  Defina a permissão como **"Leitor"** e clique em "Enviar".
 
+Se o formulário tiver perguntas de **upload de arquivos**, compartilhe também a
+pasta de destino dos arquivos (ou os arquivos individualmente) com esse mesmo
+e-mail, com permissão de **Leitor**. Assim o sistema poderá copiar uma versão
+privada para a pasta de documentos do painel, mantendo o arquivo original no
+Google Drive.
+
 ### Passo 3: Configuração no Painel Administrativo
 1.  Acesse o seu **Painel Administrativo** do Agendamento DAC.
 2.  Clique no botão **"Configurações"** (ícone de engrenagem ⚙️) no topo da página.
