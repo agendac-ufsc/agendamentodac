@@ -1604,9 +1604,8 @@ app.get('/api/admin/inscricoes/:id/documentos.zip', async (req, res) => {
                 throw new Error('Arquivo removido ou indisponível.');
             }
 
-            const categoria = nomeSeguroParaZip(documento.categoria, 'Documentos');
             const nomeBase = nomeSeguroParaZip(documento.nome, 'documento');
-            const chaveNome = `${categoria}/${nomeBase}`;
+            const chaveNome = nomeBase;
             const ocorrencias = (nomesUsados.get(chaveNome) || 0) + 1;
             nomesUsados.set(chaveNome, ocorrencias);
             const extensao = ocorrencias > 1 ? `_${ocorrencias}` : '';
@@ -1615,7 +1614,7 @@ app.get('/api/admin/inscricoes/:id/documentos.zip', async (req, res) => {
                 ? `${nomeBase.slice(0, ponto)}${extensao}${nomeBase.slice(ponto)}`
                 : `${nomeBase}${extensao}`;
 
-            zip.addFile(`${categoria}/${nomeArquivo}`, await streamParaBuffer(resultado.stream));
+            zip.addFile(nomeArquivo, await streamParaBuffer(resultado.stream));
         }
 
         const conteudoZip = zip.toBuffer();
