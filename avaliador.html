@@ -17,6 +17,10 @@
         .form-field label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px}
         .form-field input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;transition:.2s}
         .form-field input:focus{outline:none;border-color:#2563eb}
+        .password-wrap{position:relative}
+        .password-wrap input{padding-right:42px}
+        .toggle-password{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;background:transparent;color:#888;cursor:pointer;border-radius:6px}
+        .toggle-password:hover,.toggle-password:focus{background:#eff6ff;color:#2563eb;outline:none}
         .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:.2s}
         .btn-login:hover{opacity:.9}
         .login-err{color:#d9534f;font-size:13px;text-align:center;margin-top:12px;display:none}
@@ -107,7 +111,12 @@
         </div>
         <div class="form-field">
             <label>Senha</label>
-            <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+            <div class="password-wrap">
+                <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
+                <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('viewerPass', this)">
+                    <i class="fa-solid fa-eye"></i>
+                </button>
+            </div>
         </div>
         <button class="btn-login" onclick="doLogin()">Entrar</button>
         <div class="login-err" id="loginErr"></div>
@@ -201,6 +210,16 @@ let scoresCache = {}; // {inscricaoId: [avaliacoes]}
         initApp();
     }
 })();
+
+function togglePasswordVisibility(inputId, button) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const visible = input.type === 'text';
+    input.type = visible ? 'password' : 'text';
+    button.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+    button.title = visible ? 'Mostrar senha' : 'Ocultar senha';
+    button.innerHTML = `<i class="fa-solid ${visible ? 'fa-eye' : 'fa-eye-slash'}"></i>`;
+}
 
 async function doLogin() {
     const errEl = document.getElementById('loginErr');
