@@ -515,7 +515,7 @@
                              </label>
                          </div>
                      </div>
-                    <button class="btn-top btn-purple" style="margin-top:10px;background:#2563eb;border-color:#2563eb" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
+                    <button class="btn-top btn-purple" style="margin-top:10px;background:#2563eb;border-color:#2563eb" onclick="saveHomeButtonSettings()"><i class="fas fa-save"></i> Salvar Status dos Botões</button>
                 </div>
                 <label class="form-label">Link do Google Forms (usado no modo 2 etapas)</label>
                 <input type="text" id="cfgFormsLink" class="form-input" placeholder="https://docs.google.com/forms/...">
@@ -2625,6 +2625,52 @@ async function saveConfigs() {
         if (r.ok && d.success) alert('Configurações salvas!');
         else alert('Erro ao salvar: ' + (d.error || 'Falha desconhecida. Verifique o console.'));
     } catch(e) { alert('Erro de conexão: ' + e.message); }
+}
+
+async function saveHomeButtonSettings() {
+    const mostrarEl = document.getElementById('cfgMostrarBotoesDesativados');
+    if (!mostrarEl) return;
+
+    const body = {
+        mostrarBotoesDesativados: Boolean(mostrarEl.checked),
+        mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim(),
+        botoesHome: {
+            interno: {
+                ativo: Boolean(document.getElementById('cfgBtnInternoAtivo')?.checked),
+                texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno',
+                dataInicio: document.getElementById('cfgBtnInternoDataInicio')?.value || null
+            },
+            externo: {
+                ativo: Boolean(document.getElementById('cfgBtnExternoAtivo')?.checked),
+                texto: (document.getElementById('cfgBtnExternoTexto')?.value || '').trim() || 'Edital de Ocupação dos Espaços do DAC 2026',
+                dataInicio: document.getElementById('cfgBtnExternoDataInicio')?.value || null
+            },
+            ensaio: {
+                ativo: Boolean(document.getElementById('cfgBtnEnsaioAtivo')?.checked),
+                texto: (document.getElementById('cfgBtnEnsaioTexto')?.value || '').trim() || 'Agendar Apenas Ensaio',
+                dataInicio: document.getElementById('cfgBtnEnsaioDataInicio')?.value || null
+            }
+        }
+    };
+
+    try {
+        const response = await fetch('/api/admin/home-buttons', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        });
+        const resultado = await response.json().catch(() => ({}));
+        if (!response.ok || !resultado.success || resultado.mostrarBotoesDesativados !== body.mostrarBotoesDesativados) {
+            throw new Error(resultado.error || 'O servidor não confirmou o status dos botões.');
+        }
+
+        await loadConfigs();
+        alert(body.mostrarBotoesDesativados
+            ? 'Status dos botões salvo: opções desativadas continuarão visíveis.'
+            : 'Status dos botões salvo: opções desativadas ficarão ocultas.');
+    } catch (e) {
+        alert('Erro ao salvar o status dos botões: ' + e.message);
+    }
 }
 
 async function salvarNomeResponsavelTermo() {

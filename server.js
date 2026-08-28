@@ -423,6 +423,15 @@ let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui 
 
 const CONFIG_KEY = 'agendamentos_config';
 const normalizarModoInscricao = modo => modo === 'unificado' ? 'unificado' : 'duas-etapas';
+const normalizarBooleano = (valor, padrao) => {
+    if (typeof valor === 'boolean') return valor;
+    if (typeof valor === 'string') {
+        const texto = valor.trim().toLowerCase();
+        if (['false', '0', 'nao', 'não', 'off'].includes(texto)) return false;
+        if (['true', '1', 'sim', 'on'].includes(texto)) return true;
+    }
+    return valor === undefined || valor === null ? padrao : Boolean(valor);
+};
 
 const escaparTextoHtml = valor => String(valor ?? '')
     .replace(/&/g, '&amp;')
@@ -476,8 +485,8 @@ const getConfigs = async (caller = 'unknown') => {
                 const prevForms = FORMS_LINK;
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
-                PERMITIR_DISPUTA = configs.permitirDisputa !== undefined ? configs.permitirDisputa : true;
-                SOMENTE_FINSEMANA = configs.somenteFinaisDeSemana !== undefined ? configs.somenteFinaisDeSemana : false;
+                PERMITIR_DISPUTA = normalizarBooleano(configs.permitirDisputa, true);
+                SOMENTE_FINSEMANA = normalizarBooleano(configs.somenteFinaisDeSemana, false);
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
@@ -500,7 +509,7 @@ const getConfigs = async (caller = 'unknown') => {
                     MENSAGEM_BOTOES_DESATIVADOS = configs.mensagemBotoesDesativados || MENSAGEM_BOTOES_DESATIVADOS;
                 }
                 if (configs.mostrarBotoesDesativados !== undefined) {
-                    MOSTRAR_BOTOES_DESATIVADOS = configs.mostrarBotoesDesativados !== false;
+                    MOSTRAR_BOTOES_DESATIVADOS = normalizarBooleano(configs.mostrarBotoesDesativados, true);
                 }
                 if (prevSheet !== SPREADSHEET_ID || prevForms !== FORMS_LINK) {
                     console.log(`[getConfigs] ✅ Config carregada do Redis — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
@@ -618,7 +627,7 @@ const saveConfigs = async (configs) => {
             MENSAGEM_BOTOES_DESATIVADOS = (configs.mensagemBotoesDesativados || '').trim() || MENSAGEM_BOTOES_DESATIVADOS;
         }
         if (configs.mostrarBotoesDesativados !== undefined) {
-            MOSTRAR_BOTOES_DESATIVADOS = configs.mostrarBotoesDesativados !== false;
+            MOSTRAR_BOTOES_DESATIVADOS = normalizarBooleano(configs.mostrarBotoesDesativados, true);
         }
 
         if (redis) {
@@ -749,6 +758,60 @@ app.post('/api/admin/config', async (req, res) => {
     const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
+});
+
+// Salva o controle da visibilidade dos botões sem depender dos demais campos
+// do painel. O valor false precisa ser tratado como uma escolha explícita.
+app.post('/api/admin/home-buttons', async (req, res) => {
+    const {
+        botoesHome,
+        mensagemBotoesDesativados,
+        mostrarBotoesDesativados
+    } = req.body || {};
+
+    if (mostrarBotoesDesativados === undefined) {
+        return res.status(400).json({ error: 'Informe se os botões desativados devem ser exibidos.' });
+    }
+    if (!redis) {
+        return res.status(500).json({ error: 'Redis indisponível; a configuração não pôde ser persistida.' });
+    }
+
+    const mostrar = normalizarBooleano(mostrarBotoesDesativados, true);
+    try {
+        const atual = parseRedisValue(await redis.get(CONFIG_KEY)) || {};
+        const configToSave = {
+            ...atual,
+            mostrarBotoesDesativados: mostrar
+        };
+        if (botoesHome && typeof botoesHome === 'object') {
+            configToSave.botoesHome = botoesHome;
+        }
+        if (typeof mensagemBotoesDesativados === 'string') {
+            configToSave.mensagemBotoesDesativados = mensagemBotoesDesativados.trim() || MENSAGEM_BOTOES_DESATIVADOS;
+        }
+
+        await redis.set(CONFIG_KEY, configToSave);
+        const verificado = parseRedisValue(await redis.get(CONFIG_KEY)) || {};
+        if (verificado.mostrarBotoesDesativados !== mostrar) {
+            return res.status(500).json({ error: 'O servidor não confirmou o status dos botões.' });
+        }
+
+        MOSTRAR_BOTOES_DESATIVADOS = mostrar;
+        if (configToSave.botoesHome && typeof configToSave.botoesHome === 'object') {
+            BOTOES_HOME = configToSave.botoesHome;
+        }
+        if (configToSave.mensagemBotoesDesativados) {
+            MENSAGEM_BOTOES_DESATIVADOS = configToSave.mensagemBotoesDesativados;
+        }
+
+        res.json({
+            success: true,
+            mostrarBotoesDesativados: mostrar
+        });
+    } catch (error) {
+        console.error('[home-buttons] ❌ Erro ao salvar:', error.message);
+        res.status(500).json({ error: 'Falha ao persistir o status dos botões.' });
+    }
 });
 
 // Salva somente o nome da representante, sem depender dos demais campos do painel.
