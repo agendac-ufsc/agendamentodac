@@ -16,6 +16,7 @@ const axios = require('axios');
 const { google } = require('googleapis');
 const { Redis } = require('@upstash/redis');
 const multer = require('multer');
+const AdmZip = require('adm-zip');
 const { put: putBlob, get: getBlob, del: deleteBlob } = require('@vercel/blob');
 const { randomUUID } = require('crypto');
 const { Readable } = require('stream');
@@ -1562,6 +1563,73 @@ app.get('/api/admin/inscricoes/:id/documentos', async (req, res) => {
         res.json({ documentos: agendamento.documentos || [] });
     } catch (error) {
         res.status(500).json({ error: 'Não foi possível carregar os documentos.' });
+    }
+});
+
+function nomeSeguroParaZip(value, fallback) {
+    const nome = String(value || fallback)
+        .normalize('NFKC')
+        .replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/^\.+|\.+$/g, '');
+    return (nome || fallback).slice(0, 180);
+}
+
+async function streamParaBuffer(stream) {
+    const chunks = [];
+    for await (const chunk of Readable.fromWeb(stream)) {
+        chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+}
+
+app.get('/api/admin/inscricoes/:id/documentos.zip', async (req, res) => {
+    try {
+        if (!blobStorageReady) return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
+        const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(req.params.id));
+        if (!agendamento) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+
+        const documentos = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
+        if (!documentos.length) return res.status(404).json({ error: 'Esta inscrição não possui documentos.' });
+
+        const zip = new AdmZip();
+        const nomesUsados = new Map();
+        for (const documento of documentos) {
+            const blobUrl = documento.blobUrl || documento.url;
+            if (!blobUrl) throw new Error('Documento sem referência de armazenamento.');
+
+            const resultado = await getBlob(blobUrl, blobOptions({ access: 'private', useCache: false }));
+            if (resultado.statusCode !== 200 || !resultado.stream) {
+                throw new Error('Arquivo removido ou indisponível.');
+            }
+
+            const categoria = nomeSeguroParaZip(documento.categoria, 'Documentos');
+            const nomeBase = nomeSeguroParaZip(documento.nome, 'documento');
+            const chaveNome = `${categoria}/${nomeBase}`;
+            const ocorrencias = (nomesUsados.get(chaveNome) || 0) + 1;
+            nomesUsados.set(chaveNome, ocorrencias);
+            const extensao = ocorrencias > 1 ? `_${ocorrencias}` : '';
+            const ponto = nomeBase.lastIndexOf('.');
+            const nomeArquivo = ponto > 0
+                ? `${nomeBase.slice(0, ponto)}${extensao}${nomeBase.slice(ponto)}`
+                : `${nomeBase}${extensao}`;
+
+            zip.addFile(`${categoria}/${nomeArquivo}`, await streamParaBuffer(resultado.stream));
+        }
+
+        const conteudoZip = zip.toBuffer();
+        const nomeZip = `${nomeSeguroParaZip(agendamento.evento, 'inscricao')}_documentos.zip`;
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="${encodeURIComponent(nomeZip)}"`,
+            'Content-Length': String(conteudoZip.length),
+            'Cache-Control': 'private, no-store'
+        });
+        res.send(conteudoZip);
+    } catch (error) {
+        console.error('❌ [/api/admin/inscricoes/:id/documentos.zip] erro:', error.message);
+        res.status(500).json({ error: 'Não foi possível preparar o ZIP dos documentos.' });
     }
 });
 

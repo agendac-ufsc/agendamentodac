@@ -846,6 +846,9 @@
         <div id="documentosInscricaoStatus" style="font-size:13px;min-height:20px;margin-bottom:10px"></div>
         <div id="documentosInscricaoLista"></div>
         <div class="modal-footer">
+            <button id="btnBaixarDocumentosZip" class="btn-top btn-success" onclick="baixarDocumentosZip()" disabled title="Carregue uma inscrição com documentos para habilitar">
+                <i class="fas fa-file-archive"></i> Baixar ZIP
+            </button>
             <button class="btn-close-modal" onclick="closeModal('modalDocumentosInscricao')">Fechar</button>
         </div>
     </div>
@@ -869,6 +872,7 @@ let termoAdminAlteracoesSalvas = false;
 let termoPendenteIndex = null;
 let exclusaoSelecionados = [];
 let documentosInscricaoIndex = null;
+let documentosInscricaoId = null;
 const inscricoesSelecionadas = new Set();
 
 // ══════════════════════════════════════════════════
@@ -2755,6 +2759,8 @@ async function abrirDocumentos(idx) {
     if (!p?.id || !p.inscricaoTeste) return;
 
     documentosInscricaoIndex = idx;
+    documentosInscricaoId = String(p.id);
+    atualizarBotaoDownloadDocumentos(0);
     document.getElementById('documentosInscricaoTitulo').textContent =
         `Documentos — ${p.evento || 'Inscrição'}`;
     document.getElementById('documentosInscricaoResumo').innerHTML =
@@ -2781,6 +2787,7 @@ async function abrirDocumentos(idx) {
 function renderDocumentosInscricao(documentos, inscricaoId) {
     const status = document.getElementById('documentosInscricaoStatus');
     const lista = document.getElementById('documentosInscricaoLista');
+    atualizarBotaoDownloadDocumentos(documentos.length);
     status.style.color = '#666';
     status.textContent = documentos.length
         ? `${documentos.length} arquivo(s) armazenado(s) de forma privada.`
@@ -2825,6 +2832,58 @@ function renderDocumentosInscricao(documentos, inscricaoId) {
             </div>
         </section>
     `).join('');
+}
+
+function atualizarBotaoDownloadDocumentos(total) {
+    const btn = document.getElementById('btnBaixarDocumentosZip');
+    if (!btn) return;
+    const habilitado = Number(total) > 0;
+    btn.disabled = !habilitado;
+    btn.style.opacity = habilitado ? '1' : '.55';
+    btn.style.cursor = habilitado ? 'pointer' : 'not-allowed';
+    btn.title = habilitado
+        ? `Baixar ${total} documento(s) em um arquivo ZIP`
+        : 'Esta inscrição não possui documentos para baixar';
+}
+
+async function baixarDocumentosZip() {
+    if (userRole !== 'admin' || !documentosInscricaoId) return;
+    const btn = document.getElementById('btnBaixarDocumentosZip');
+    const status = document.getElementById('documentosInscricaoStatus');
+    const item = allUnificados[documentosInscricaoIndex];
+    const nomeEvento = item?.primeiraEtapa?.evento || 'inscricao';
+    const nomeArquivo = `${String(nomeEvento).replace(/[^\p{L}\p{N}._-]+/gu, '_')}_documentos.zip`;
+    const textoOriginal = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Preparando...';
+    status.style.color = '#666';
+    status.textContent = 'Preparando o ZIP dos documentos...';
+    try {
+        const response = await fetch(`/api/admin/inscricoes/${encodeURIComponent(documentosInscricaoId)}/documentos.zip?_=${Date.now()}`);
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || 'Não foi possível preparar o ZIP dos documentos.');
+        }
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = nomeArquivo;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+        status.style.color = '#166534';
+        status.textContent = 'Download dos documentos iniciado.';
+    } catch (error) {
+        status.style.color = '#b91c1c';
+        status.textContent = error.message;
+    } finally {
+        btn.innerHTML = textoOriginal;
+        btn.disabled = false;
+        btn.style.opacity = '1';
+        btn.style.cursor = 'pointer';
+    }
 }
 
 async function excluirDocumento(inscricaoId, documentoId) {
