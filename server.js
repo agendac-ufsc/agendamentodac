@@ -1436,13 +1436,30 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
             }
         }
 
+        // O upload já persiste os metadados no Redis. Não substituir essa lista
+        // por um payload parcial do navegador, pois isso apagaria arquivos
+        // enviados anteriormente quando a finalização fosse repetida.
+        const documentosPersistidos = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
+        const documentosRecebidos = Array.isArray(dados.documentos) ? dados.documentos : [];
+        const documentosFinais = [...documentosPersistidos];
+        const chavesDocumentos = new Set(documentosPersistidos.map(documento =>
+            documento.id || documento.blobUrl || documento.pathname
+        ).filter(Boolean));
+        for (const documento of documentosRecebidos) {
+            const chave = documento?.id || documento?.blobUrl || documento?.pathname;
+            if (chave && !chavesDocumentos.has(chave)) {
+                documentosFinais.push(documento);
+                chavesDocumentos.add(chave);
+            }
+        }
+
         const atualizada = await updateAgendamento(id, {
             email,
             inscricaoTesteConcluida: true,
             segundaEtapaTeste,
             statusInscricao: 'Validada',
             calendarSynced: true,
-            documentos: Array.isArray(dados.documentos) ? dados.documentos : (agendamento.documentos || [])
+            documentos: documentosFinais
         });
         if (!atualizada) return res.status(500).json({ error: 'Não foi possível validar a inscrição.' });
 
@@ -1544,7 +1561,14 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
             });
         }
         if (arquivos.length) {
-            await updateAgendamento(id, { documentos: [...(agendamento.documentos || []), ...arquivos] });
+            const documentosAtualizados = [...(Array.isArray(agendamento.documentos) ? agendamento.documentos : []), ...arquivos];
+            const documentosSalvos = await updateAgendamento(id, { documentos: documentosAtualizados });
+            if (!documentosSalvos) {
+                await Promise.all(arquivos.map(documento =>
+                    deleteBlob(documento.blobUrl, blobOptions()).catch(() => null)
+                ));
+                return res.status(500).json({ error: 'Os arquivos foram enviados, mas não foi possível salvar os documentos da inscrição.' });
+            }
         }
         res.json({ success: true, documentos: arquivos });
     } catch (error) {
@@ -1656,6 +1680,7 @@ async function sincronizarDocumentosForms(agendamento, headers, valores) {
     try {
         for (const referencia of novasReferencias) {
             const metadataResponse = await drive.files.get({
+                auth: googleAuthClient,
                 fileId: referencia.fileId,
                 fields: 'id,name,mimeType,size,modifiedTime',
                 supportsAllDrives: true
@@ -1664,7 +1689,7 @@ async function sincronizarDocumentosForms(agendamento, headers, valores) {
             const nomeOriginal = metadata.name || `documento-${referencia.fileId}`;
             const nomeSeguro = nomeSeguroParaZip(nomeOriginal, 'documento');
             const mediaResponse = await drive.files.get(
-                { fileId: referencia.fileId, alt: 'media', supportsAllDrives: true },
+                { auth: googleAuthClient, fileId: referencia.fileId, alt: 'media', supportsAllDrives: true },
                 { responseType: 'stream' }
             );
             const pathname = `inscricoes/${agendamento.id}/forms-${referencia.fileId}-${nomeSeguro}`;
