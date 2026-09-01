@@ -3490,7 +3490,7 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                     <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${localExibir}</p>
                 </div>
                 <p style="font-size:14px;color:#555;line-height:1.7">
-                    Por favor, acesse o link abaixo, preencha os dados solicitados e assine digitalmente:
+                    Para oficializar seu evento, acesse o link abaixo, preencha os dados solicitados e clique em “Concluir termo”.
                 </p>
                 ${obsBlock}
                 <div style="text-align:center;margin:28px 0">
