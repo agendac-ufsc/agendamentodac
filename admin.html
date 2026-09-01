@@ -1065,7 +1065,7 @@ function sincronizarTermoAdminAberto() {
     document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
     document.getElementById('adminTermoEmail').value = value('email', p.email);
     document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
-    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
+    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', obterDataHorarioTermo(p));
     document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
     atualizarPillsEspacoAdmin();
     document.getElementById('adminTermoCpf').value = value('cpfCnpj');
@@ -1333,6 +1333,30 @@ async function enviarLinkTermoPendente() {
     }
 }
 
+function obterDataHorarioTermo(p) {
+    if (p?.dataHorarioEvento) return p.dataHorarioEvento;
+
+    const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+    const partes = [];
+    if (p?.etapas && typeof p.etapas === 'object') {
+        Object.keys(p.etapas).forEach(key => {
+            const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+            itens.forEach((item, index) => {
+                if (!item?.data || !item?.horario) return;
+                const label = itens.length > 1 ? `${nomesEtapas[key] || key} ${index + 1}` : (nomesEtapas[key] || key);
+                const dataBr = item.data.split('-').reverse().join('/');
+                partes.push(`${label}: ${dataBr}, ${item.horario}`);
+            });
+        });
+    }
+    if (partes.length) return partes.join(' | ');
+
+    return (p?.calendarDates || [])
+        .map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`)
+        .filter(Boolean)
+        .join(' | ');
+}
+
 function abrirEditorTermo(idx) {
     if (userRole !== 'admin') return;
     const p = allUnificados[idx]?.primeiraEtapa;
@@ -1346,7 +1370,7 @@ function abrirEditorTermo(idx) {
     document.getElementById('adminTermoNome').value = value('nomeCompleto', p.nome);
     document.getElementById('adminTermoEmail').value = value('email', p.email);
     document.getElementById('adminTermoEvento').value = value('nomeEvento', p.evento);
-    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', p.dataHorarioEvento || (p.calendarDates || []).map(cd => `${cd.data?.split('-').reverse().join('/') || ''}${cd.horario ? ', ' + cd.horario : ''}`).join(' | '));
+    document.getElementById('adminTermoDatas').value = value('dataHorarioEvento', obterDataHorarioTermo(p));
     document.getElementById('adminTermoEspaco').value = value('espacoIgreja', false) ? 'igrejinha' : 'teatro';
     atualizarPillsEspacoAdmin();
     document.getElementById('adminTermoCpf').value = value('cpfCnpj');
