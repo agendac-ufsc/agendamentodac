@@ -1007,6 +1007,10 @@ function obterFimDoUltimoEvento(agendamento) {
     return candidatos.sort((a, b) => a.fimDate - b.fimDate).at(-1) || null;
 }
 
+function ehRascunhoUnificado(agendamento) {
+    return agendamento?.inscricaoTeste === true && agendamento?.inscricaoTesteConcluida !== true;
+}
+
 async function buscarDatasEventosLegados(agendamento) {
     if (!googleAuthClient || !agendamento?.evento) return [];
     const normalizar = valor => String(valor || '').toLowerCase()
@@ -1163,7 +1167,8 @@ async function verificarEnviosAutomaticosFormulario() {
         const agendamentos = [...agendamentosRedis, ...agendamentosLegados]
             .filter((agendamento, index, lista) =>
                 lista.findIndex(item => String(item.id) === String(agendamento.id)) === index
-            );
+            )
+            .filter(agendamento => !ehRascunhoUnificado(agendamento));
         for (const agendamento of agendamentos) {
             const email = String(agendamento.email || '').trim().toLowerCase();
             if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
@@ -1269,6 +1274,7 @@ app.post('/api/agendar', async (req, res) => {
             // Buffer de 30 min: dois eventos conflitam se um começa antes de 30 min após o outro terminar
             const overlaps = (a, b) => a.start < b.end + 30 && a.end + 30 > b.start;
             const conflito = existentes.some(ex => {
+                if (ehRascunhoUnificado(ex)) return false;
                 if ((ex.local || 'teatro') !== localKey) return false;
                 if (!ex.etapas) return false;
                 for (const tipo of Object.keys(etapas)) {
@@ -2121,6 +2127,15 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         const agendamentosOrdenados = [...agendamentosPrimeiraEtapa].reverse();
 
         for (const p of agendamentosOrdenados) {
+            // O modo unificado grava a primeira etapa como rascunho para que
+            // o proponente possa concluir o formulário complementar. Esse
+            // rascunho não pode ser associado a uma linha do Forms, exibido
+            // no painel ou sincronizado com o Calendar antes da conclusão.
+            if (ehRascunhoUnificado(p)) {
+                console.log(`⏳ [Rascunho unificado] Ignorado até a conclusão: ${p.evento || 'sem nome'} | ID: ${p.id}`);
+                continue;
+            }
+
             const pEmail = (p.email || '').trim().toLowerCase();
             const pTelefone = (p.telefone || '').replace(/\D/g, '');
 
