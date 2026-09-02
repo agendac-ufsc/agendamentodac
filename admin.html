@@ -1600,8 +1600,7 @@ async function reenviarTermoParaProponente() {
             body: JSON.stringify({
                 emails: [p.email],
                 baseUrl: window.location.origin,
-                id: p.id,
-                observacao: 'Seu Termo Digital foi reaberto para revisão. Confira os dados, aprove novamente todas as cláusulas e envie uma nova versão.'
+                id: p.id
             })
         });
         const data = await r.json().catch(() => ({}));

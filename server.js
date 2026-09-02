@@ -3696,9 +3696,9 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                     <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${escapeHtml(localExibir)}</p>
                 </div>
                 ${obsBlock}
-                <p style="font-size:14px;line-height:1.7;margin:22px 0">
-                    <a href="${escapeHtml(termoUrl)}" style="color:#4b3b80;font-weight:600;text-decoration:underline">Acessar o Termo Digital de Autorização</a>
-                </p>
+                <div style="text-align:center;margin:26px 0 22px">
+                    <a href="${escapeHtml(termoUrl)}" style="display:inline-block;background-color:#5b3f92;color:#ffffff;text-decoration:none;font-size:15px;font-weight:700;line-height:1;padding:15px 25px;border-radius:6px;box-shadow:0 2px 5px rgba(91,63,146,.25)">Abrir o Termo Digital</a>
+                </div>
                 <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato diretamente com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p>
                 <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
                 <p style="font-size:11px;color:#aaa;text-align:center">
