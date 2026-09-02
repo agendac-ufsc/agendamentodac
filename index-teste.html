@@ -119,6 +119,78 @@
         .btn-modal { padding: 10px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
         .btn-yes { background: #28a745; color: white; }
         .btn-no { background: #6c757d; color: white; }
+        .app-alert-overlay {
+            z-index: 11000;
+            padding: 20px;
+            background: rgba(42, 28, 68, 0.58);
+            backdrop-filter: blur(3px);
+        }
+        .app-alert {
+            width: min(430px, 100%);
+            padding: 30px 30px 26px;
+            border: 1px solid rgba(118, 75, 162, 0.12);
+            border-radius: 18px;
+            background: #fff;
+            box-shadow: 0 24px 70px rgba(42, 28, 68, 0.3);
+            text-align: center;
+            animation: appAlertIn 0.18s ease-out;
+        }
+        .app-alert-icon {
+            width: 48px;
+            height: 48px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 14px;
+            border-radius: 50%;
+            background: #f3effb;
+            color: #764ba2;
+            font-size: 25px;
+            font-weight: 800;
+        }
+        .app-alert h2 {
+            margin: 0 0 9px;
+            color: #332342;
+            font-size: 20px;
+        }
+        .app-alert p {
+            margin: 0;
+            color: #5f5868;
+            font-size: 15px;
+            line-height: 1.55;
+            white-space: pre-line;
+        }
+        .app-alert button {
+            min-width: 120px;
+            margin-top: 22px;
+            padding: 11px 26px;
+            border: none;
+            border-radius: 9px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 5px 12px rgba(118, 75, 162, 0.22);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .app-alert button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 7px 16px rgba(118, 75, 162, 0.3);
+        }
+        .app-alert button:focus-visible {
+            outline: 3px solid rgba(102, 126, 234, 0.35);
+            outline-offset: 3px;
+        }
+        @keyframes appAlertIn {
+            from { opacity: 0; transform: translateY(8px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @media (max-width: 600px) {
+            .app-alert { padding: 26px 22px 22px; }
+            .app-alert h2 { font-size: 18px; }
+            .app-alert p { font-size: 14px; }
+        }
         .inscricao-warning-modal {
             width: min(820px, 100%);
             max-height: calc(100vh - 32px);
@@ -790,6 +862,16 @@
         </div>
     </div>
 
+    <!-- Modal de alertas do formulário unificado -->
+    <div class="modal-overlay app-alert-overlay" id="modalAlertaTeste" role="dialog" aria-modal="true" aria-labelledby="modalAlertaTesteTitulo" aria-describedby="modalAlertaTesteMensagem">
+        <div class="app-alert" role="document">
+            <div class="app-alert-icon" aria-hidden="true">!</div>
+            <h2 id="modalAlertaTesteTitulo">Atenção</h2>
+            <p id="modalAlertaTesteMensagem"></p>
+            <button type="button" id="btnFecharAlertaTeste">Entendi</button>
+        </div>
+    </div>
+
     <div class="modal-overlay" id="modalCalendar">
         <div class="modal-content" style="max-width: 900px; width: 95%;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -824,6 +906,41 @@
         document.addEventListener('click', function() {
             const m = document.getElementById('gearMenu');
             if (m) m.style.display = 'none';
+        });
+
+        let focoAnteriorAlertaTeste = null;
+
+        function mostrarAlertaTeste(mensagem, titulo = 'Atenção') {
+            const modal = document.getElementById('modalAlertaTeste');
+            const tituloEl = document.getElementById('modalAlertaTesteTitulo');
+            const mensagemEl = document.getElementById('modalAlertaTesteMensagem');
+            const botao = document.getElementById('btnFecharAlertaTeste');
+            if (!modal || !tituloEl || !mensagemEl || !botao) return;
+
+            focoAnteriorAlertaTeste = document.activeElement;
+            tituloEl.textContent = titulo;
+            mensagemEl.textContent = String(mensagem || 'Verifique as informações e tente novamente.');
+            modal.style.display = 'flex';
+            botao.focus();
+        }
+
+        function fecharAlertaTeste() {
+            const modal = document.getElementById('modalAlertaTeste');
+            if (!modal) return;
+            modal.style.display = 'none';
+            if (focoAnteriorAlertaTeste && document.contains(focoAnteriorAlertaTeste)) {
+                focoAnteriorAlertaTeste.focus();
+            }
+            focoAnteriorAlertaTeste = null;
+        }
+
+        document.getElementById('btnFecharAlertaTeste')?.addEventListener('click', fecharAlertaTeste);
+        document.addEventListener('keydown', event => {
+            const modal = document.getElementById('modalAlertaTeste');
+            if (event.key === 'Escape' && modal?.style.display === 'flex') {
+                event.preventDefault();
+                fecharAlertaTeste();
+            }
         });
     </script>
 
@@ -2054,7 +2171,7 @@
         function avancarPessoaFisicaTeste() {
             const campos = ['testeNomePessoaFisica', 'testeCpfPessoaFisica', 'testeCepPessoaFisica'];
             if (campos.some(id => !document.getElementById(id).value.trim())) {
-                alert('Preencha todos os campos obrigatórios.');
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios.');
                 return;
             }
             const curriculo = document.getElementById('testeCurriculoPessoaFisica').files;
@@ -2062,11 +2179,11 @@
             const limite = 10 * 1024 * 1024;
             const tiposAceitos = file => file.type === 'application/pdf' || file.type.startsWith('image/');
             if (curriculo.length !== 1 || !tiposAceitos(curriculo[0]) || curriculo[0].size > limite) {
-                alert('Selecione 1 currículo em PDF ou imagem com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 currículo em PDF ou imagem com tamanho máximo de 10 MB.');
                 return;
             }
             if (documentos.length < 1 || documentos.length > 5 || Array.from(documentos).some(file => !tiposAceitos(file) || file.size > limite)) {
-                alert('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.');
+                mostrarAlertaTeste('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.');
                 return;
             }
             mostrarTelaTeste('categoriaPropostaSection');
@@ -2079,7 +2196,7 @@
         function avancarCategoriaPropostaTeste() {
             const vinculo = document.querySelector('input[name="vinculoUfscTeste"]:checked');
             if (!vinculo) {
-                alert('Selecione se a proposta possui vínculo com a UFSC.');
+                mostrarAlertaTeste('Selecione se a proposta possui vínculo com a UFSC.');
                 return;
             }
             if (vinculo.value === 'SIM') {
@@ -2098,11 +2215,11 @@
             const comprovante = document.getElementById('testeComprovanteVinculoUfsc').files;
             const arquivo = comprovante[0];
             if (!descricao) {
-                alert('Descreva brevemente o vínculo com a UFSC.');
+                mostrarAlertaTeste('Descreva brevemente o vínculo com a UFSC.');
                 return;
             }
             if (comprovante.length !== 1 || !arquivo || !arquivo.name.toLowerCase().endsWith('.pdf') || arquivo.type !== 'application/pdf' || arquivo.size > 10 * 1024 * 1024) {
-                alert('Selecione 1 comprovante em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 comprovante em PDF com tamanho máximo de 10 MB.');
                 return;
             }
             mostrarTelaTeste('dadosPropostaSection');
@@ -2195,23 +2312,23 @@
             const arquivosAceitos = file => file && (arquivoPdfValido(file) || file.type.startsWith('image/')) && file.size <= 10 * 1024 * 1024;
 
             if (!areas.length) {
-                alert('Selecione pelo menos uma área/segmento.');
+                mostrarAlertaTeste('Selecione pelo menos uma área/segmento.');
                 return;
             }
             if (!finalidade || !sinopse || !relevancia || !acessibilidade) {
-                alert('Preencha todos os campos obrigatórios.');
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios.');
                 return;
             }
             if (ficha.length !== 1 || !arquivoPdfValido(ficha[0])) {
-                alert('Selecione 1 ficha técnica em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 ficha técnica em PDF com tamanho máximo de 10 MB.');
                 return;
             }
             if (linksVideo.length > 5 || Array.from(linksVideo).some(file => !arquivosAceitos(file))) {
-                alert('Selecione até 5 arquivos de vídeo/fotos, com tamanho máximo de 10 MB por arquivo.');
+                mostrarAlertaTeste('Selecione até 5 arquivos de vídeo/fotos, com tamanho máximo de 10 MB por arquivo.');
                 return;
             }
             if (outrosLinks.length > 1 || (outrosLinks.length === 1 && !arquivosAceitos(outrosLinks[0]))) {
-                alert('Selecione no máximo 1 arquivo válido, com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione no máximo 1 arquivo válido, com tamanho máximo de 10 MB.');
                 return;
             }
             const usaAcessibilidade = acessibilidade.value === 'SIM';
@@ -2231,11 +2348,11 @@
             const outroSelecionado = document.getElementById('testeOutroRecursoAcessibilidade').checked;
             const outroTexto = document.getElementById('testeDescricaoOutroRecursoAcessibilidade').value.trim();
             if (!recursos.length) {
-                alert('Selecione pelo menos um recurso de acessibilidade comunicacional.');
+                mostrarAlertaTeste('Selecione pelo menos um recurso de acessibilidade comunicacional.');
                 return;
             }
             if (outroSelecionado && !outroTexto) {
-                alert('Especifique o outro recurso de acessibilidade comunicacional.');
+                mostrarAlertaTeste('Especifique o outro recurso de acessibilidade comunicacional.');
                 return;
             }
             mostrarTelaTeste('gratuidadeEventoSection');
@@ -2249,7 +2366,7 @@
         function avancarGratuidadeEventoTeste() {
             const gratuidade = document.querySelector('input[name="gratuidadeEventoTeste"]:checked');
             if (!gratuidade) {
-                alert('Informe se o evento será gratuito.');
+                mostrarAlertaTeste('Informe se o evento será gratuito.');
                 return;
             }
             if (gratuidade.value === 'SIM') {
@@ -2344,7 +2461,7 @@
         async function concluirInscricaoFinalTeste(projetoDac = '') {
             const dados = coletarDadosFinaisInscricaoTeste(projetoDac);
             if (!dados.id) {
-                alert('Não foi possível identificar a inscrição inicial. Volte e tente novamente.');
+                mostrarAlertaTeste('Não foi possível identificar a inscrição inicial. Volte e tente novamente.');
                 return;
             }
             if (finalizacaoInscricaoEmAndamento) return;
@@ -2377,7 +2494,7 @@
                 mostrarTelaTeste('inscricaoValidadaSection');
             } catch (error) {
                 mostrarTelaTeste(telaAnterior);
-                alert(error.message);
+                mostrarAlertaTeste(error.message, 'Não foi possível concluir');
             } finally {
                 finalizacaoInscricaoEmAndamento = false;
             }
@@ -2390,7 +2507,7 @@
         function concluirInscricaoTeste() {
             const projeto = document.querySelector('input[name="projetoDacTeste"]:checked');
             if (!projeto) {
-                alert('Escolha uma opção sobre a programação dos projetos do DAC.');
+                mostrarAlertaTeste('Escolha uma opção sobre a programação dos projetos do DAC.');
                 return;
             }
             concluirInscricaoFinalTeste(projeto.value);
@@ -2408,7 +2525,7 @@
                 'testeEnderecoPessoaJuridica'
             ];
             if (campos.some(id => !document.getElementById(id).value.trim())) {
-                alert('Preencha todos os campos obrigatórios.');
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios.');
                 return;
             }
 
@@ -2426,19 +2543,19 @@
             );
 
             if (portfolio.length !== 1 || !portfolioAceito(portfolio[0]) || portfolio[0].size > limite100Mb) {
-                alert('Selecione 1 portfólio em PDF, documento ou apresentação com tamanho máximo de 100 MB.');
+                mostrarAlertaTeste('Selecione 1 portfólio em PDF, documento ou apresentação com tamanho máximo de 100 MB.');
                 return;
             }
             if (contrato.length !== 1 || !pdf(contrato[0]) || contrato[0].size > limite10Mb) {
-                alert('Selecione 1 contrato social em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 contrato social em PDF com tamanho máximo de 10 MB.');
                 return;
             }
             if (documentoRepresentante.length !== 1 || !pdfOuImagem(documentoRepresentante[0]) || documentoRepresentante[0].size > limite10Mb) {
-                alert('Selecione 1 documento oficial em PDF ou imagem com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 documento oficial em PDF ou imagem com tamanho máximo de 10 MB.');
                 return;
             }
             if (documentoCnpj.length !== 1 || !pdf(documentoCnpj[0]) || documentoCnpj[0].size > limite10Mb) {
-                alert('Selecione 1 documento do CNPJ em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 documento do CNPJ em PDF com tamanho máximo de 10 MB.');
                 return;
             }
             mostrarTelaTeste('categoriaPropostaSection');
