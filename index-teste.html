@@ -1197,7 +1197,7 @@
             </div>
         </div>
         <div class="step-actions">
-            <button type="button" class="btn-next-step btn-success" onclick="mostrarTelaTeste('homeContainer')">OK</button>
+            <button type="button" class="btn-next-step btn-success" onclick="voltarTelaInicial()">OK</button>
         </div>
     </div>
 
@@ -2493,8 +2493,7 @@
         function selecionarLocal(local) {
             document.getElementById('localSelecionado').value = local;
             document.getElementById('localSelectedBadge').textContent = locaisNomes[local] || local;
-            document.getElementById('localSelectionContainer').style.display = 'none';
-            document.getElementById('mainFormContainer').style.display = 'block';
+            mostrarTelaTeste('mainFormContainer');
             // Atualiza src do calendário embedding
             const calSrc = local === 'igrejinha'
                 ? 'https://calendar.google.com/calendar/embed?src=c_e19d30c40d4de176bc7d4e11ada96bfaffd130b3ed499d9807c88785e2c71c05%40group.calendar.google.com&ctz=America%2FSao_Paulo'
@@ -2506,8 +2505,7 @@
         }
 
         function voltarSelecaoLocal() {
-            document.getElementById('mainFormContainer').style.display = 'none';
-            document.getElementById('localSelectionContainer').style.display = 'block';
+            mostrarTelaTeste('localSelectionContainer');
         }
 
         function mostrarMensagemDesativado() {
@@ -2528,16 +2526,71 @@
                     globalCurrentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
                 }
             }
-            document.getElementById('homeContainer').style.display = 'none';
+            mostrarTelaTeste('localSelectionContainer');
             document.getElementById('gearMenuWrap').style.display = 'block';
-            document.getElementById('localSelectionContainer').style.display = 'block';
         }
 
         function voltarTelaInicial() {
-            document.getElementById('localSelectionContainer').style.display = 'none';
-            document.getElementById('mainFormContainer').style.display = 'none';
-            document.getElementById('homeContainer').style.display = 'flex';
+            resetarFormularioInscricaoTeste();
+            mostrarTelaTeste('homeContainer');
             document.getElementById('gearMenuWrap').style.display = 'block';
+        }
+
+        function resetarFormularioInscricaoTeste() {
+            const form = document.getElementById('agendamentoForm');
+            if (form) form.reset();
+
+            steps.forEach(step => {
+                confirmedSteps[step].length = 0;
+                selections[step].date = null;
+                selections[step].start = null;
+                selections[step].end = null;
+
+                const item = document.querySelector(`.accordion-item[data-step="${step}"]`);
+                if (item) {
+                    item.classList.toggle('disabled', step !== 'evento');
+                    item.querySelector('.accordion-header')?.classList.remove('completed', 'active');
+                    item.querySelector('.accordion-content')?.classList.remove('show');
+                }
+            });
+
+            currentStepContext = null;
+            tipoPessoaTesteAtual = null;
+            inscricaoTesteId = null;
+            formsLinkProximaEtapaTeste = '';
+            dataInicioEdital = null;
+            globalCurrentMonth = new Date();
+
+            document.querySelectorAll('input[type="file"]').forEach(input => {
+                input.value = '';
+                const zone = input.closest('.upload-zone');
+                if (zone) atualizarZonaUploadTeste(input, zone);
+            });
+
+            document.getElementById('dadosSection').style.display = 'block';
+            document.getElementById('schedulingSection').style.display = 'none';
+            document.getElementById('dadosBannerResumo').replaceChildren();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.style.display = '';
+            submitBtn.removeAttribute('data-submitting');
+            submitBtn.classList.add('btn-blocked');
+            submitBtn.style.opacity = '';
+            submitBtn.textContent = 'Próxima etapa';
+            document.getElementById('submitHint').style.display = 'none';
+            document.getElementById('loading').classList.remove('show');
+
+            const message = document.getElementById('message');
+            message.textContent = '';
+            message.className = 'message';
+            document.getElementById('summaryList').replaceChildren();
+            document.getElementById('summarySection').classList.remove('show');
+
+            ['modalAvisoInscricao', 'modalConfirmaDados', 'modalAddAnother', 'modalStart', 'modalCalendar', 'modalDocumentos', 'modalTaxaLocacao']
+                .forEach(id => {
+                    const modal = document.getElementById(id);
+                    if (modal) modal.style.display = 'none';
+                });
         }
 
         // ── FLUXO DE DADOS ──────────────────────────────────

@@ -1267,10 +1267,59 @@
         }
 
         function voltarTelaInicial() {
+            resetarFormularioInscricao();
             document.getElementById('localSelectionContainer').style.display = 'none';
             document.getElementById('mainFormContainer').style.display = 'none';
             document.getElementById('homeContainer').style.display = 'flex';
             document.getElementById('gearMenuWrap').style.display = 'block';
+        }
+
+        function resetarFormularioInscricao() {
+            const form = document.getElementById('agendamentoForm');
+            if (form) form.reset();
+
+            steps.forEach(step => {
+                confirmedSteps[step].length = 0;
+                selections[step].date = null;
+                selections[step].start = null;
+                selections[step].end = null;
+
+                const item = document.querySelector(`.accordion-item[data-step="${step}"]`);
+                if (item) {
+                    item.classList.toggle('disabled', step !== 'evento');
+                    item.querySelector('.accordion-header')?.classList.remove('completed', 'active');
+                    item.querySelector('.accordion-content')?.classList.remove('show');
+                }
+            });
+
+            currentStepContext = null;
+            dataInicioEdital = null;
+            globalCurrentMonth = new Date();
+
+            document.getElementById('dadosSection').style.display = 'block';
+            document.getElementById('schedulingSection').style.display = 'none';
+            document.getElementById('dadosBannerResumo').replaceChildren();
+
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.style.display = '';
+            submitBtn.removeAttribute('data-submitting');
+            submitBtn.classList.add('btn-blocked');
+            submitBtn.style.opacity = '';
+            submitBtn.textContent = 'Finalizar 1ª Etapa da Inscrição';
+            document.getElementById('submitHint').style.display = 'none';
+            document.getElementById('loading').classList.remove('show');
+
+            const message = document.getElementById('message');
+            message.textContent = '';
+            message.className = 'message';
+            document.getElementById('summaryList').replaceChildren();
+            document.getElementById('summarySection').classList.remove('show');
+
+            ['modalAvisoInscricao', 'modalConfirmaDados', 'modalAddAnother', 'modalStart', 'modalCalendar', 'modalDocumentos', 'modalTaxaLocacao']
+                .forEach(id => {
+                    const modal = document.getElementById(id);
+                    if (modal) modal.style.display = 'none';
+                });
         }
 
         // ── FLUXO DE DADOS ──────────────────────────────────
