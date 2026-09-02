@@ -1604,7 +1604,13 @@ async function reenviarTermoParaProponente() {
             })
         });
         const data = await r.json().catch(() => ({}));
-        if (!r.ok || !data.success || data.enviados !== 1) throw new Error(data.error || 'Não foi possível reenviar o link.');
+        if (!r.ok || !data.success || data.enviados !== 1) {
+            const detalhe = data.detalhes?.[0];
+            const motivo = detalhe?.status === 'nao_encontrado'
+                ? `A inscrição não foi localizada${detalhe.email ? ` pelo e-mail ${detalhe.email}` : ''}. Atualize a lista e tente novamente.`
+                : detalhe?.msg;
+            throw new Error(data.error || motivo || 'Não foi possível reenviar o link.');
+        }
         status.style.color = '#15803d';
         status.textContent = `Link reenviado para ${p.email}.`;
     } catch (e) {

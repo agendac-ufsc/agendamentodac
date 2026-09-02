@@ -3645,18 +3645,23 @@ app.post('/api/enviar-links-termo', async (req, res) => {
     const naoEncontrados = [];
     const detalhes = [];
 
+    const emailSolicitado = Array.isArray(emails) ? String(emails[0] || '').trim().toLowerCase() : '';
     const destinatarios = requestedId
-        ? [{ id: String(requestedId), email: '' }]
+        ? [{ id: String(requestedId), email: emailSolicitado }]
         : emails.map(email => ({ id: '', email }));
 
     for (const destinatario of destinatarios) {
         const email = String(destinatario.email || '').trim().toLowerCase();
         const idSolicitado = String(destinatario.id || '').trim();
         if (!email && !idSolicitado) continue;
-        const insc = idSolicitado
+        let insc = idSolicitado
             ? (inscricoes.find(p => String(p.id) === idSolicitado) || await buscarDadosInscricaoForms(idSolicitado))
             : inscricoes.find(p => (p.email || '').trim().toLowerCase() === email)
                 || await buscarInscricaoFormsPorEmail(email);
+        if (!insc && idSolicitado && email) {
+            insc = inscricoes.find(p => (p.email || '').trim().toLowerCase() === email)
+                || await buscarInscricaoFormsPorEmail(email);
+        }
         if (!insc) {
             naoEncontrados.push(email || idSolicitado);
             detalhes.push({ email: email || null, id: idSolicitado || null, status: 'nao_encontrado' });
@@ -3741,7 +3746,14 @@ app.post('/api/enviar-links-termo', async (req, res) => {
         }
     }
 
-    res.json({ success: true, enviados, erros, naoEncontrados, detalhes, total: destinatarios.length });
+    const resultado = { success: true, enviados, erros, naoEncontrados, detalhes, total: destinatarios.length };
+    if (requestedId && enviados !== 1) {
+        const mensagem = erros > 0
+            ? 'O Brevo recusou o envio do link. Consulte os detalhes do erro e tente novamente.'
+            : `A inscrição não foi localizada pelo identificador informado${emailSolicitado ? ` nem pelo e-mail ${emailSolicitado}` : ''}. Atualize a lista de inscrições e tente novamente.`;
+        return res.status(erros > 0 ? 502 : 404).json({ ...resultado, success: false, error: mensagem });
+    }
+    res.json(resultado);
 });
 
 module.exports = app;
