@@ -1633,8 +1633,44 @@ async function copiarLinkTermo(idx) {
     }
 }
 
+function obterCpfCnpjProponente(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosTeste = p.segundaEtapaTeste || {};
+    const termo = p.termoDados || {};
+    const tipo = String(p.tipoProponente || dadosTeste.tipoProponente || '').toLowerCase();
+    const candidatosDiretos = tipo.includes('jurid')
+        ? [
+            dadosTeste.cnpjPessoaJuridica,
+            p.cnpjPessoaJuridica,
+            dadosTeste.cnpj,
+            p.cnpj,
+            termo.cnpj,
+            termo.cpfCnpj
+        ]
+        : [
+            dadosTeste.cpfPessoaFisica,
+            p.cpfPessoaFisica,
+            dadosTeste.cpf,
+            p.cpf,
+            termo.cpf,
+            termo.cpfCnpj
+        ];
+    const valorDireto = candidatosDiretos.find(valor => String(valor || '').trim());
+    if (valorDireto) return String(valorDireto).trim();
+
+    const headers = Array.isArray(item?.segundaEtapa?.headers) ? item.segundaEtapa.headers : [];
+    const valores = Array.isArray(item?.segundaEtapa?.valores) ? item.segundaEtapa.valores : [];
+    const indiceDocumento = headers.findIndex(header => {
+        const titulo = String(header || '').toLowerCase();
+        return titulo.includes('cpf') || titulo.includes('cnpj');
+    });
+    return indiceDocumento >= 0 ? String(valores[indiceDocumento] || '').trim() : '';
+}
+
 function showContact(idx) {
-    const p = allUnificados[idx].primeiraEtapa;
+    const item = allUnificados[idx];
+    const p = item.primeiraEtapa;
+    const cpfCnpj = obterCpfCnpjProponente(item);
     document.getElementById('contatoBody').innerHTML = `
         <p><strong>Proponente:</strong> ${p.nome||'—'}</p>
         <p style="margin-top:8px;display:flex;align-items:center;gap:8px">
@@ -1643,6 +1679,7 @@ function showContact(idx) {
             ${p.email ? `<button onclick="openEmailRapido('${p.email}','${(p.nome||'').replace(/'/g,"\\'")}','${(p.evento||allUnificados[idx].evento||'').replace(/'/g,"\\'")}');event.stopPropagation()" title="Enviar e-mail rápido" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:15px;padding:2px 4px;border-radius:5px;line-height:1" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='none'"><i class="fas fa-paper-plane"></i></button>` : ''}
         </p>
         <p style="margin-top:8px"><strong>Telefone:</strong> ${p.telefone||'—'}</p>
+        <p style="margin-top:8px"><strong>CPF/CNPJ:</strong> ${escapeHtml(cpfCnpj || '—')}</p>
         <p style="margin-top:8px"><strong>Local:</strong> ${p.localNome||'—'}</p>
         <p style="margin-top:8px"><strong>Inscrito em:</strong> ${p.timestamp||'—'}</p>
     `;
