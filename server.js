@@ -926,14 +926,28 @@ const clearBlacklist = async () => {
     }
 };
 
+const BREVO_DEFAULT_SENDER = 'agendac.ufsc@gmail.com';
+const BREVO_SENDER_NAME = 'DAC - UFSC';
+const BREVO_REPLY_TO = 'pautas.dac@contato.ufsc.br';
+
+function limparConfiguracaoBrevo(valor) {
+    return String(valor || '').replace(/^["']|["']$/g, '').trim();
+}
+
+function obterRemetenteBrevo() {
+    // Todos os fluxos devem usar o mesmo remetente validado no Brevo.
+    // ADMIN_EMAIL é destinatário administrativo, não remetente de fallback.
+    return limparConfiguracaoBrevo(process.env.SENDER_EMAIL) || BREVO_DEFAULT_SENDER;
+}
+
 const sendEmail = async (to, subject, htmlContent) => {
-    const apiKey = process.env.BREVO_API_KEY;
+    const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
     if (!apiKey) return null;
-    const senderEmail = process.env.SENDER_EMAIL || "agendac.ufsc@gmail.com";
+    const senderEmail = obterRemetenteBrevo();
     const data = {
-        sender: { "name": "Agendamento DAC", "email": senderEmail },
+        sender: { "name": BREVO_SENDER_NAME, "email": senderEmail },
         to: Array.isArray(to) ? to.map(email => ({ "email": email })) : [{ "email": to }],
-        replyTo: { "email": "pautas.dac@contato.ufsc.br", "name": "DAC - UFSC" },
+        replyTo: { "email": BREVO_REPLY_TO, "name": BREVO_SENDER_NAME },
         subject: subject,
         htmlContent: htmlContent
     };
@@ -941,8 +955,10 @@ const sendEmail = async (to, subject, htmlContent) => {
         const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
             headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }
         });
+        console.log(`✅ [Brevo] E-mail aceito para envio: ${response.data?.messageId || 'messageId não informado'}`);
         return response.data;
     } catch (error) {
+        console.error('❌ [Brevo] Falha ao enviar e-mail:', error.response?.data || error.message);
         return null;
     }
 };
@@ -3338,8 +3354,8 @@ app.post('/api/admin/email-rapido', async (req, res) => {
     if (!to || !assunto || !mensagem) {
         return res.status(400).json({ error: 'Destinatário, assunto e mensagem são obrigatórios.' });
     }
-    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
-    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
+    const senderEmail = obterRemetenteBrevo();
     if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
 
     const mensagemEscapada = escapeHtml(mensagem).replace(/\n/g, '<br>');
@@ -3370,9 +3386,9 @@ app.post('/api/admin/email-rapido', async (req, res) => {
 
     try {
         await axios.post('https://api.brevo.com/v3/smtp/email', {
-            sender: { name: 'DAC - UFSC', email: senderEmail },
+            sender: { name: BREVO_SENDER_NAME, email: senderEmail },
             to: [{ email: to, name: nome || to }],
-            replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
+            replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
             subject: assunto,
             htmlContent
         }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
@@ -3393,8 +3409,8 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
     if (!Array.isArray(inscricoes) || inscricoes.length === 0) {
         return res.status(400).json({ error: 'Nenhuma inscrição selecionada.' });
     }
-    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
-    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
+    const senderEmail = obterRemetenteBrevo();
     if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
 
     const locaisNomes = { teatro: 'Teatro Carmen Fossari', igrejinha: 'Igrejinha da UFSC' };
@@ -3433,10 +3449,10 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
 
         try {
             const resp = await axios.post('https://api.brevo.com/v3/smtp/email', {
-                sender: { name: 'DAC - UFSC', email: senderEmail },
+                sender: { name: BREVO_SENDER_NAME, email: senderEmail },
                 to: [{ email: email, name: nome || email }],
                 cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
-                replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
+                replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
                 subject: `📋 Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
                 htmlContent
             }, {
@@ -3460,8 +3476,8 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
 app.post('/api/enviar-termo-assinado', async (req, res) => {
     const { id, email, nome, evento, fileName, pdfBase64, termoDados } = req.body || {};
     const normalizedEmail = String(email || '').trim().toLowerCase();
-    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
-    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
+    const senderEmail = obterRemetenteBrevo();
 
     if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
         return res.status(400).json({ error: 'Informe um e-mail válido para o envio.' });
@@ -3529,10 +3545,10 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
 
     try {
         await axios.post('https://api.brevo.com/v3/smtp/email', {
-            sender: { name: 'DAC - UFSC', email: senderEmail },
+            sender: { name: BREVO_SENDER_NAME, email: senderEmail },
             to: [{ email: normalizedEmail, name: nome || normalizedEmail }],
             cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
-            replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
+            replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
             subject: `📄 Termo Assinado — ${evento || 'Projeto DAC'} — DAC/UFSC`,
             htmlContent,
             attachment: [{
@@ -3579,8 +3595,8 @@ app.post('/api/enviar-links-termo', async (req, res) => {
     if ((!Array.isArray(emails) || emails.length === 0) && !requestedId) {
         return res.status(400).json({ error: 'Nenhum e-mail ou inscrição informada.' });
     }
-    const apiKey = (process.env.BREVO_API_KEY || '').replace(/^["']|["']$/g, '');
-    const senderEmail = (process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL || 'agendac.ufsc@gmail.com').replace(/^["']|["']$/g, '');
+    const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
+    const senderEmail = obterRemetenteBrevo();
     if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
 
     const inscricoes = await getAgendamentos();
@@ -3662,10 +3678,10 @@ app.post('/api/enviar-links-termo', async (req, res) => {
 
         try {
             await axios.post('https://api.brevo.com/v3/smtp/email', {
-                sender: { name: 'DAC - UFSC', email: senderEmail },
+                sender: { name: BREVO_SENDER_NAME, email: senderEmail },
                 to: [{ email: emailDestino, name: nome || emailDestino }],
                 cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
-                replyTo: { email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' },
+                replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
                 subject: `✍️ Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
                 htmlContent
             }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
