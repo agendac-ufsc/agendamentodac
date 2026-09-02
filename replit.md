@@ -112,6 +112,7 @@ O painel administrativo define em **Configurações → Formulários** qual pág
 | `BREVO_API_KEY` | Chave da API Brevo para envio de e-mails |
 | `ADMIN_EMAIL` | E-mail do administrador (cópia das notificações) |
 | `SENDER_EMAIL` | E-mail remetente dos e-mails |
+| `PUBLIC_APP_URL` | URL pública estável usada nos links enviados por e-mail (opcional; o envio é bloqueado no domínio de preview) |
 | `ADMIN_PASSWORD` | Senha admin (padrão: `admin.dac.ufsc`) |
 
 ## Locais e Calendários

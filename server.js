@@ -940,6 +940,40 @@ function obterRemetenteBrevo() {
     return limparConfiguracaoBrevo(process.env.SENDER_EMAIL) || BREVO_DEFAULT_SENDER;
 }
 
+function obterOrigemPublicaTermo(req, origemInformada) {
+    const origemConfigurada = limparConfiguracaoBrevo(
+        process.env.PUBLIC_APP_URL || process.env.REPLIT_APP_URL
+    ).replace(/\/+$/, '');
+    if (origemConfigurada) {
+        try {
+            const url = new URL(origemConfigurada);
+            if (url.protocol !== 'https:') return '';
+            return url.origin;
+        } catch {
+            return '';
+        }
+    }
+
+    const protocolo = 'https';
+    const host = String(req.get('host') || '').trim();
+    const origemRequisicao = host ? `${protocolo}://${host}` : String(origemInformada || '').trim();
+    try {
+        const url = new URL(origemRequisicao);
+        const hostname = url.hostname.toLowerCase();
+        if (
+            hostname === 'localhost' ||
+            hostname === '127.0.0.1' ||
+            hostname === '0.0.0.0' ||
+            hostname.endsWith('.replit.dev')
+        ) {
+            return '';
+        }
+        return url.origin;
+    } catch {
+        return '';
+    }
+}
+
 const sendEmail = async (to, subject, htmlContent) => {
     const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
     if (!apiKey) return null;
@@ -3453,7 +3487,7 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
                 to: [{ email: email, name: nome || email }],
                 cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
                 replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
-                subject: `📋 Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
+                subject: `Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
                 htmlContent
             }, {
                 headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }
@@ -3600,7 +3634,12 @@ app.post('/api/enviar-links-termo', async (req, res) => {
     if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
 
     const inscricoes = await getAgendamentos();
-    const origin = (baseUrl || '').replace(/\/$/, '');
+    const origin = obterOrigemPublicaTermo(req, baseUrl);
+    if (!origin) {
+        return res.status(400).json({
+            error: 'O envio do termo precisa ser feito pela aplicação publicada. O endereço de preview do Replit não pode ser usado no link enviado.'
+        });
+    }
 
     let enviados = 0, erros = 0;
     const naoEncontrados = [];
@@ -3634,38 +3673,31 @@ app.post('/api/enviar-links-termo', async (req, res) => {
         const localExibir = localNome || (local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
         const termoUrl = `${origin}/termo?id=${encodeURIComponent(id)}`;
 
-        const obsBlock = observacao ? `
-            <div style="background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;padding:16px 18px;margin:20px 0">
-                <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#92400e">⚠️ Aviso da equipe DAC:</p>
-                <p style="margin:0;font-size:14px;color:#92400e;line-height:1.6">${observacao.replace(/\n/g, '<br>')}</p>
+        const observacaoLimpa = escapeHtml(observacao || '').replace(/\n/g, '<br>');
+        const obsBlock = observacaoLimpa ? `
+            <div style="background:#f8f9fa;border-left:3px solid #764ba2;padding:12px 14px;margin:20px 0">
+                <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#555">Mensagem da equipe do DAC</p>
+                <p style="margin:0;font-size:14px;color:#555;line-height:1.6">${observacaoLimpa}</p>
             </div>` : '';
 
         const htmlContent = `
-        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
-            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:28px 30px;text-align:center">
-                <h2 style="margin:0;color:#fff;font-size:20px">Termo de Autorização de Uso</h2>
-                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
+        <div style="font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:8px;overflow:hidden;color:#333">
+            <div style="background:#f7f7fb;padding:20px 24px;border-bottom:1px solid #e5e7eb">
+                <h2 style="margin:0;color:#4b3b80;font-size:19px">DAC — Departamento Artístico Cultural</h2>
+                <p style="margin:6px 0 0;color:#666;font-size:12px">UFSC — Secretaria de Cultura, Arte e Esporte</p>
             </div>
-            <div style="padding:28px 30px">
-                <p style="font-size:15px">Olá, <strong>${nome || 'Proponente'}</strong>!</p>
+            <div style="padding:24px">
+                <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>!</p>
                 <p style="font-size:14px;color:#555;line-height:1.7">
-                    Você está recebendo o link individual para preencher o <strong>Termo Digital de Autorização de Uso do DAC</strong> referente ao seu evento:
+                    Para preencher o <strong>Termo Digital de Autorização de Uso do DAC</strong> referente ao seu evento, acesse o link abaixo:
                 </p>
-                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
-                    <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${evento || 'N/A'}</p>
-                    <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${localExibir}</p>
+                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:6px;padding:14px 16px;margin:18px 0">
+                    <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${escapeHtml(evento || 'N/A')}</p>
+                    <p style="margin:0;font-size:13px;color:#666"><strong>Local:</strong> ${escapeHtml(localExibir)}</p>
                 </div>
-                <p style="font-size:14px;color:#555;line-height:1.7">
-                    Para oficializar seu evento, acesse o link abaixo, preencha os dados solicitados e clique em “Concluir termo”.
-                </p>
                 ${obsBlock}
-                <div style="text-align:center;margin:28px 0">
-                    <a href="${termoUrl}" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-size:15px;font-weight:700;letter-spacing:.3px">
-                        ✍️ Acessar Meu Termo Digital
-                    </a>
-                </div>
-                <p style="font-size:12px;color:#aaa;text-align:center;word-break:break-all">
-                    Ou copie o link: <a href="${termoUrl}" style="color:#764ba2">${termoUrl}</a>
+                <p style="font-size:14px;line-height:1.7;margin:22px 0">
+                    <a href="${escapeHtml(termoUrl)}" style="color:#4b3b80;font-weight:600;text-decoration:underline">Acessar o Termo Digital de Autorização</a>
                 </p>
                 <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato diretamente com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p>
                 <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
@@ -3676,18 +3708,32 @@ app.post('/api/enviar-links-termo', async (req, res) => {
             </div>
         </div>`;
 
+        const textContent = [
+            `Olá, ${nome || 'Proponente'}!`,
+            '',
+            'Para preencher o Termo Digital de Autorização de Uso do DAC referente ao seu evento, acesse:',
+            termoUrl,
+            '',
+            `Evento: ${evento || 'N/A'}`,
+            `Local: ${localExibir}`,
+            observacao ? `\nMensagem da equipe do DAC:\n${observacao}` : '',
+            '',
+            'Em caso de dúvidas, entre em contato com pautas.dac@contato.ufsc.br.'
+        ].join('\n');
+
         try {
-            await axios.post('https://api.brevo.com/v3/smtp/email', {
+            const respostaBrevo = await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: BREVO_SENDER_NAME, email: senderEmail },
                 to: [{ email: emailDestino, name: nome || emailDestino }],
-                cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
+                cc: [{ email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME }],
                 replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
-                subject: `✍️ Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
-                htmlContent
+                subject: `Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
+                htmlContent,
+                textContent
             }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
             enviados++;
             detalhes.push({ email: emailDestino, id, nome, evento, status: 'enviado' });
-            console.log(`✅ Link do termo enviado para ${emailDestino} (inscrição ${id})`);
+            console.log(`✅ Link do termo aceito pelo Brevo para ${emailDestino} (inscrição ${id}) — messageId: ${respostaBrevo.data?.messageId || 'não informado'}`);
         } catch (e) {
             erros++;
             detalhes.push({ email: emailDestino, id, nome, evento, status: 'erro', msg: e.response?.data?.message || e.message });
