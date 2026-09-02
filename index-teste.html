@@ -182,6 +182,18 @@
             outline: 3px solid rgba(102, 126, 234, 0.35);
             outline-offset: 3px;
         }
+        .alerta-campo-destaque {
+            position: relative;
+            z-index: 1;
+            outline: 3px solid #f59e0b;
+            outline-offset: 5px;
+            border-radius: 10px;
+            animation: alertaCampoPulse 1.4s ease-in-out 2;
+        }
+        @keyframes alertaCampoPulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0); }
+            50% { box-shadow: 0 0 0 7px rgba(245, 158, 11, 0.15); }
+        }
         @keyframes appAlertIn {
             from { opacity: 0; transform: translateY(8px) scale(0.98); }
             to { opacity: 1; transform: translateY(0) scale(1); }
@@ -909,14 +921,101 @@
         });
 
         let focoAnteriorAlertaTeste = null;
+        let destinoAlertaTestePendente = null;
 
-        function mostrarAlertaTeste(mensagem, titulo = 'Atenção') {
+        function normalizarTextoAlertaTeste(valor) {
+            return String(valor || '')
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function obterDestinoAlertaTeste(mensagem) {
+            const texto = normalizarTextoAlertaTeste(mensagem);
+            if (texto.includes('data e horario') || texto.includes('cronograma')) {
+                return { telaId: 'mainFormContainer', campoId: 'stepsAccordion' };
+            }
+            if (texto.includes('cpf') || texto.includes('cep residencial') || texto.includes('pessoa fisica') || texto.includes('curriculo')) {
+                return { telaId: 'pessoaFisicaSection', campoId: 'testeCpfPessoaFisica' };
+            }
+            if (texto.includes('cnpj') || texto.includes('pessoa juridica') || texto.includes('razao social') || texto.includes('representante legal') || texto.includes('contrato social') || texto.includes('portfolio') || texto.includes('documento do representante') || texto.includes('documento do cnpj')) {
+                return { telaId: 'pessoaJuridicaSection', campoId: 'testeCnpjPessoaJuridica' };
+            }
+            if (texto.includes('descricao') && texto.includes('vinculo')) {
+                return { telaId: 'vinculoInstitucionalSection', campoId: 'testeDescricaoVinculoUfsc' };
+            }
+            if (texto.includes('comprovante') && texto.includes('vincul')) {
+                return { telaId: 'vinculoInstitucionalSection', campoId: 'testeComprovanteVinculoUfsc' };
+            }
+            if (texto.includes('vinculo com a ufsc') || texto.includes('vinculo institucional') || texto.includes('resposta sobre vinculo')) {
+                return { telaId: 'categoriaPropostaSection', campoSelector: 'input[name="vinculoUfscTeste"]' };
+            }
+            if (texto.includes('area') || texto.includes('segmento')) {
+                return { telaId: 'dadosPropostaSection', campoSelector: 'input[name="areaSegmentoTeste"]' };
+            }
+            if (texto.includes('finalidade')) {
+                return { telaId: 'dadosPropostaSection', campoSelector: 'input[name="finalidadeAtividadeTeste"]' };
+            }
+            if (texto.includes('sinopse') || texto.includes('breve descricao')) {
+                return { telaId: 'dadosPropostaSection', campoId: 'testeSinopseProposta' };
+            }
+            if (texto.includes('ficha tecnica')) {
+                return { telaId: 'dadosPropostaSection', campoId: 'testeFichaTecnicaProposta' };
+            }
+            if (texto.includes('video') || texto.includes('foto')) {
+                return { telaId: 'dadosPropostaSection', campoId: 'testeLinksVideoProposta' };
+            }
+            if (texto.includes('relevancia')) {
+                return { telaId: 'dadosPropostaSection', campoId: 'testeRelevanciaProposta' };
+            }
+            if (texto.includes('acessibilidade') || texto.includes('recurso')) {
+                return { telaId: 'acessibilidadeComunicacionalSection', campoSelector: 'input[name="recursosAcessibilidadeTeste"]' };
+            }
+            if (texto.includes('gratuito') || texto.includes('cobranca de ingresso')) {
+                return { telaId: 'gratuidadeEventoSection', campoSelector: 'input[name="gratuidadeEventoTeste"]' };
+            }
+            if (texto.includes('programacao dos projetos') || texto.includes('projeto do dac')) {
+                return { telaId: 'projetosDacSection', campoSelector: 'input[name="projetoDacTeste"]' };
+            }
+            if (texto.includes('inscricao inicial') || texto.includes('nome') || texto.includes('e-mail') || texto.includes('telefone') || texto.includes('evento')) {
+                return { telaId: 'mainFormContainer', campoId: 'nome' };
+            }
+            return null;
+        }
+
+        function limparDestaquesAlertaTeste() {
+            document.querySelectorAll('.alerta-campo-destaque').forEach(elemento => {
+                elemento.classList.remove('alerta-campo-destaque');
+            });
+        }
+
+        function encontrarCampoDestinoAlertaTeste(destino) {
+            if (!destino) return null;
+            if (destino.campoId) return document.getElementById(destino.campoId);
+            return destino.campoSelector ? document.querySelector(destino.campoSelector) : null;
+        }
+
+        function destacarDestinoAlertaTeste(destino) {
+            limparDestaquesAlertaTeste();
+            const campo = encontrarCampoDestinoAlertaTeste(destino);
+            if (!campo) return;
+            const grupo = campo.closest('.form-group, .proposal-card, .ufsc-link-card, .institutional-upload') || campo;
+            grupo.classList.add('alerta-campo-destaque');
+        }
+
+        function mostrarAlertaTeste(mensagem, titulo = 'Atenção', destino = null) {
             const modal = document.getElementById('modalAlertaTeste');
             const tituloEl = document.getElementById('modalAlertaTesteTitulo');
             const mensagemEl = document.getElementById('modalAlertaTesteMensagem');
             const botao = document.getElementById('btnFecharAlertaTeste');
             if (!modal || !tituloEl || !mensagemEl || !botao) return;
 
+            const destinoResolvido = destino || obterDestinoAlertaTeste(mensagem);
+            destinoAlertaTestePendente = destinoResolvido;
+            if (destinoResolvido?.telaId && typeof mostrarTelaTeste === 'function') {
+                mostrarTelaTeste(destinoResolvido.telaId);
+                destacarDestinoAlertaTeste(destinoResolvido);
+            }
             focoAnteriorAlertaTeste = document.activeElement;
             tituloEl.textContent = titulo;
             mensagemEl.textContent = String(mensagem || 'Verifique as informações e tente novamente.');
@@ -928,10 +1027,20 @@
             const modal = document.getElementById('modalAlertaTeste');
             if (!modal) return;
             modal.style.display = 'none';
-            if (focoAnteriorAlertaTeste && document.contains(focoAnteriorAlertaTeste)) {
+            const destino = destinoAlertaTestePendente;
+            const campoDestino = encontrarCampoDestinoAlertaTeste(destino);
+            if (campoDestino && document.contains(campoDestino)) {
+                campoDestino.focus();
+                campoDestino.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                window.setTimeout(() => {
+                    const grupo = campoDestino.closest('.form-group, .proposal-card, .ufsc-link-card, .institutional-upload') || campoDestino;
+                    grupo.classList.remove('alerta-campo-destaque');
+                }, 3500);
+            } else if (focoAnteriorAlertaTeste && document.contains(focoAnteriorAlertaTeste)) {
                 focoAnteriorAlertaTeste.focus();
             }
             focoAnteriorAlertaTeste = null;
+            destinoAlertaTestePendente = null;
         }
 
         document.getElementById('btnFecharAlertaTeste')?.addEventListener('click', fecharAlertaTeste);
@@ -2057,6 +2166,10 @@
 
             if (submitBtn.classList.contains('btn-blocked')) {
                 submitHint.style.display = 'block';
+                mostrarAlertaTeste('Adicione pelo menos um horário de Evento para continuar.', 'Atenção', {
+                    telaId: 'mainFormContainer',
+                    campoId: 'stepsAccordion'
+                });
                 return;
             }
 
@@ -2170,8 +2283,12 @@
 
         function avancarPessoaFisicaTeste() {
             const campos = ['testeNomePessoaFisica', 'testeCpfPessoaFisica', 'testeCepPessoaFisica'];
-            if (campos.some(id => !document.getElementById(id).value.trim())) {
-                mostrarAlertaTeste('Preencha todos os campos obrigatórios.');
+            const campoObrigatorioAusente = campos.find(id => !document.getElementById(id).value.trim());
+            if (campoObrigatorioAusente) {
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios.', 'Atenção', {
+                    telaId: 'pessoaFisicaSection',
+                    campoId: campoObrigatorioAusente
+                });
                 return;
             }
             const curriculo = document.getElementById('testeCurriculoPessoaFisica').files;
@@ -2179,11 +2296,17 @@
             const limite = 10 * 1024 * 1024;
             const tiposAceitos = file => file.type === 'application/pdf' || file.type.startsWith('image/');
             if (curriculo.length !== 1 || !tiposAceitos(curriculo[0]) || curriculo[0].size > limite) {
-                mostrarAlertaTeste('Selecione 1 currículo em PDF ou imagem com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 currículo em PDF ou imagem com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'pessoaFisicaSection',
+                    campoId: 'testeCurriculoPessoaFisica'
+                });
                 return;
             }
             if (documentos.length < 1 || documentos.length > 5 || Array.from(documentos).some(file => !tiposAceitos(file) || file.size > limite)) {
-                mostrarAlertaTeste('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.');
+                mostrarAlertaTeste('Selecione de 1 a 5 documentos em PDF ou imagem, com tamanho máximo de 10 MB por arquivo.', 'Atenção', {
+                    telaId: 'pessoaFisicaSection',
+                    campoId: 'testeDocumentoPessoaFisica'
+                });
                 return;
             }
             mostrarTelaTeste('categoriaPropostaSection');
@@ -2196,7 +2319,10 @@
         function avancarCategoriaPropostaTeste() {
             const vinculo = document.querySelector('input[name="vinculoUfscTeste"]:checked');
             if (!vinculo) {
-                mostrarAlertaTeste('Selecione se a proposta possui vínculo com a UFSC.');
+                mostrarAlertaTeste('Selecione se a proposta possui vínculo com a UFSC.', 'Atenção', {
+                    telaId: 'categoriaPropostaSection',
+                    campoSelector: 'input[name="vinculoUfscTeste"]'
+                });
                 return;
             }
             if (vinculo.value === 'SIM') {
@@ -2215,11 +2341,17 @@
             const comprovante = document.getElementById('testeComprovanteVinculoUfsc').files;
             const arquivo = comprovante[0];
             if (!descricao) {
-                mostrarAlertaTeste('Descreva brevemente o vínculo com a UFSC.');
+                mostrarAlertaTeste('Descreva brevemente o vínculo com a UFSC.', 'Atenção', {
+                    telaId: 'vinculoInstitucionalSection',
+                    campoId: 'testeDescricaoVinculoUfsc'
+                });
                 return;
             }
             if (comprovante.length !== 1 || !arquivo || !arquivo.name.toLowerCase().endsWith('.pdf') || arquivo.type !== 'application/pdf' || arquivo.size > 10 * 1024 * 1024) {
-                mostrarAlertaTeste('Selecione 1 comprovante em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 comprovante em PDF com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'vinculoInstitucionalSection',
+                    campoId: 'testeComprovanteVinculoUfsc'
+                });
                 return;
             }
             mostrarTelaTeste('dadosPropostaSection');
@@ -2312,23 +2444,47 @@
             const arquivosAceitos = file => file && (arquivoPdfValido(file) || file.type.startsWith('image/')) && file.size <= 10 * 1024 * 1024;
 
             if (!areas.length) {
-                mostrarAlertaTeste('Selecione pelo menos uma área/segmento.');
+                mostrarAlertaTeste('Selecione pelo menos uma área/segmento.', 'Atenção', {
+                    telaId: 'dadosPropostaSection',
+                    campoSelector: 'input[name="areaSegmentoTeste"]'
+                });
                 return;
             }
-            if (!finalidade || !sinopse || !relevancia || !acessibilidade) {
-                mostrarAlertaTeste('Preencha todos os campos obrigatórios.');
+            const destinoObrigatorioAusente = !finalidade
+                ? { campoSelector: 'input[name="finalidadeAtividadeTeste"]' }
+                : !sinopse
+                    ? { campoId: 'testeSinopseProposta' }
+                    : !relevancia
+                        ? { campoId: 'testeRelevanciaProposta' }
+                        : !acessibilidade
+                            ? { campoSelector: 'input[name="acessibilidadeComunicacionalTeste"]' }
+                            : null;
+            if (destinoObrigatorioAusente) {
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios.', 'Atenção', {
+                    telaId: 'dadosPropostaSection',
+                    ...destinoObrigatorioAusente
+                });
                 return;
             }
             if (ficha.length !== 1 || !arquivoPdfValido(ficha[0])) {
-                mostrarAlertaTeste('Selecione 1 ficha técnica em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 ficha técnica em PDF com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'dadosPropostaSection',
+                    campoId: 'testeFichaTecnicaProposta'
+                });
                 return;
             }
             if (linksVideo.length > 5 || Array.from(linksVideo).some(file => !arquivosAceitos(file))) {
-                mostrarAlertaTeste('Selecione até 5 arquivos de vídeo/fotos, com tamanho máximo de 10 MB por arquivo.');
+                mostrarAlertaTeste('Selecione até 5 arquivos de vídeo/fotos, com tamanho máximo de 10 MB por arquivo.', 'Atenção', {
+                    telaId: 'dadosPropostaSection',
+                    campoId: 'testeLinksVideoProposta'
+                });
                 return;
             }
             if (outrosLinks.length > 1 || (outrosLinks.length === 1 && !arquivosAceitos(outrosLinks[0]))) {
-                mostrarAlertaTeste('Selecione no máximo 1 arquivo válido, com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione no máximo 1 arquivo válido, com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'dadosPropostaSection',
+                    campoId: 'testeOutrosLinksProposta'
+                });
                 return;
             }
             const usaAcessibilidade = acessibilidade.value === 'SIM';
@@ -2348,11 +2504,17 @@
             const outroSelecionado = document.getElementById('testeOutroRecursoAcessibilidade').checked;
             const outroTexto = document.getElementById('testeDescricaoOutroRecursoAcessibilidade').value.trim();
             if (!recursos.length) {
-                mostrarAlertaTeste('Selecione pelo menos um recurso de acessibilidade comunicacional.');
+                mostrarAlertaTeste('Selecione pelo menos um recurso de acessibilidade comunicacional.', 'Atenção', {
+                    telaId: 'acessibilidadeComunicacionalSection',
+                    campoSelector: 'input[name="recursosAcessibilidadeTeste"]'
+                });
                 return;
             }
             if (outroSelecionado && !outroTexto) {
-                mostrarAlertaTeste('Especifique o outro recurso de acessibilidade comunicacional.');
+                mostrarAlertaTeste('Especifique o outro recurso de acessibilidade comunicacional.', 'Atenção', {
+                    telaId: 'acessibilidadeComunicacionalSection',
+                    campoId: 'testeDescricaoOutroRecursoAcessibilidade'
+                });
                 return;
             }
             mostrarTelaTeste('gratuidadeEventoSection');
@@ -2366,7 +2528,10 @@
         function avancarGratuidadeEventoTeste() {
             const gratuidade = document.querySelector('input[name="gratuidadeEventoTeste"]:checked');
             if (!gratuidade) {
-                mostrarAlertaTeste('Informe se o evento será gratuito.');
+                mostrarAlertaTeste('Informe se o evento será gratuito.', 'Atenção', {
+                    telaId: 'gratuidadeEventoSection',
+                    campoSelector: 'input[name="gratuidadeEventoTeste"]'
+                });
                 return;
             }
             if (gratuidade.value === 'SIM') {
@@ -2461,7 +2626,10 @@
         async function concluirInscricaoFinalTeste(projetoDac = '') {
             const dados = coletarDadosFinaisInscricaoTeste(projetoDac);
             if (!dados.id) {
-                mostrarAlertaTeste('Não foi possível identificar a inscrição inicial. Volte e tente novamente.');
+                mostrarAlertaTeste('Não foi possível identificar a inscrição inicial. Volte e tente novamente.', 'Atenção', {
+                    telaId: 'mainFormContainer',
+                    campoId: 'nome'
+                });
                 return;
             }
             if (finalizacaoInscricaoEmAndamento) return;
@@ -2507,7 +2675,10 @@
         function concluirInscricaoTeste() {
             const projeto = document.querySelector('input[name="projetoDacTeste"]:checked');
             if (!projeto) {
-                mostrarAlertaTeste('Escolha uma opção sobre a programação dos projetos do DAC.');
+                mostrarAlertaTeste('Escolha uma opção sobre a programação dos projetos do DAC.', 'Atenção', {
+                    telaId: 'projetosDacSection',
+                    campoSelector: 'input[name="projetoDacTeste"]'
+                });
                 return;
             }
             concluirInscricaoFinalTeste(projeto.value);
@@ -2524,8 +2695,12 @@
                 'testeCnpjPessoaJuridica',
                 'testeEnderecoPessoaJuridica'
             ];
-            if (campos.some(id => !document.getElementById(id).value.trim())) {
-                mostrarAlertaTeste('Preencha todos os campos obrigatórios.');
+            const campoObrigatorioAusente = campos.find(id => !document.getElementById(id).value.trim());
+            if (campoObrigatorioAusente) {
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios.', 'Atenção', {
+                    telaId: 'pessoaJuridicaSection',
+                    campoId: campoObrigatorioAusente
+                });
                 return;
             }
 
@@ -2543,19 +2718,31 @@
             );
 
             if (portfolio.length !== 1 || !portfolioAceito(portfolio[0]) || portfolio[0].size > limite100Mb) {
-                mostrarAlertaTeste('Selecione 1 portfólio em PDF, documento ou apresentação com tamanho máximo de 100 MB.');
+                mostrarAlertaTeste('Selecione 1 portfólio em PDF, documento ou apresentação com tamanho máximo de 100 MB.', 'Atenção', {
+                    telaId: 'pessoaJuridicaSection',
+                    campoId: 'testePortfolioPessoaJuridica'
+                });
                 return;
             }
             if (contrato.length !== 1 || !pdf(contrato[0]) || contrato[0].size > limite10Mb) {
-                mostrarAlertaTeste('Selecione 1 contrato social em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 contrato social em PDF com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'pessoaJuridicaSection',
+                    campoId: 'testeContratoPessoaJuridica'
+                });
                 return;
             }
             if (documentoRepresentante.length !== 1 || !pdfOuImagem(documentoRepresentante[0]) || documentoRepresentante[0].size > limite10Mb) {
-                mostrarAlertaTeste('Selecione 1 documento oficial em PDF ou imagem com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 documento oficial em PDF ou imagem com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'pessoaJuridicaSection',
+                    campoId: 'testeDocumentoRepresentantePessoaJuridica'
+                });
                 return;
             }
             if (documentoCnpj.length !== 1 || !pdf(documentoCnpj[0]) || documentoCnpj[0].size > limite10Mb) {
-                mostrarAlertaTeste('Selecione 1 documento do CNPJ em PDF com tamanho máximo de 10 MB.');
+                mostrarAlertaTeste('Selecione 1 documento do CNPJ em PDF com tamanho máximo de 10 MB.', 'Atenção', {
+                    telaId: 'pessoaJuridicaSection',
+                    campoId: 'testeDocumentoCnpjPessoaJuridica'
+                });
                 return;
             }
             mostrarTelaTeste('categoriaPropostaSection');
@@ -2723,7 +2910,15 @@
 
         function abrirModalConfirmaDados() {
             const btn = document.getElementById('btnConfirmarDados');
-            if (btn.classList.contains('btn-blocked')) return;
+            const campos = ['nome', 'email', 'telefone', 'evento'];
+            const campoObrigatorioAusente = campos.find(id => !document.getElementById(id).value.trim());
+            if (btn.classList.contains('btn-blocked') || campoObrigatorioAusente) {
+                mostrarAlertaTeste('Preencha todos os campos obrigatórios para continuar.', 'Atenção', {
+                    telaId: 'mainFormContainer',
+                    campoId: campoObrigatorioAusente || 'nome'
+                });
+                return;
+            }
             const nome     = document.getElementById('nome').value.trim();
             const email    = document.getElementById('email').value.trim();
             const telefone = document.getElementById('telefone').value.trim();
