@@ -1011,6 +1011,119 @@ function ehRascunhoUnificado(agendamento) {
     return agendamento?.inscricaoTeste === true && agendamento?.inscricaoTesteConcluida !== true;
 }
 
+function textoPreenchido(valor) {
+    return typeof valor === 'string' ? valor.trim().length > 0 : Boolean(valor);
+}
+
+function listaPreenchida(valor) {
+    return Array.isArray(valor) && valor.some(item => textoPreenchido(item));
+}
+
+function cronogramaValido(etapas) {
+    if (!etapas || typeof etapas !== 'object') return false;
+    const evento = Array.isArray(etapas.evento) ? etapas.evento : [etapas.evento];
+    if (!evento.some(item => item?.data && item?.horario)) return false;
+
+    return Object.values(etapas).every(valor => {
+        const itens = Array.isArray(valor) ? valor : [valor];
+        return itens.length > 0 && itens.every(item =>
+            item && /^\d{4}-\d{2}-\d{2}$/.test(String(item.data || '')) &&
+            /^\d{1,2}:\d{2}\s+às\s+\d{1,2}:\d{2}$/.test(String(item.horario || ''))
+        );
+    });
+}
+
+function possuiDocumento(documentos, campo) {
+    return documentos.some(documento =>
+        documento?.campo === campo && (documento.blobUrl || documento.pathname)
+    );
+}
+
+function validarInscricaoUnificadaCompleta(dados, agendamento, documentos) {
+    const camposBase = [
+        ['nome', dados.nome || agendamento.nome],
+        ['e-mail', dados.email || agendamento.email],
+        ['telefone', dados.telefone || agendamento.telefone],
+        ['nome do evento', dados.evento || agendamento.evento]
+    ];
+    const ausentes = camposBase.filter(([, valor]) => !textoPreenchido(valor)).map(([nome]) => nome);
+    if (!cronogramaValido(dados.etapas || agendamento.etapas)) {
+        ausentes.push('pelo menos uma data e horário de Evento');
+    }
+
+    const tipo = String(dados.tipoProponente || '').trim();
+    if (!['Pessoa Física', 'Pessoa Jurídica'].includes(tipo)) {
+        ausentes.push('tipo de proponente');
+    } else if (tipo === 'Pessoa Física') {
+        [
+            ['nome completo da pessoa física', dados.nomePessoaFisica],
+            ['CPF', dados.cpfPessoaFisica],
+            ['CEP residencial', dados.cepPessoaFisica]
+        ].forEach(([nome, valor]) => {
+            if (!textoPreenchido(valor)) ausentes.push(nome);
+        });
+        if (!possuiDocumento(documentos, 'testeCurriculoPessoaFisica')) ausentes.push('currículo');
+        if (!possuiDocumento(documentos, 'testeDocumentoPessoaFisica')) ausentes.push('documento oficial da pessoa física');
+    } else {
+        [
+            ['representante legal', dados.representantePessoaJuridica],
+            ['razão social', dados.razaoSocialPessoaJuridica],
+            ['CNPJ', dados.cnpjPessoaJuridica],
+            ['endereço da pessoa jurídica', dados.enderecoPessoaJuridica]
+        ].forEach(([nome, valor]) => {
+            if (!textoPreenchido(valor)) ausentes.push(nome);
+        });
+        [
+            ['portfólio', 'testePortfolioPessoaJuridica'],
+            ['contrato social', 'testeContratoPessoaJuridica'],
+            ['documento do representante legal', 'testeDocumentoRepresentantePessoaJuridica'],
+            ['documento do CNPJ', 'testeDocumentoCnpjPessoaJuridica']
+        ].forEach(([nome, campo]) => {
+            if (!possuiDocumento(documentos, campo)) ausentes.push(nome);
+        });
+    }
+
+    const vinculo = String(dados.vinculoUfsc || '').trim();
+    if (!['SIM', 'NÃO'].includes(vinculo)) {
+        ausentes.push('resposta sobre vínculo com a UFSC');
+    } else if (vinculo === 'SIM') {
+        if (!textoPreenchido(dados.descricaoVinculoUfsc)) ausentes.push('descrição do vínculo com a UFSC');
+        if (!possuiDocumento(documentos, 'testeComprovanteVinculoUfsc')) ausentes.push('comprovante de vínculo com a UFSC');
+    }
+
+    if (!listaPreenchida(dados.areas)) ausentes.push('área/segmento');
+    if (!textoPreenchido(dados.finalidade)) ausentes.push('finalidade da atividade');
+    if (!textoPreenchido(dados.sinopse)) ausentes.push('sinopse da proposta');
+    if (!possuiDocumento(documentos, 'testeFichaTecnicaProposta')) ausentes.push('ficha técnica');
+    if (!textoPreenchido(dados.relevancia)) ausentes.push('relevância cultural e impacto social');
+
+    const acessibilidade = String(dados.acessibilidade || '').trim();
+    if (!['SIM', 'NÃO'].includes(acessibilidade)) {
+        ausentes.push('resposta sobre acessibilidade comunicacional');
+    } else if (acessibilidade === 'SIM') {
+        if (!listaPreenchida(dados.recursosAcessibilidade)) {
+            ausentes.push('recursos de acessibilidade comunicacional');
+        }
+        if (Array.isArray(dados.recursosAcessibilidade) &&
+            dados.recursosAcessibilidade.includes('Outro') &&
+            !textoPreenchido(dados.descricaoOutroRecursoAcessibilidade)) {
+            ausentes.push('descrição do outro recurso de acessibilidade');
+        }
+    }
+
+    const gratuidade = String(dados.gratuidade || '').trim();
+    if (!['SIM', 'NÃO'].includes(gratuidade)) {
+        ausentes.push('resposta sobre gratuidade do evento');
+    } else if (gratuidade === 'SIM' && !textoPreenchido(dados.projetoDac)) {
+        ausentes.push('projeto do DAC ou produção própria');
+    }
+
+    return {
+        valido: ausentes.length === 0,
+        ausentes
+    };
+}
+
 async function buscarDatasEventosLegados(agendamento) {
     if (!googleAuthClient || !agendamento?.evento) return [];
     const normalizar = valor => String(valor || '').toLowerCase()
@@ -1335,15 +1448,10 @@ app.post('/api/agendar', async (req, res) => {
             return res.json({ success: true, id: idAgendamento, rascunho: true });
         }
 
-        // Enviar e-mails de forma independente — erro de e-mail não cancela a inscrição já salva
-        const formsLinkEmail = FORMS_LINK || '';
-        const botaoForms = formsLinkEmail
-            ? `<div style="text-align:center;margin:16px 0"><a href="${formsLinkEmail}" target="_blank" style="display:inline-block;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-size:14px;font-weight:700">Acessar a 2ª Etapa (Formulário Complementar)</a></div>`
-            : `<p style="font-size:13px;color:#555">Acesse o formulário complementar disponível no site do DAC para concluir sua inscrição.</p>`;
-        sendEmail(email, '📋 Registro de Datas — Inscrição Pendente (DAC/UFSC)', `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #764ba2;">Olá, ${nome}!</h2><p>Este e-mail é apenas um <strong>registro das datas e horários</strong> que você escolheu para o projeto <strong>${evento}</strong> no <strong>${localNome}</strong>. Guarde para não esquecer.</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Datas escolhidas:</strong></p>${tabelaHtml}<hr style="border: 0; border-top: 1px solid #eee;"><div style="background:#fff8e1;border-left:4px solid #f59e0b;padding:14px 16px;border-radius:6px;margin:16px 0"><p style="margin:0 0 8px;font-size:14px;color:#92400e"><strong>📌 Lembre-se: a inscrição só é válida com as duas etapas preenchidas.</strong><br>Se você ainda não preencheu o <strong>formulário complementar (2ª etapa)</strong>, acesse agora pelo botão abaixo para concluir sua inscrição.</p>${botaoForms}<p style="margin:8px 0 0;font-size:12px;color:#b45309"><em>Se já preencheu o formulário, pode ignorar o botão acima.</em></p></div><p>Em caso de dúvidas, entre em contato com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p><p>Atenciosamente,<br><strong>Equipe DAC</strong></p></div>`).catch(err => console.error('⚠️ [E-mail] Erro ao enviar confirmação ao proponente:', err.message));
-        sendEmail(adminEmail, `📅 NOVA INSCRIÇÃO: ${evento} (${nome}) — ${localNome}`, `<div style="font-family: sans-serif; color: #333; max-width: 600px; margin: auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;"><h2 style="color: #333;">Nova Inscrição de Projeto</h2><p>Um novo projeto foi inscrito com o seguinte cronograma:</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Dados do Proponente:</strong></p><p>👤 <strong>Nome:</strong> ${nome}</p><p>📧 <strong>E-mail:</strong> ${email}</p><p>📞 <strong>Telefone:</strong> ${telefone}</p><p>🏛️ <strong>Local:</strong> ${localNome}</p><p>🎭 <strong>Evento:</strong> ${evento}</p><hr style="border: 0; border-top: 1px solid #eee;"><p><strong>Cronograma do Projeto:</strong></p>${tabelaHtml}</div>`).catch(err => console.error('⚠️ [E-mail] Erro ao enviar notificação ao admin:', err.message));
-
-        res.json({ success: true, id: idAgendamento });
+        // Nesta rota é criada apenas a primeira etapa. Nenhum e-mail é enviado
+        // aqui: o envio só ocorre depois que a segunda etapa for encontrada e
+        // validada como completa pelo fluxo de finalização.
+        res.json({ success: true, id: idAgendamento, pendente: true });
     } catch (error) {
         res.status(500).json({ error: 'Erro interno ao processar agendamento.' });
     }
@@ -1416,6 +1524,33 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
         };
         const jaConcluida = agendamento.inscricaoTesteConcluida === true;
 
+        // O upload já persiste os metadados no Redis. Não substituir essa lista
+        // por um payload parcial do navegador, pois isso apagaria arquivos
+        // enviados anteriormente quando a finalização fosse repetida.
+        const documentosPersistidos = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
+        const documentosRecebidos = Array.isArray(dados.documentos) ? dados.documentos : [];
+        const documentosFinais = [...documentosPersistidos];
+        const chavesDocumentos = new Set(documentosPersistidos.map(documento =>
+            documento.id || documento.blobUrl || documento.pathname
+        ).filter(Boolean));
+        for (const documento of documentosRecebidos) {
+            const chave = documento?.id || documento?.blobUrl || documento?.pathname;
+            if (chave && !chavesDocumentos.has(chave)) {
+                documentosFinais.push(documento);
+                chavesDocumentos.add(chave);
+            }
+        }
+
+        // A validação da tela não é suficiente: a rota também precisa impedir
+        // que uma chamada manual finalize uma inscrição pela metade. Esta
+        // validação acontece antes de criar eventos ou enviar qualquer e-mail.
+        const validacao = validarInscricaoUnificadaCompleta(dados, agendamento, documentosFinais);
+        if (!validacao.valido) {
+            return res.status(400).json({
+                error: `Inscrição incompleta. Preencha: ${validacao.ausentes.join(', ')}.`
+            });
+        }
+
         // A agenda só recebe os eventos quando a inscrição estiver 100% concluída.
         // Isso evita marcar horários apenas porque a primeira etapa foi iniciada.
         if (!jaConcluida && agendamento.calendarSynced !== true) {
@@ -1439,23 +1574,6 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
                         return res.status(502).json({ error: 'A inscrição foi salva, mas não foi possível registrá-la no Google Calendar.' });
                     }
                 }
-            }
-        }
-
-        // O upload já persiste os metadados no Redis. Não substituir essa lista
-        // por um payload parcial do navegador, pois isso apagaria arquivos
-        // enviados anteriormente quando a finalização fosse repetida.
-        const documentosPersistidos = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
-        const documentosRecebidos = Array.isArray(dados.documentos) ? dados.documentos : [];
-        const documentosFinais = [...documentosPersistidos];
-        const chavesDocumentos = new Set(documentosPersistidos.map(documento =>
-            documento.id || documento.blobUrl || documento.pathname
-        ).filter(Boolean));
-        for (const documento of documentosRecebidos) {
-            const chave = documento?.id || documento?.blobUrl || documento?.pathname;
-            if (chave && !chavesDocumentos.has(chave)) {
-                documentosFinais.push(documento);
-                chavesDocumentos.add(chave);
             }
         }
 
@@ -2186,11 +2304,14 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                             for (let i = 0; i < itens.length; i++) {
                                 const item = itens[i];
                                 const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
-                                await createCalendarEvent(
+                                const eventoCriado = await createCalendarEvent(
                                     `${label}: ${p.evento}`,
                                     `Em análise\nLocal: ${localNomeResolvido}`,
                                     item.data, item.horario, calIdInscricao, p.id
                                 );
+                                if (!eventoCriado) {
+                                    throw new Error(`Não foi possível criar o evento da etapa ${label}.`);
+                                }
                                 const [ano, mes, dia] = (item.data || '').split('-');
                                 const dataFormatada = ano ? `${dia}/${mes}/${ano}` : item.data;
                                 linhasEtapas.push(`<tr><td style="border:1px solid #ddd;padding:8px"><strong>${label}</strong></td><td style="border:1px solid #ddd;padding:8px">${dataFormatada}</td><td style="border:1px solid #ddd;padding:8px">${item.horario || ''}</td></tr>`);
@@ -2232,6 +2353,35 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                             `📋 Inscrição Completa: ${p.evento || 'Novo Projeto'} — ${p.nome || ''} — DAC/UFSC`,
                             htmlAdmin
                         ).catch(err => console.error(`⚠️ [E-mail] Erro ao notificar admin sobre inscrição completa:`, err.message));
+
+                        // O e-mail do proponente também é uma confirmação da
+                        // inscrição completa. Nunca enviá-lo enquanto existir
+                        // somente a primeira etapa no Redis.
+                        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(p.email || '').trim())) {
+                            const htmlProponente = `
+                            <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+                                <div style="background:linear-gradient(135deg,#16a34a,#15803d);padding:24px 30px;text-align:center">
+                                    <h2 style="margin:0;color:#fff;font-size:19px">Inscrição concluída com sucesso</h2>
+                                    <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">Comprovante — DAC/UFSC</p>
+                                </div>
+                                <div style="padding:28px 30px">
+                                    <p style="font-size:15px;margin-top:0">Olá, <strong>${escapeHtml(p.nome || 'Proponente')}</strong>!</p>
+                                    <p style="font-size:14px;line-height:1.6">As duas etapas da sua inscrição foram preenchidas. Sua inscrição foi registrada e encaminhada para análise da equipe do DAC.</p>
+                                    <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:0 0 20px">
+                                        <p style="margin:0 0 6px;font-size:13px"><strong>Evento:</strong> ${escapeHtml(p.evento || 'N/A')}</p>
+                                        <p style="margin:0;font-size:13px"><strong>Local:</strong> ${escapeHtml(localNomeResolvido)}</p>
+                                    </div>
+                                    <p style="font-size:14px;font-weight:600;margin-bottom:6px">Cronograma solicitado:</p>
+                                    ${tabelaEtapas}
+                                    <p style="font-size:13px;color:#555;margin-top:22px">Em caso de dúvidas, entre em contato com <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#15803d;font-weight:bold">pautas.dac@contato.ufsc.br</a>.</p>
+                                </div>
+                            </div>`;
+                            sendEmail(
+                                p.email,
+                                `✅ Inscrição concluída: ${p.evento || 'Novo Projeto'} — DAC/UFSC`,
+                                htmlProponente
+                            ).catch(err => console.error(`⚠️ [E-mail] Erro ao enviar confirmação ao proponente:`, err.message));
+                        }
                     } catch (calErr) {
                         console.error(`⚠️ [Calendar] Falha ao criar eventos para ${p.email}:`, calErr.message);
                     }

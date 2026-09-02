@@ -2289,6 +2289,13 @@
                     }))
                 ])),
                 tipoProponente: document.querySelector('input[name="tipoProponenteTeste"]:checked')?.value || tipoPessoaTesteAtual || '',
+                nomePessoaFisica: valor('testeNomePessoaFisica'),
+                cpfPessoaFisica: valor('testeCpfPessoaFisica'),
+                cepPessoaFisica: valor('testeCepPessoaFisica'),
+                representantePessoaJuridica: valor('testeRepresentantePessoaJuridica'),
+                razaoSocialPessoaJuridica: valor('testeRazaoSocialPessoaJuridica'),
+                cnpjPessoaJuridica: valor('testeCnpjPessoaJuridica'),
+                enderecoPessoaJuridica: valor('testeEnderecoPessoaJuridica'),
                 categoriaProposta: vinculo === 'SIM' ? 'Com vínculo com a UFSC' : 'Externa',
                 vinculoUfsc: vinculo,
                 descricaoVinculoUfsc: valor('testeDescricaoVinculoUfsc'),
@@ -2298,6 +2305,7 @@
                 relevancia: valor('testeRelevanciaProposta'),
                 acessibilidade,
                 recursosAcessibilidade: selecionados('recursosAcessibilidadeTeste'),
+                descricaoOutroRecursoAcessibilidade: valor('testeDescricaoOutroRecursoAcessibilidade'),
                 gratuidade,
                 projetoDac,
                 arquivos: [
