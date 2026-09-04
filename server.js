@@ -149,7 +149,8 @@ const updateAgendamento = async (id, campos) => {
     try {
         if (redis) {
             const agendamentos = await getAgendamentos();
-            const idx = agendamentos.findIndex(a => a.id === id);
+            const idNormalizado = String(id);
+            const idx = agendamentos.findIndex(a => String(a.id) === idNormalizado);
             if (idx === -1) return false;
             agendamentos[idx] = { ...agendamentos[idx], ...campos };
             await redis.set(AGENDAMENTOS_KEY, agendamentos);
@@ -3614,6 +3615,9 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
             statusSaved = String(id).startsWith('forms_')
                 ? await saveTermoLegada(String(id), dadosTermo)
                 : await updateAgendamento(id, dadosTermo);
+            if (!statusSaved) {
+                console.error(`❌ [Termo] PDF enviado, mas não foi possível salvar termoAssinado para a inscrição ${id}.`);
+            }
         }
 
         console.log(`✅ Termo assinado enviado para ${normalizedEmail} com cópia para o DAC`);
