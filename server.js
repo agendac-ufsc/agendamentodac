@@ -3704,7 +3704,8 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                 </p>
                 <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:20px">
                     Permanecemos à disposição para quaisquer esclarecimentos.<br><br>
-                    Atenciosamente,
+                    Atenciosamente,<br>
+                    <strong>Equipe DAC</strong>
                 </p>
                 <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:6px;padding:14px 16px;margin:18px 0">
                     <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${escapeHtml(evento || 'N/A')}</p>
@@ -3735,6 +3736,7 @@ app.post('/api/enviar-links-termo', async (req, res) => {
             'Permanecemos à disposição para quaisquer esclarecimentos.',
             '',
             'Atenciosamente,',
+            'Equipe DAC',
             '',
             `Evento: ${evento || 'N/A'}`,
             `Local: ${localExibir}`,
