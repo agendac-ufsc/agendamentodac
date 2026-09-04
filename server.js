@@ -2087,11 +2087,13 @@ async function buscarDadosInscricaoForms(id) {
             (h.includes('nome completo') && !h.includes('representante')) || h.includes('full name')
         );
 
-        const row = rows.slice(1).find(values => {
+        const idNormalizado = String(id);
+        const row = rows.slice(1).find((values, rowIndex) => {
             const email = emailIndex >= 0 ? String(values[emailIndex] || '').trim().toLowerCase() : '';
             const evento = eventIndex >= 0 ? String(values[eventIndex] || '').trim() : 'Evento (Forms)';
             const candidate = `forms_${email || 'noemail'}_${evento.toLowerCase().replace(/\s+/g, '_')}`;
-            return candidate === String(id);
+            const deterministicCandidate = `${candidate}_${rowIndex}`;
+            return candidate === idNormalizado || deterministicCandidate === idNormalizado;
         });
         if (!row) return null;
 
@@ -2167,7 +2169,7 @@ app.get('/api/agendamento/:id', async (req, res) => {
     if (!id) return res.status(400).json({ error: 'ID não fornecido' });
     try {
         const agendamentos = await getAgendamentos();
-        const ag = agendamentos.find(a => a.id === id) || await buscarDadosInscricaoForms(id);
+        const ag = agendamentos.find(a => String(a.id) === String(id)) || await buscarDadosInscricaoForms(id);
         if (!ag) return res.status(404).json({ error: 'Inscrição não encontrada' });
 
         // Montar string descritiva de data/horário a partir das etapas (se existirem)
@@ -3553,6 +3555,13 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
         .slice(0, 180) || 'Termo_DAC_2026.pdf';
     const nomeSeguro = escapeHtml(nome || 'Proponente');
     const eventoSeguro = escapeHtml(evento || 'Seu projeto');
+    const emailSeguro = escapeHtml(normalizedEmail);
+    const idSeguro = escapeHtml(id || 'Não informado');
+    const dataEventoSeguro = escapeHtml(termoDados?.dataHorarioEvento || 'Não informado');
+    const attachment = [{
+        content: pdfBuffer.toString('base64'),
+        name: safeFileName
+    }];
 
     const htmlContent = `
     <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
@@ -3578,19 +3587,80 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
         </div>
     </div>`;
 
+    const textContentProponente = [
+        `Olá, ${nome || 'Proponente'}!`,
+        '',
+        `Conforme sua autorização, segue em anexo o PDF do Termo de Autorização assinado digitalmente referente ao evento ${evento || 'Seu projeto'}.`,
+        'O mesmo documento foi encaminhado ao DAC para registro.',
+        '',
+        'Em caso de dúvidas, entre em contato com pautas.dac@contato.ufsc.br.'
+    ].join('\n');
+
+    const htmlContentDac = `
+    <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+            <h2 style="margin:0;color:#fff;font-size:19px">Termo de Autorização Assinado</h2>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">Notificação administrativa — DAC/UFSC</p>
+        </div>
+        <div style="padding:26px 28px">
+            <p style="font-size:15px">O proponente preencheu, confirmou ciência e enviou o Termo de Autorização assinado digitalmente.</p>
+            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                <p style="margin:0 0 8px;font-size:13px"><strong>Proponente:</strong> ${nomeSeguro}</p>
+                <p style="margin:0 0 8px;font-size:13px"><strong>E-mail:</strong> ${emailSeguro}</p>
+                <p style="margin:0 0 8px;font-size:13px"><strong>Evento:</strong> ${eventoSeguro}</p>
+                <p style="margin:0 0 8px;font-size:13px"><strong>Data/horário informado:</strong> ${dataEventoSeguro}</p>
+                <p style="margin:0;font-size:13px"><strong>Identificador da inscrição:</strong> ${idSeguro}</p>
+            </div>
+            <p style="font-size:14px;color:#555;line-height:1.7">O PDF assinado segue anexado para registro e continuidade da análise pela equipe do DAC.</p>
+            <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+            <p style="font-size:11px;color:#aaa">
+                UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+            </p>
+        </div>
+    </div>`;
+
+    const textContentDac = [
+        'Termo de Autorização Assinado — Notificação administrativa DAC/UFSC',
+        '',
+        'O proponente preencheu, confirmou ciência e enviou o Termo de Autorização assinado digitalmente.',
+        '',
+        `Proponente: ${nome || 'Não informado'}`,
+        `E-mail: ${normalizedEmail}`,
+        `Evento: ${evento || 'Não informado'}`,
+        `Data/horário informado: ${termoDados?.dataHorarioEvento || 'Não informado'}`,
+        `Identificador da inscrição: ${id || 'Não informado'}`,
+        '',
+        'O PDF assinado segue anexado para registro e continuidade da análise pela equipe do DAC.'
+    ].join('\n');
+
     try {
         await axios.post('https://api.brevo.com/v3/smtp/email', {
             sender: { name: BREVO_SENDER_NAME, email: senderEmail },
             to: [{ email: normalizedEmail, name: nome || normalizedEmail }],
-            cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
             replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
             subject: `📄 Termo Assinado — ${evento || 'Projeto DAC'} — DAC/UFSC`,
             htmlContent,
-            attachment: [{
-                content: pdfBuffer.toString('base64'),
-                name: safeFileName
-            }]
+            textContent: textContentProponente,
+            attachment
         }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+
+        let dacEmailSent = true;
+        try {
+            await axios.post('https://api.brevo.com/v3/smtp/email', {
+                sender: { name: BREVO_SENDER_NAME, email: senderEmail },
+                to: [{ email: BREVO_REPLY_TO, name: 'DAC - UFSC' }],
+                replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
+                subject: `✅ Termo assinado — ${evento || 'Projeto DAC'} — ${nome || 'Proponente'}`,
+                htmlContent: htmlContentDac,
+                textContent: textContentDac,
+                attachment
+            }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+            console.log(`✅ [Termo] Notificação administrativa enviada para o DAC: ${normalizedEmail}`);
+        } catch (e) {
+            dacEmailSent = false;
+            console.error(`❌ [Termo] PDF enviado ao proponente, mas falha ao notificar o DAC:`, e.response?.data || e.message);
+        }
 
         let statusSaved = true;
         if (id) {
@@ -3620,8 +3690,8 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
             }
         }
 
-        console.log(`✅ Termo assinado enviado para ${normalizedEmail} com cópia para o DAC`);
-        res.json({ success: true, statusSaved });
+        console.log(`✅ Termo assinado enviado para ${normalizedEmail}; notificação administrativa separada: ${dacEmailSent ? 'enviada' : 'falhou'}`);
+        res.json({ success: true, statusSaved, dacEmailSent });
     } catch (e) {
         console.error(`❌ Erro ao enviar termo assinado para ${normalizedEmail}:`, e.response?.data || e.message);
         res.status(500).json({ error: e.response?.data?.message || 'Não foi possível enviar o PDF por e-mail.' });

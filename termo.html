@@ -974,7 +974,11 @@ function criarPDF() {
         $('confirmacaoFinal').checked = true;
         renderClausulas();
         aplicarModoTermo();
-       showToast('PDF enviado ao proponente e ao DAC.', 'success');
+       if (result.dacEmailSent === false) {
+         showToast('PDF enviado, mas não foi possível enviar a notificação ao DAC.', 'error');
+       } else {
+         showToast('PDF enviado ao proponente e notificação enviada ao DAC.', 'success');
+       }
        if (window.opener && !window.opener.closed) {
           window.opener.postMessage({
             type: 'termo-assinado',
