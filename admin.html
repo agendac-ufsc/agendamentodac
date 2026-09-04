@@ -1314,8 +1314,7 @@ async function enviarLinkTermoPendente() {
             body: JSON.stringify({
                 id: p.id,
                 emails: [p.email],
-                baseUrl: window.location.origin,
-                observacao: 'Para registrar e oficializar seu evento junto ao DAC/UFSC, preencha os dados restantes do Termo Digital, leia e aprove todas as cláusulas e envie o PDF assinado pelo próprio formulário.'
+                baseUrl: window.location.origin
             })
         });
         const data = await r.json().catch(() => ({}));

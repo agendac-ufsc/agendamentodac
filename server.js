@@ -3692,9 +3692,19 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                 <p style="margin:6px 0 0;color:#666;font-size:12px">UFSC — Secretaria de Cultura, Arte e Esporte</p>
             </div>
             <div style="padding:24px">
-                <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>!</p>
+                <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>,</p>
                 <p style="font-size:14px;color:#555;line-height:1.7">
-                    Para preencher o <strong>Termo Digital de Autorização de Uso do DAC</strong> referente ao seu evento, acesse o link abaixo:
+                    Informamos que sua proposta inscrita no <strong>Edital nº 002/2026/DAC/SeCArtE/UFSC</strong> foi homologada.
+                </p>
+                <p style="font-size:14px;color:#555;line-height:1.7">
+                    Conforme previsto no item <strong>13.1.1 do Edital</strong>, encaminhamos, abaixo, o link para acesso ao <strong>Termo de Autorização para Ocupação dos Espaços do DAC</strong>.
+                </p>
+                <p style="font-size:14px;color:#555;line-height:1.7">
+                    Solicitamos, por gentileza, que os dados referentes à reserva sejam conferidos e, após a leitura dos termos e condições para utilização do espaço, que seja assinalada a opção de ciência do Termo, a fim de que possamos dar continuidade ao processo de reserva.
+                </p>
+                <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:20px">
+                    Permanecemos à disposição para quaisquer esclarecimentos.<br><br>
+                    Atenciosamente,
                 </p>
                 <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:6px;padding:14px 16px;margin:18px 0">
                     <p style="margin:0 0 6px;font-size:13px;color:#666"><strong>Evento:</strong> ${escapeHtml(evento || 'N/A')}</p>
@@ -3714,13 +3724,23 @@ app.post('/api/enviar-links-termo', async (req, res) => {
         </div>`;
 
         const textContent = [
-            `Olá, ${nome || 'Proponente'}!`,
+            `Olá, ${nome || 'Proponente'},`,
             '',
-            'Para preencher o Termo Digital de Autorização de Uso do DAC referente ao seu evento, acesse:',
-            termoUrl,
+            'Informamos que sua proposta inscrita no Edital nº 002/2026/DAC/SeCArtE/UFSC foi homologada.',
+            '',
+            'Conforme previsto no item 13.1.1 do Edital, encaminhamos, abaixo, o link para acesso ao Termo de Autorização para Ocupação dos Espaços do DAC.',
+            '',
+            'Solicitamos, por gentileza, que os dados referentes à reserva sejam conferidos e, após a leitura dos termos e condições para utilização do espaço, que seja assinalada a opção de ciência do Termo, a fim de que possamos dar continuidade ao processo de reserva.',
+            '',
+            'Permanecemos à disposição para quaisquer esclarecimentos.',
+            '',
+            'Atenciosamente,',
             '',
             `Evento: ${evento || 'N/A'}`,
             `Local: ${localExibir}`,
+            '',
+            'Abrir o Termo Digital:',
+            termoUrl,
             observacao ? `\nMensagem da equipe do DAC:\n${observacao}` : '',
             '',
             'Em caso de dúvidas, entre em contato com pautas.dac@contato.ufsc.br.'
