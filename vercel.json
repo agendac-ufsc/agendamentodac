@@ -32,6 +32,10 @@
       "dest": "termo.html"
     },
     {
+      "src": "/registro-atividades",
+      "dest": "server.js"
+    },
+    {
       "src": "/(.*)",
       "dest": "index.html"
     }
