@@ -69,13 +69,54 @@
         input:focus, textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(118,75,162,.10); }
         textarea { min-height: 105px; resize: vertical; line-height: 1.5; }
         input:disabled, textarea:disabled { opacity: 1; color: #394454; background: #f8fafc; cursor: default; }
-        .upload-box {
-            margin-top: 17px; padding: 18px; border: 1.5px dashed #c7cedb; border-radius: 10px;
-            background: #fbfcff; text-align: center;
+        /* O upload segue o mesmo padrão acessível usado no modo unificado:
+           toda a área funciona como o seletor de arquivos. */
+        .upload-zone {
+            position: relative; min-height: 108px; display: flex; align-items: center;
+            justify-content: center; overflow: hidden; margin-top: 17px; padding: 16px 18px;
+            border: 1.5px dashed #c4b5fd; border-radius: 12px;
+            background: linear-gradient(180deg, #fbfaff 0%, #f7f5ff 100%);
+            color: #4c1d95; cursor: pointer;
+            transition: border-color .2s, background .2s, box-shadow .2s;
         }
-        .upload-box i { color: var(--purple); font-size: 23px; }
-        .upload-box p { margin: 7px 0 12px; color: var(--muted); font-size: 12px; }
-        input[type="file"] { width: 100%; color: #586274; font-size: 12px; }
+        .upload-zone:hover {
+            border-color: #8b5cf6;
+            background: linear-gradient(180deg, #f8f5ff 0%, #f2edff 100%);
+            box-shadow: 0 5px 14px rgba(118, 75, 162, .10);
+        }
+        .upload-zone:focus-within {
+            outline: 3px solid rgba(99, 102, 241, .20); outline-offset: 2px; border-color: #667eea;
+        }
+        .upload-zone.has-files {
+            border-style: solid; border-color: #22c55e;
+            background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%); color: #166534;
+        }
+        .upload-zone.has-files:hover { border-color: #15803d; }
+        .upload-zone input[type="file"] {
+            position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%;
+            margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer;
+        }
+        .upload-zone-content {
+            position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column;
+            align-items: center; gap: 5px; pointer-events: none; text-align: center;
+        }
+        .upload-zone-icon {
+            width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%;
+            background: #ede9fe; color: #6d28d9; font-size: 20px; font-weight: 700; line-height: 1;
+        }
+        .upload-zone.has-files .upload-zone-icon { background: #dcfce7; color: #15803d; }
+        .upload-zone-title { color: inherit; font-size: 14px; font-weight: 700; }
+        .upload-zone-action { color: #6b7280; font-size: 12px; }
+        .upload-zone.has-files .upload-zone-action { color: #15803d; }
+        .upload-zone-files {
+            display: flex; flex-wrap: wrap; justify-content: center; gap: 5px;
+            max-width: 100%; margin-top: 3px;
+        }
+        .upload-file-chip {
+            max-width: min(100%, 280px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            padding: 4px 8px; border-radius: 999px; background: rgba(255, 255, 255, .85);
+            border: 1px solid #bbf7d0; color: #166534; font-size: 11px;
+        }
         .file-list { display: grid; gap: 7px; margin-top: 10px; text-align: left; }
         .file-item {
             display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -166,12 +207,16 @@
             <section class="card">
                 <h2>Registros</h2>
                 <p class="help">(máx. 5) — sugestões: montagem, entrada do público, plateia, apresentação.</p>
-                <div id="uploadBox" class="upload-box">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                    <p>Selecione até 5 arquivos de registro do(s) evento(s).</p>
+                <div id="uploadBox" class="upload-zone" role="group">
+                    <div class="upload-zone-content">
+                        <span class="upload-zone-icon" aria-hidden="true">↑</span>
+                        <strong class="upload-zone-title">Adicionar arquivos</strong>
+                        <span class="upload-zone-action">Clique em qualquer parte desta área para escolher</span>
+                        <span id="selectedFiles" class="upload-zone-files" aria-live="polite"></span>
+                    </div>
                     <input id="files" type="file" multiple accept="image/*,video/*,application/pdf">
-                    <div id="selectedFiles" class="file-list"></div>
                 </div>
+                <p class="help">Selecione até 5 arquivos de registro do(s) evento(s).</p>
                 <div id="savedFiles" class="file-list"></div>
             </section>
 
@@ -249,6 +294,38 @@
             });
         }
 
+        function atualizarZonaUpload(files) {
+            const zone = $('uploadBox');
+            const title = zone.querySelector('.upload-zone-title');
+            const action = zone.querySelector('.upload-zone-action');
+            const icon = zone.querySelector('.upload-zone-icon');
+            const list = $('selectedFiles');
+            const temArquivos = files.length > 0;
+
+            zone.classList.toggle('has-files', temArquivos);
+            icon.textContent = temArquivos ? '✓' : '↑';
+            title.textContent = temArquivos
+                ? `${files.length} arquivo${files.length === 1 ? '' : 's'} selecionado${files.length === 1 ? '' : 's'}`
+                : 'Adicionar arquivos';
+            action.textContent = temArquivos
+                ? 'Clique em qualquer parte para trocar a seleção'
+                : 'Clique em qualquer parte desta área para escolher';
+            list.replaceChildren();
+            files.slice(0, 3).forEach(file => {
+                const chip = document.createElement('span');
+                chip.className = 'upload-file-chip';
+                chip.title = file.name;
+                chip.textContent = file.name;
+                list.appendChild(chip);
+            });
+            if (files.length > 3) {
+                const chip = document.createElement('span');
+                chip.className = 'upload-file-chip';
+                chip.textContent = `+${files.length - 3} outro${files.length - 3 === 1 ? '' : 's'}`;
+                list.appendChild(chip);
+            }
+        }
+
         function renderEvents() {
             const eventos = currentData?.eventos || [];
             $('eventList').innerHTML = eventos.map((evento, index) => {
@@ -280,7 +357,7 @@
             $('autores').value = registro.autores || '';
             $('observacao').value = registro.observacao || '';
             $('sugestao').value = registro.sugestao || '';
-            renderFiles([], 'selectedFiles');
+            renderSelectedFiles();
             renderFiles(registro.arquivos || [], 'savedFiles', true);
 
             const concluido = registro.concluido === true;
@@ -307,7 +384,7 @@
         }
 
         function renderSelectedFiles() {
-            renderFiles(selectedFiles.map(file => ({ nome: file.name, tamanho: file.size })), 'selectedFiles');
+            atualizarZonaUpload(selectedFiles);
         }
 
         $('files').addEventListener('change', event => {
