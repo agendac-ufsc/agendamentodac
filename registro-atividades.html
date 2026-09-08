@@ -131,6 +131,11 @@
         }
         .file-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .file-item a { color: var(--purple); font-weight: 700; text-decoration: none; white-space: nowrap; }
+        .saved-files-header {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px;
+            margin-top: 18px; color: #3c4758; font-size: 13px; font-weight: 700;
+        }
+        .saved-files-header button { padding: 8px 11px; font-size: 12px; }
         .status {
             display: none; padding: 12px 14px; border-radius: 9px; margin-top: 16px;
             font-size: 13px; line-height: 1.5;
@@ -148,6 +153,9 @@
             border-radius: 9px; padding: 13px 15px; font-size: 13px; line-height: 1.55; margin-bottom: 17px;
         }
         .completed-note.show { display: block; }
+        .admin-top-actions {
+            display: flex; justify-content: flex-end; margin-top: 17px;
+        }
         .actions {
             display: flex; justify-content: space-between; align-items: center; gap: 10px;
             flex-wrap: wrap; margin-top: 22px;
@@ -197,6 +205,11 @@
                 <p class="intro">Preencha as informações sobre a realização do evento e envie os registros solicitados ao DAC.</p>
                 <div id="adminNote" class="admin-note hidden"></div>
                 <div id="completedNote" class="completed-note"></div>
+                <div class="admin-top-actions">
+                    <button id="btnEnviarAdmin" type="button" class="btn-blue hidden" onclick="enviarLinkAdmin()">
+                        <i class="fa-solid fa-paper-plane"></i> Enviar formulário ao proponente
+                    </button>
+                </div>
                 <div class="basic-grid">
                     <div class="info-box"><div class="info-label">Proponente</div><div id="infoNome" class="info-value">—</div></div>
                     <div class="info-box"><div class="info-label">E-mail</div><div id="infoEmail" class="info-value">—</div></div>
@@ -224,6 +237,12 @@
                     <input id="files" type="file" multiple accept="image/*,video/*,application/pdf">
                 </div>
                 <p class="help">Selecione até 5 arquivos de registro do(s) evento(s).</p>
+                <div class="saved-files-header">
+                    <span>Arquivos enviados</span>
+                    <button id="btnZip" type="button" class="btn-secondary hidden" onclick="baixarArquivosZip()">
+                        <i class="fa-solid fa-file-zipper"></i> Baixar tudo em ZIP
+                    </button>
+                </div>
                 <div id="savedFiles" class="file-list"></div>
             </section>
 
@@ -244,7 +263,6 @@
                 <div class="actions">
                     <button type="button" class="btn-secondary" onclick="window.close()"><i class="fa-solid fa-arrow-left"></i> Fechar</button>
                     <div class="actions-right">
-                        <button id="btnEnviarAdmin" type="button" class="btn-blue hidden" onclick="enviarLinkAdmin()"><i class="fa-solid fa-paper-plane"></i> Enviar para o proponente</button>
                         <button id="btnPDF" type="button" class="btn-success hidden" onclick="baixarPDF()"><i class="fa-regular fa-file-pdf"></i> Baixar PDF</button>
                         <button id="btnEnviar" type="button" class="btn-primary" onclick="enviarRegistro()"><i class="fa-solid fa-paper-plane"></i> Enviar registro</button>
                     </div>
@@ -397,6 +415,7 @@
             $('btnEnviar').classList.toggle('hidden', !editavel);
             $('btnEnviarAdmin').classList.toggle('hidden', !isAdmin || concluido);
             $('btnPDF').classList.toggle('hidden', !concluido);
+            $('btnZip').classList.toggle('hidden', !isAdmin || !Array.isArray(registro.arquivos) || !registro.arquivos.length);
             if (isAdmin && concluido) showStatus('Registro preenchido disponível para consulta e download.', 'success');
             if (concluido && !isAdmin) showStatus('Este registro já foi enviado. Obrigado!', 'success');
         }
@@ -499,14 +518,32 @@
                 const response = await fetch('/api/registro-atividades', { method: 'POST', body: form });
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível enviar o registro.');
-                showStatus('Registro enviado com sucesso ao DAC.', 'success');
+                const statusMessage =
+                    data.dacEmailSent === false
+                        ? 'Registro salvo, mas o aviso por e-mail ao DAC não foi entregue.'
+                        : 'Registro enviado com sucesso ao DAC.';
+                const statusType = data.dacEmailSent === false ? 'error' : 'success';
                 await carregar();
+                showStatus(statusMessage, statusType);
             } catch (error) {
                 showStatus(error.message, 'error');
             } finally {
                 btn.disabled = false;
                 btn.innerHTML = original;
             }
+        }
+
+        function baixarArquivosZip() {
+            if (!isAdmin || !currentData?.registro?.arquivos?.length) {
+                showStatus('Não há arquivos enviados para baixar.', 'error');
+                return;
+            }
+            const link = document.createElement('a');
+            link.href = `/api/registro-atividades/${encodeURIComponent(id)}/arquivos.zip`;
+            link.download = '';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
         }
 
         function baixarPDF() {

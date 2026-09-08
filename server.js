@@ -2087,6 +2087,54 @@ app.get('/api/registro-atividades/:id/arquivo/:arquivoId', async (req, res) => {
     }
 });
 
+app.get('/api/registro-atividades/:id/arquivos.zip', async (req, res) => {
+    try {
+        if (!blobStorageReady) return res.status(503).json({ error: 'O armazenamento de registros não está configurado.' });
+        const id = String(req.params.id || '');
+        const inscricao = await buscarInscricaoParaRegistroAtividades(id);
+        if (!inscricao) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        const salvo = await obterRegistroAtividadesSalvo(id, inscricao);
+        const arquivos = Array.isArray(salvo?.arquivos) ? salvo.arquivos : [];
+        if (!arquivos.length) return res.status(404).json({ error: 'Este registro não possui arquivos.' });
+
+        const zip = new AdmZip();
+        const nomesUsados = new Map();
+        for (const arquivo of arquivos) {
+            const blobUrl = arquivo.blobUrl || arquivo.url;
+            if (!blobUrl) throw new Error('Arquivo sem referência de armazenamento.');
+
+            const resultado = await getBlob(blobUrl, blobOptions({ access: 'private', useCache: false }));
+            if (resultado.statusCode !== 200 || !resultado.stream) {
+                throw new Error('Arquivo removido ou indisponível.');
+            }
+
+            const nomeBase = nomeSeguroParaZip(arquivo.nome, 'registro');
+            const ocorrencias = (nomesUsados.get(nomeBase) || 0) + 1;
+            nomesUsados.set(nomeBase, ocorrencias);
+            const sufixo = ocorrencias > 1 ? `_${ocorrencias}` : '';
+            const ponto = nomeBase.lastIndexOf('.');
+            const nomeArquivo = ponto > 0
+                ? `${nomeBase.slice(0, ponto)}${sufixo}${nomeBase.slice(ponto)}`
+                : `${nomeBase}${sufixo}`;
+
+            zip.addFile(nomeArquivo, await streamParaBuffer(resultado.stream));
+        }
+
+        const conteudoZip = zip.toBuffer();
+        const nomeEvento = nomeSeguroParaZip(inscricao.evento || 'registro-atividades', 'registro-atividades');
+        res.set({
+            'Content-Type': 'application/zip',
+            'Content-Disposition': `attachment; filename="${encodeURIComponent(`${nomeEvento}_registros.zip`)}"`,
+            'Content-Length': String(conteudoZip.length),
+            'Cache-Control': 'private, no-store'
+        });
+        res.send(conteudoZip);
+    } catch (error) {
+        console.error('❌ [/api/registro-atividades/:id/arquivos.zip] erro:', error.message);
+        res.status(500).json({ error: 'Não foi possível preparar o ZIP dos registros.' });
+    }
+});
+
 app.post('/api/admin/enviar-registro-atividades', async (req, res) => {
     const { id, baseUrl } = req.body || {};
     const idNormalizado = String(id || '').trim();
@@ -2295,8 +2343,64 @@ app.post('/api/registro-atividades', uploadRegistrosAtividades.array('registros'
         const salvo = await salvarRegistroAtividades(id, inscricao, registro);
         if (!salvo) throw new Error('Não foi possível salvar o registro no Redis.');
 
-        console.log(`✅ [Atividades] Registro preenchido recebido para ${inscricao.email || id}.`);
-        res.json({ success: true, registro: { ...registro, arquivos: arquivos.map(({ blobUrl, pathname, ...arquivo }) => arquivo) } });
+        const nome = inscricao.nome || inscricao.termoDados?.nomeCompleto || 'Proponente';
+        const email = inscricao.email || inscricao.termoDados?.email || 'não informado';
+        const evento = inscricao.evento || inscricao.termoDados?.nomeEvento || 'Evento';
+        const local = inscricao.localNome
+            || (inscricao.local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
+        const eventosHtml = eventos.map(item => `
+            <li><strong>${escapeHtml(item.label || 'Evento')}:</strong>
+                ${escapeHtml(item.data || 'Data não informada')}
+                ${item.horario ? ` · ${escapeHtml(item.horario)}` : ''}
+                — total de público: ${escapeHtml(item.totalPublico)}
+            </li>`).join('');
+        const arquivosHtml = arquivos.length
+            ? `<ul>${arquivos.map(arquivo => `<li>${escapeHtml(arquivo.nome)}</li>`).join('')}</ul>`
+            : '<p>Nenhum arquivo foi anexado.</p>';
+        const htmlDac = `
+        <div style="font-family:sans-serif;max-width:680px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+                <h2 style="margin:0;color:#fff;font-size:19px">Registro de atividades preenchido</h2>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">Notificação administrativa — DAC/UFSC</p>
+            </div>
+            <div style="padding:26px 28px;font-size:14px;line-height:1.6">
+                <p>O proponente preencheu e enviou o Registro de atividades.</p>
+                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                    <p style="margin:0 0 8px"><strong>Proponente:</strong> ${escapeHtml(nome)}</p>
+                    <p style="margin:0 0 8px"><strong>E-mail:</strong> ${escapeHtml(email)}</p>
+                    <p style="margin:0 0 8px"><strong>Local:</strong> ${escapeHtml(local)}</p>
+                    <p style="margin:0"><strong>Evento:</strong> ${escapeHtml(evento)}</p>
+                </div>
+                <h3 style="color:#5b347f;font-size:15px">Datas, horários e público</h3>
+                <ul>${eventosHtml}</ul>
+                <h3 style="color:#5b347f;font-size:15px">Autor dos registros</h3>
+                <p>${escapeHtml(autores)}</p>
+                <h3 style="color:#5b347f;font-size:15px">Observação</h3>
+                <p>${escapeHtml(observacao || 'Não informado')}</p>
+                <h3 style="color:#5b347f;font-size:15px">Sugestão</h3>
+                <p>${escapeHtml(sugestao || 'Não informado')}</p>
+                <h3 style="color:#5b347f;font-size:15px">Arquivos enviados</h3>
+                ${arquivosHtml}
+            </div>
+        </div>`;
+        const dacEmailResult = await sendEmail(
+            ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
+            `Registro de atividades preenchido — ${evento} — ${nome}`,
+            htmlDac
+        );
+        const dacEmailSent = Boolean(dacEmailResult);
+        if (!dacEmailSent) {
+            console.error(`❌ [Atividades] Registro salvo, mas não foi possível avisar o DAC sobre ${email}.`);
+        }
+        registro.dacEmailSent = dacEmailSent;
+        await salvarRegistroAtividades(id, inscricao, registro);
+
+        console.log(`✅ [Atividades] Registro preenchido recebido para ${inscricao.email || id}; confirmação ao DAC: ${dacEmailSent ? 'enviada' : 'falhou'}.`);
+        res.json({
+            success: true,
+            dacEmailSent,
+            registro: { ...registro, arquivos: arquivos.map(({ blobUrl, pathname, ...arquivo }) => arquivo) }
+        });
     } catch (error) {
         await Promise.all(removerArquivos.map(url => deleteBlob(url, blobOptions()).catch(() => null)));
         console.error(`❌ [Atividades] Erro ao receber registro ${id}:`, error.message);
@@ -2517,15 +2621,12 @@ async function salvarRegistroAtividades(id, inscricao, dados) {
 
 function obterEventosRegistroAtividades(inscricao) {
     const eventos = [];
-    const nomesEtapas = {
-        ensaio: 'Ensaio',
-        montagem: 'Montagem',
-        evento: 'Evento',
-        desmontagem: 'Desmontagem'
-    };
+    const nomesEtapas = { evento: 'Evento' };
 
-    if (inscricao?.etapas && typeof inscricao.etapas === 'object') {
-        Object.entries(inscricao.etapas).forEach(([chave, valor]) => {
+    if (inscricao?.etapas && typeof inscricao.etapas === 'object' && inscricao.etapas.evento) {
+        const chave = 'evento';
+        const valor = inscricao.etapas.evento;
+        {
             const itens = Array.isArray(valor) ? valor : [valor];
             itens.forEach((item, index) => {
                 if (!item || (!item.data && !item.horario)) return;
@@ -2538,7 +2639,7 @@ function obterEventosRegistroAtividades(inscricao) {
                     horario: String(item.horario || '')
                 });
             });
-        });
+        }
     }
 
     if (!eventos.length && Array.isArray(inscricao?.calendarDates)) {
