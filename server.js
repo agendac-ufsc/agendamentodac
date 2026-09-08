@@ -1012,6 +1012,7 @@ const escapeHtml = (value) => String(value ?? '')
 const ATIVIDADES_FORMULARIO_URL = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
 const ATIVIDADES_FORMULARIO_LABEL = 'Formulário Atividades DAC 2026';
 const ATIVIDADES_ENVIADAS_PREFIX = 'atividades_formulario_enviado:';
+const REGISTRO_ATIVIDADES_ENVIADO_PREFIX = 'registro_atividades_link_enviado:';
 const ATIVIDADES_CONFIRMACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
 
 function adicionarDiasUteisServidor(dataInicial, quantidade) {
@@ -1326,6 +1327,142 @@ function criarHtmlFormularioAtividades(nome, mensagem) {
     </div>`;
 }
 
+function obterOrigemPublicaAutomatica() {
+    const candidatos = [
+        process.env.PUBLIC_APP_URL,
+        process.env.REPLIT_APP_URL,
+        process.env.VERCEL_PROJECT_PRODUCTION_URL
+            ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+            : ''
+    ];
+    for (const candidato of candidatos) {
+        const origem = limparConfiguracaoBrevo(candidato).replace(/\/+$/, '');
+        if (!origem) continue;
+        try {
+            const url = new URL(origem);
+            const hostname = url.hostname.toLowerCase();
+            if (url.protocol !== 'https:'
+                || hostname === 'localhost'
+                || hostname === '127.0.0.1'
+                || hostname === '0.0.0.0'
+                || hostname.endsWith('.replit.dev')) {
+                continue;
+            }
+            return url.origin;
+        } catch {
+            continue;
+        }
+    }
+    return '';
+}
+
+function criarHtmlLinkRegistroAtividadesAutomatico({ nome, evento, prazo, link, ultimoEvento }) {
+    return `
+    <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+            <h2 style="margin:0;color:#fff;font-size:19px">Registro de atividades</h2>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
+        </div>
+        <div style="padding:26px 28px">
+            <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>!</p>
+            <p style="font-size:14px;color:#555;line-height:1.7">
+                Como o evento <strong>${escapeHtml(evento || 'seu evento')}</strong> foi encerrado,
+                solicitamos o preenchimento do Registro de atividades.
+            </p>
+            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:20px 0;font-size:13px;line-height:1.7">
+                <strong>Término considerado:</strong>
+                ${escapeHtml(ultimoEvento?.data || 'Data não informada')}
+                ${ultimoEvento?.horario ? ` — ${escapeHtml(ultimoEvento.horario)}` : ''}
+            </div>
+            <div style="text-align:center;margin:24px 0">
+                <a href="${escapeHtml(link)}" style="display:inline-block;background:#764ba2;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:8px">Preencher registro de atividades</a>
+            </div>
+            <p style="font-size:13px;color:#666">Pedimos que o formulário seja preenchido até o dia <strong>${escapeHtml(prazo)}</strong>.</p>
+            <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato com
+                <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>.
+            </p>
+            <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+            <p style="font-size:11px;color:#aaa">
+                UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+            </p>
+        </div>
+    </div>`;
+}
+
+async function enviarRegistroAtividadesAutomatico(agendamento, ultimoEvento, agora) {
+    const id = String(agendamento?.id || '').trim();
+    const email = String(agendamento?.email || agendamento?.termoDados?.email || '').trim().toLowerCase();
+    if (!id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
+
+    const anterior = await obterRegistroAtividadesSalvo(id, agendamento);
+    if (anterior?.concluido === true || anterior?.enviadoEm) {
+        return true;
+    }
+
+    const origin = obterOrigemPublicaAutomatica();
+    if (!origin) {
+        console.error(`❌ [Atividades] Não foi possível enviar automaticamente o novo registro para ${email}: PUBLIC_APP_URL/REPLIT_APP_URL não configurada com HTTPS.`);
+        return false;
+    }
+
+    const link = `${origin}/registro-atividades?id=${encodeURIComponent(id)}`;
+    const nome = agendamento.nome || agendamento.termoDados?.nomeCompleto || 'Proponente';
+    const evento = agendamento.evento || agendamento.termoDados?.nomeEvento || 'Seu evento';
+    const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
+    const resultado = await sendEmail(
+        email,
+        `Registro de atividades — ${evento} — DAC/UFSC`,
+        criarHtmlLinkRegistroAtividadesAutomatico({ nome, evento, prazo, link, ultimoEvento })
+    );
+    if (!resultado) {
+        console.error(`❌ [Atividades] Falha ao enviar automaticamente o novo registro para ${email}.`);
+        return false;
+    }
+
+    let dacEmailSent = true;
+    const confirmacaoHtml = `
+    <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+            <h2 style="margin:0;color:#fff;font-size:19px">Novo Registro de atividades enviado</h2>
+            <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">Confirmação automática — DAC/UFSC</p>
+        </div>
+        <div style="padding:26px 28px;font-size:14px;line-height:1.6">
+            <p>O link do novo Registro de atividades foi enviado automaticamente após o término do último evento.</p>
+            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                <p style="margin:0 0 8px"><strong>Proponente:</strong> ${escapeHtml(nome)}</p>
+                <p style="margin:0 0 8px"><strong>E-mail:</strong> ${escapeHtml(email)}</p>
+                <p style="margin:0 0 8px"><strong>Evento:</strong> ${escapeHtml(evento)}</p>
+                <p style="margin:0"><strong>Término considerado:</strong> ${escapeHtml(ultimoEvento.data)} — ${escapeHtml(ultimoEvento.horario)}</p>
+            </div>
+        </div>
+    </div>`;
+    const confirmacao = await sendEmail(
+        ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
+        `Novo Registro de atividades enviado — ${evento} — ${nome}`,
+        confirmacaoHtml
+    );
+    if (!confirmacao) {
+        dacEmailSent = false;
+        console.error(`❌ [Atividades] Novo registro enviado, mas falhou a confirmação ao DAC sobre ${email}.`);
+    }
+
+    const salvo = await salvarRegistroAtividades(id, agendamento, {
+        ...anterior,
+        enviadoEm: agora.toISOString(),
+        enviadoPara: email,
+        prazo,
+        link,
+        ultimoEvento: ultimoEvento.fimDate.toISOString(),
+        dacEmailSent
+    });
+    if (!salvo) {
+        console.error(`❌ [Atividades] Novo registro enviado para ${email}, mas não foi possível salvar o status.`);
+    }
+    console.log(`✅ [Atividades] Novo Registro de atividades enviado automaticamente para ${email}; confirmação administrativa: ${dacEmailSent ? 'enviada' : 'falhou'}.`);
+    return true;
+}
+
 async function verificarEnviosAutomaticosFormulario() {
     if (!redis || !process.env.BREVO_API_KEY) return;
     try {
@@ -1352,49 +1489,60 @@ async function verificarEnviosAutomaticosFormulario() {
             if (agora < ultimoEvento.fimDate) continue;
 
             const chaveEnvio = `${ATIVIDADES_ENVIADAS_PREFIX}${agendamento.id}:${ultimoEvento.fimDate.toISOString()}`;
-            if (await redis.get(chaveEnvio)) continue;
-
-            const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
-            const resultado = await sendEmail(
-                email,
-                'Formulário Atividades DAC 2026',
-                criarHtmlFormularioAtividades(agendamento.nome, criarMensagemFormularioAtividades(prazo))
-            );
-            if (resultado) {
-                await redis.set(chaveEnvio, {
-                    enviadoEm: agora.toISOString(),
-                    ultimoEvento: ultimoEvento.fimDate.toISOString()
-                });
-                console.log(`✅ [Atividades] Formulário enviado automaticamente para ${email} no fim da inscrição ${agendamento.id}.`);
-
-                const confirmacaoHtml = `
-                <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
-                    <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
-                        <h2 style="margin:0;color:#fff;font-size:18px">Formulário de atividades enviado</h2>
-                        <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">Confirmação automática — DAC/UFSC</p>
-                    </div>
-                    <div style="padding:28px">
-                        <p style="font-size:15px">O formulário de atividades foi enviado automaticamente ao proponente após o término do evento.</p>
-                        <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;font-size:13px;line-height:1.7">
-                            <p style="margin:0"><strong>Proponente:</strong> ${escapeHtml(agendamento.nome || 'Não informado')}</p>
-                            <p style="margin:0"><strong>E-mail destinatário:</strong> ${escapeHtml(email)}</p>
-                            <p style="margin:0"><strong>Evento:</strong> ${escapeHtml(agendamento.evento || 'Não informado')}</p>
-                            <p style="margin:0"><strong>Término considerado:</strong> ${escapeHtml(ultimoEvento.data)} — ${escapeHtml(ultimoEvento.horario)}</p>
-                        </div>
-                    </div>
-                </div>`;
-                const confirmacao = await sendEmail(
-                    ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
-                    'Confirmação: formulário de atividades enviado',
-                    confirmacaoHtml
+            if (!(await redis.get(chaveEnvio))) {
+                const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
+                const resultado = await sendEmail(
+                    email,
+                    'Formulário Atividades DAC 2026',
+                    criarHtmlFormularioAtividades(agendamento.nome, criarMensagemFormularioAtividades(prazo))
                 );
-                if (confirmacao) {
-                    console.log(`✅ [Atividades] Confirmação enviada ao DAC sobre ${email}.`);
+                if (resultado) {
+                    await redis.set(chaveEnvio, {
+                        enviadoEm: agora.toISOString(),
+                        ultimoEvento: ultimoEvento.fimDate.toISOString()
+                    });
+                    console.log(`✅ [Atividades] Formulário enviado automaticamente para ${email} no fim da inscrição ${agendamento.id}.`);
+
+                    const confirmacaoHtml = `
+                    <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
+                        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
+                            <h2 style="margin:0;color:#fff;font-size:18px">Formulário de atividades enviado</h2>
+                            <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">Confirmação automática — DAC/UFSC</p>
+                        </div>
+                        <div style="padding:28px">
+                            <p style="font-size:15px">O formulário de atividades foi enviado automaticamente ao proponente após o término do evento.</p>
+                            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;font-size:13px;line-height:1.7">
+                                <p style="margin:0"><strong>Proponente:</strong> ${escapeHtml(agendamento.nome || 'Não informado')}</p>
+                                <p style="margin:0"><strong>E-mail destinatário:</strong> ${escapeHtml(email)}</p>
+                                <p style="margin:0"><strong>Evento:</strong> ${escapeHtml(agendamento.evento || 'Não informado')}</p>
+                                <p style="margin:0"><strong>Término considerado:</strong> ${escapeHtml(ultimoEvento.data)} — ${escapeHtml(ultimoEvento.horario)}</p>
+                            </div>
+                        </div>
+                    </div>`;
+                    const confirmacao = await sendEmail(
+                        ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
+                        'Confirmação: formulário de atividades enviado',
+                        confirmacaoHtml
+                    );
+                    if (confirmacao) {
+                        console.log(`✅ [Atividades] Confirmação enviada ao DAC sobre ${email}.`);
+                    } else {
+                        console.error(`❌ [Atividades] Formulário enviado, mas falhou a confirmação ao DAC sobre ${email}.`);
+                    }
                 } else {
-                    console.error(`❌ [Atividades] Formulário enviado, mas falhou a confirmação ao DAC sobre ${email}.`);
+                    console.error(`❌ [Atividades] Falha ao enviar formulário automático para ${email}.`);
                 }
-            } else {
-                console.error(`❌ [Atividades] Falha ao enviar formulário automático para ${email}.`);
+            }
+
+            const chaveNovoRegistro = `${REGISTRO_ATIVIDADES_ENVIADO_PREFIX}${agendamento.id}:${ultimoEvento.fimDate.toISOString()}`;
+            if (!(await redis.get(chaveNovoRegistro))) {
+                const novoRegistroEnviado = await enviarRegistroAtividadesAutomatico(agendamento, ultimoEvento, agora);
+                if (novoRegistroEnviado) {
+                    await redis.set(chaveNovoRegistro, {
+                        enviadoEm: agora.toISOString(),
+                        ultimoEvento: ultimoEvento.fimDate.toISOString()
+                    });
+                }
             }
         }
     } catch (error) {
