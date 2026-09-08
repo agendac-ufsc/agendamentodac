@@ -48,6 +48,10 @@ const uploadDocumentosTeste = multer({
     storage: multer.memoryStorage(),
     limits: { files: 30, fileSize: 100 * 1024 * 1024 }
 });
+const uploadRegistrosAtividades = multer({
+    storage: multer.memoryStorage(),
+    limits: { files: 5, fileSize: 20 * 1024 * 1024 }
+});
 
 // Configurar Google Calendar — locais disponíveis
 const CALENDAR_IDS = {
@@ -1999,6 +2003,306 @@ app.get('/', async (req, res) => {
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 app.get('/avaliador', (req, res) => res.sendFile(path.join(__dirname, 'avaliador.html')));
 app.get('/termo', (req, res) => res.sendFile(path.join(__dirname, 'termo.html')));
+app.get('/registro-atividades', (req, res) => res.sendFile(path.join(__dirname, 'registro-atividades.html')));
+
+app.get('/api/registro-atividades/:id', async (req, res) => {
+    try {
+        const id = String(req.params.id || '');
+        const inscricao = await buscarInscricaoParaRegistroAtividades(id);
+        if (!inscricao) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+
+        const salvo = await obterRegistroAtividadesSalvo(id, inscricao);
+        const eventosBase = obterEventosRegistroAtividades(inscricao);
+        const eventos = eventosBase.map(evento => {
+            const salvoEvento = salvo?.eventos?.find(item => String(item.id) === String(evento.id));
+            return {
+                ...evento,
+                totalPublico: salvoEvento?.totalPublico ?? ''
+            };
+        });
+        const arquivos = Array.isArray(salvo?.arquivos)
+            ? salvo.arquivos.map(arquivo => ({
+                id: arquivo.id,
+                nome: arquivo.nome,
+                mimeType: arquivo.mimeType,
+                tamanho: arquivo.tamanho,
+                enviadoEm: arquivo.enviadoEm,
+                downloadUrl: `/api/registro-atividades/${encodeURIComponent(id)}/arquivo/${encodeURIComponent(arquivo.id)}`
+            }))
+            : [];
+
+        res.json({
+            id,
+            nome: inscricao.nome || inscricao.termoDados?.nomeCompleto || '',
+            email: inscricao.email || inscricao.termoDados?.email || '',
+            evento: inscricao.evento || inscricao.termoDados?.nomeEvento || '',
+            localNome: inscricao.localNome
+                || (inscricao.local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari'),
+            eventos,
+            registro: salvo ? {
+                enviadoEm: salvo.enviadoEm || null,
+                enviadoPara: salvo.enviadoPara || null,
+                prazo: salvo.prazo || null,
+                concluido: salvo.concluido === true,
+                concluidoEm: salvo.concluidoEm || null,
+                autores: salvo.autores || '',
+                observacao: salvo.observacao || '',
+                sugestao: salvo.sugestao || '',
+                eventos,
+                arquivos
+            } : null
+        });
+    } catch (error) {
+        console.error('❌ [/api/registro-atividades/:id] erro:', error.message);
+        res.status(500).json({ error: 'Não foi possível carregar o registro de atividades.' });
+    }
+});
+
+app.get('/api/registro-atividades/:id/arquivo/:arquivoId', async (req, res) => {
+    try {
+        if (!blobStorageReady) return res.status(503).send('O armazenamento de documentos não está configurado.');
+        const id = String(req.params.id || '');
+        const inscricao = await buscarInscricaoParaRegistroAtividades(id);
+        if (!inscricao) return res.status(404).send('Inscrição não encontrada.');
+        const salvo = await obterRegistroAtividadesSalvo(id, inscricao);
+        const arquivo = salvo?.arquivos?.find(item => String(item.id) === String(req.params.arquivoId));
+        const blobUrl = arquivo?.blobUrl || arquivo?.url;
+        if (!blobUrl) return res.status(404).send('Registro não encontrado.');
+
+        const resultado = await getBlob(blobUrl, blobOptions({ access: 'private', useCache: false }));
+        if (resultado.statusCode !== 200 || !resultado.stream) {
+            return res.status(404).send('Arquivo removido ou indisponível.');
+        }
+        const conteudo = await streamParaBuffer(resultado.stream);
+        res.set({
+            'Content-Type': arquivo.mimeType || 'application/octet-stream',
+            'Content-Disposition': `attachment; filename="${nomeSeguroParaZip(arquivo.nome, 'registro')}"`,
+            'Content-Length': String(conteudo.length),
+            'Cache-Control': 'private, no-store'
+        });
+        res.send(conteudo);
+    } catch (error) {
+        console.error('❌ [/api/registro-atividades/:id/arquivo] erro:', error.message);
+        res.status(500).send('Não foi possível baixar o registro.');
+    }
+});
+
+app.post('/api/admin/enviar-registro-atividades', async (req, res) => {
+    const { id, baseUrl } = req.body || {};
+    const idNormalizado = String(id || '').trim();
+    const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
+    const senderEmail = obterRemetenteBrevo();
+    if (!idNormalizado) return res.status(400).json({ error: 'Inscrição não informada.' });
+    if (!apiKey) return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
+
+    try {
+        const inscricao = await buscarInscricaoParaRegistroAtividades(idNormalizado);
+        if (!inscricao) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        const email = String(inscricao.email || inscricao.termoDados?.email || '').trim().toLowerCase();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'Esta inscrição não possui um e-mail válido.' });
+        }
+
+        const origin = obterOrigemPublicaTermo(req, baseUrl);
+        if (!origin) {
+            return res.status(400).json({
+                error: 'O envio precisa ser feito pela aplicação publicada. O endereço de preview do Replit não pode ser usado no link enviado.'
+            });
+        }
+        const link = `${origin}/registro-atividades?id=${encodeURIComponent(idNormalizado)}`;
+        const nome = inscricao.nome || inscricao.termoDados?.nomeCompleto || 'Proponente';
+        const evento = inscricao.evento || inscricao.termoDados?.nomeEvento || 'Seu evento';
+        const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(new Date(), 5));
+        const nomeSeguro = escapeHtml(nome);
+        const eventoSeguro = escapeHtml(evento);
+        const emailSeguro = escapeHtml(email);
+        const linkSeguro = escapeHtml(link);
+
+        const htmlProponente = `
+        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+                <h2 style="margin:0;color:#fff;font-size:19px">Registro de atividades</h2>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
+            </div>
+            <div style="padding:26px 28px">
+                <p style="font-size:15px">Olá, <strong>${nomeSeguro}</strong>!</p>
+                <p style="font-size:14px;color:#555;line-height:1.7">
+                    Conforme previsto no item 13.1.9 do Edital de Ocupação dos Espaços do DAC,
+                    solicitamos o preenchimento do Registro de atividades referente ao evento
+                    <strong>${eventoSeguro}</strong>.
+                </p>
+                <div style="text-align:center;margin:24px 0">
+                    <a href="${linkSeguro}" style="display:inline-block;background:#764ba2;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:8px">Preencher registro de atividades</a>
+                </div>
+                <p style="font-size:13px;color:#666">Pedimos que o formulário seja preenchido até o dia <strong>${escapeHtml(prazo)}</strong>.</p>
+                <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato com
+                    <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>.
+                </p>
+                <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+                <p style="font-size:11px;color:#aaa">
+                    UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                    Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+                </p>
+            </div>
+        </div>`;
+        const textProponente = [
+            `Olá, ${nome}!`,
+            '',
+            `Solicitamos o preenchimento do Registro de atividades referente ao evento ${evento}.`,
+            '',
+            'Acesse o formulário:',
+            link,
+            '',
+            `Pedimos que o formulário seja preenchido até o dia ${prazo}.`,
+            '',
+            'Em caso de dúvidas, entre em contato com pautas.dac@contato.ufsc.br.'
+        ].join('\n');
+
+        await axios.post('https://api.brevo.com/v3/smtp/email', {
+            sender: { name: BREVO_SENDER_NAME, email: senderEmail },
+            to: [{ email, name: nome }],
+            replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
+            subject: `Registro de atividades — ${evento} — DAC/UFSC`,
+            htmlContent: htmlProponente,
+            textContent: textProponente
+        }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+
+        let dacEmailSent = true;
+        const htmlDac = `
+        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
+                <h2 style="margin:0;color:#fff;font-size:19px">Registro de atividades enviado</h2>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">Notificação administrativa — DAC/UFSC</p>
+            </div>
+            <div style="padding:26px 28px">
+                <p style="font-size:15px">O Registro de atividades foi enviado ao e-mail do proponente.</p>
+                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                    <p style="margin:0 0 8px;font-size:13px"><strong>Proponente:</strong> ${nomeSeguro}</p>
+                    <p style="margin:0 0 8px;font-size:13px"><strong>E-mail:</strong> ${emailSeguro}</p>
+                    <p style="margin:0;font-size:13px"><strong>Evento:</strong> ${eventoSeguro}</p>
+                </div>
+                <p style="font-size:13px;color:#666">O link enviado foi gerado pelo sistema interno do DAC.</p>
+            </div>
+        </div>`;
+        try {
+            await axios.post('https://api.brevo.com/v3/smtp/email', {
+                sender: { name: BREVO_SENDER_NAME, email: senderEmail },
+                to: [{ email: BREVO_REPLY_TO, name: 'DAC - UFSC' }],
+                replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
+                subject: `Registro de atividades enviado — ${evento} — ${nome}`,
+                htmlContent: htmlDac,
+                textContent: `O Registro de atividades foi enviado ao e-mail do proponente.\n\nProponente: ${nome}\nE-mail: ${email}\nEvento: ${evento}`
+            }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+        } catch (error) {
+            dacEmailSent = false;
+            console.error(`❌ [Atividades] Formulário enviado, mas falhou a confirmação ao DAC sobre ${email}:`, error.response?.data || error.message);
+        }
+
+        const anterior = await obterRegistroAtividadesSalvo(idNormalizado, inscricao) || {};
+        const salvo = await salvarRegistroAtividades(idNormalizado, inscricao, {
+            ...anterior,
+            enviadoEm: new Date().toISOString(),
+            enviadoPara: email,
+            prazo,
+            link,
+            concluido: anterior.concluido === true,
+            dacEmailSent
+        });
+        if (!salvo) return res.status(500).json({ error: 'O e-mail foi enviado, mas não foi possível salvar o status do registro.' });
+
+        console.log(`✅ [Atividades] Registro enviado para ${email}; confirmação administrativa: ${dacEmailSent ? 'enviada' : 'falhou'}`);
+        res.json({ success: true, enviados: 1, dacEmailSent });
+    } catch (error) {
+        console.error(`❌ [Atividades] Erro ao enviar registro para ${idNormalizado}:`, error.response?.data || error.message);
+        res.status(500).json({ error: error.response?.data?.message || 'Não foi possível enviar o registro de atividades.' });
+    }
+});
+
+app.post('/api/registro-atividades', uploadRegistrosAtividades.array('registros', 5), async (req, res) => {
+    const id = String(req.body?.id || '').trim();
+    const files = Array.isArray(req.files) ? req.files : [];
+    const removerArquivos = [];
+    try {
+        const inscricao = await buscarInscricaoParaRegistroAtividades(id);
+        if (!inscricao) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        const anterior = await obterRegistroAtividadesSalvo(id, inscricao) || {};
+        if (anterior.concluido === true) {
+            return res.status(409).json({ error: 'Este registro de atividades já foi enviado.' });
+        }
+
+        const autores = String(req.body?.autores || '').trim();
+        const observacao = String(req.body?.observacao || '').trim();
+        const sugestao = String(req.body?.sugestao || '').trim();
+        if (!autores) return res.status(400).json({ error: 'Informe o nome dos autores dos registros.' });
+
+        let eventosRecebidos = [];
+        try {
+            eventosRecebidos = JSON.parse(String(req.body?.eventos || '[]'));
+        } catch {
+            return res.status(400).json({ error: 'Os dados dos eventos são inválidos.' });
+        }
+        if (!Array.isArray(eventosRecebidos)) {
+            return res.status(400).json({ error: 'Os dados dos eventos são inválidos.' });
+        }
+        const eventosBase = obterEventosRegistroAtividades(inscricao);
+        const eventos = eventosBase.map((evento, index) => {
+            const recebido = eventosRecebidos[index] || {};
+            const totalPublico = String(recebido.totalPublico ?? '').trim();
+            if (!totalPublico || !/^\d+$/.test(totalPublico)) {
+                throw new Error(`Informe o total de público para ${evento.label}.`);
+            }
+            return { ...evento, totalPublico: Number(totalPublico) };
+        });
+
+        if (!blobStorageReady && files.length) {
+            return res.status(503).json({ error: 'O armazenamento de registros ainda não está configurado.' });
+        }
+        const arquivos = [];
+        for (const file of files) {
+            const nomeSeguro = String(file.originalname || 'registro')
+                .replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-150) || 'registro';
+            const pathname = `registros-atividades/${id.replace(/[^a-zA-Z0-9._-]/g, '_')}/${randomUUID()}-${nomeSeguro}`;
+            const uploaded = await putBlob(pathname, file.buffer, blobOptions({
+                access: 'private',
+                addRandomSuffix: false,
+                contentType: file.mimetype || 'application/octet-stream',
+                multipart: file.size > 50 * 1024 * 1024
+            }));
+            removerArquivos.push(uploaded.url);
+            arquivos.push({
+                id: randomUUID(),
+                pathname: uploaded.pathname,
+                blobUrl: uploaded.url,
+                nome: file.originalname || nomeSeguro,
+                mimeType: file.mimetype || 'application/octet-stream',
+                tamanho: file.size,
+                enviadoEm: new Date().toISOString()
+            });
+        }
+
+        const registro = {
+            ...anterior,
+            concluido: true,
+            concluidoEm: new Date().toISOString(),
+            autores,
+            observacao,
+            sugestao,
+            eventos,
+            arquivos,
+            enviadoEm: anterior.enviadoEm || null,
+            enviadoPara: anterior.enviadoPara || inscricao.email || null
+        };
+        const salvo = await salvarRegistroAtividades(id, inscricao, registro);
+        if (!salvo) throw new Error('Não foi possível salvar o registro no Redis.');
+
+        console.log(`✅ [Atividades] Registro preenchido recebido para ${inscricao.email || id}.`);
+        res.json({ success: true, registro: { ...registro, arquivos: arquivos.map(({ blobUrl, pathname, ...arquivo }) => arquivo) } });
+    } catch (error) {
+        await Promise.all(removerArquivos.map(url => deleteBlob(url, blobOptions()).catch(() => null)));
+        console.error(`❌ [Atividades] Erro ao receber registro ${id}:`, error.message);
+        res.status(400).json({ error: error.message || 'Não foi possível salvar o registro de atividades.' });
+    }
+});
 
 async function buscarDatasCalendarioLegada(nomeEvento) {
     if (!nomeEvento) return [];
@@ -2161,6 +2465,107 @@ async function buscarInscricaoFormsPorEmail(emailBuscado) {
         console.error('❌ [Sheets] Erro ao buscar termo Forms por e-mail:', e.message);
         return null;
     }
+}
+
+const REGISTROS_ATIVIDADES_KEY = 'registros_atividades_v1';
+
+async function getRegistrosAtividades() {
+    try {
+        if (!redis) return {};
+        return parseRedisValue(await redis.get(REGISTROS_ATIVIDADES_KEY)) || {};
+    } catch (error) {
+        console.error('❌ [Atividades] Erro ao buscar registros salvos:', error.message);
+        return {};
+    }
+}
+
+async function saveRegistroAtividadesLegado(id, dados) {
+    try {
+        if (!redis) return false;
+        const registros = await getRegistrosAtividades();
+        registros[String(id)] = dados;
+        await redis.set(REGISTROS_ATIVIDADES_KEY, registros);
+        return true;
+    } catch (error) {
+        console.error('❌ [Atividades] Erro ao salvar registro legado:', error.message);
+        return false;
+    }
+}
+
+async function buscarInscricaoParaRegistroAtividades(id) {
+    const idNormalizado = String(id || '');
+    if (!idNormalizado) return null;
+    const agendamentos = await getAgendamentos();
+    const agendamento = agendamentos.find(item => String(item.id) === idNormalizado);
+    if (agendamento) return { ...agendamento, isLegada: false };
+    const legado = await buscarDadosInscricaoForms(idNormalizado);
+    return legado ? { ...legado, isLegada: true } : null;
+}
+
+async function obterRegistroAtividadesSalvo(id, inscricao) {
+    if (inscricao?.registroAtividades && typeof inscricao.registroAtividades === 'object') {
+        return inscricao.registroAtividades;
+    }
+    const registros = await getRegistrosAtividades();
+    return registros[String(id)] || null;
+}
+
+async function salvarRegistroAtividades(id, inscricao, dados) {
+    if (inscricao?.isLegada) return saveRegistroAtividadesLegado(id, dados);
+    return updateAgendamento(id, { registroAtividades: dados });
+}
+
+function obterEventosRegistroAtividades(inscricao) {
+    const eventos = [];
+    const nomesEtapas = {
+        ensaio: 'Ensaio',
+        montagem: 'Montagem',
+        evento: 'Evento',
+        desmontagem: 'Desmontagem'
+    };
+
+    if (inscricao?.etapas && typeof inscricao.etapas === 'object') {
+        Object.entries(inscricao.etapas).forEach(([chave, valor]) => {
+            const itens = Array.isArray(valor) ? valor : [valor];
+            itens.forEach((item, index) => {
+                if (!item || (!item.data && !item.horario)) return;
+                eventos.push({
+                    id: `etapa-${chave}-${index + 1}`,
+                    label: itens.length > 1
+                        ? `${nomesEtapas[chave] || chave} ${index + 1}`
+                        : (nomesEtapas[chave] || chave),
+                    data: String(item.data || ''),
+                    horario: String(item.horario || '')
+                });
+            });
+        });
+    }
+
+    if (!eventos.length && Array.isArray(inscricao?.calendarDates)) {
+        inscricao.calendarDates.forEach((item, index) => {
+            if (!item) return;
+            eventos.push({
+                id: `calendario-${index + 1}`,
+                label: 'Evento',
+                data: String(item.data || ''),
+                horario: String(item.horario || '')
+            });
+        });
+    }
+
+    if (!eventos.length) {
+        const dataHorario = inscricao?.dataHorarioEvento
+            || inscricao?.termoDados?.dataHorarioEvento
+            || '';
+        eventos.push({
+            id: 'evento-1',
+            label: 'Evento',
+            data: '',
+            horario: String(dataHorario)
+        });
+    }
+
+    return eventos;
 }
 
 // Buscar uma única inscrição pelo ID (usado pela página do termo digital)
@@ -2488,6 +2893,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         // Injetar etapas salvas manualmente para inscrições legadas
         const legadasEtapasMap = await getLegadasEtapas();
         const termosLegadasMap = await getTermosLegadas();
+        const registrosAtividadesMap = await getRegistrosAtividades();
         unificados.forEach(u => {
             if (u.primeiraEtapa.isLegada && legadasEtapasMap[u.primeiraEtapa.id]) {
                 u.primeiraEtapa.etapas = legadasEtapasMap[u.primeiraEtapa.id];
@@ -2496,6 +2902,9 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                 const termoSalvo = termosLegadasMap[u.primeiraEtapa.id];
                 u.primeiraEtapa.termoAssinado = termoSalvo.termoAssinado === true;
                 u.primeiraEtapa.termoDados = termoSalvo.termoDados || null;
+            }
+            if (u.primeiraEtapa.isLegada && registrosAtividadesMap[u.primeiraEtapa.id]) {
+                u.primeiraEtapa.registroAtividades = registrosAtividadesMap[u.primeiraEtapa.id];
             }
         });
 

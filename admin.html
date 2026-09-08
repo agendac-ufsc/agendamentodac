@@ -81,8 +81,8 @@
         #inscricoesTable th:nth-child(5),#inscricoesTable td:nth-child(5){width:auto;overflow:hidden}
         #inscricoesTable td:nth-child(5) span{white-space:normal!important}
         #inscricoesTable th:nth-child(6),#inscricoesTable td:nth-child(6){width:88px}
-        #inscricoesTable th:nth-child(7){width:140px;text-align:right}
-        #inscricoesTable td:nth-child(7){width:140px;padding:6px 4px;overflow:hidden}
+        #inscricoesTable th:nth-child(7){width:170px;text-align:right}
+        #inscricoesTable td:nth-child(7){width:170px;padding:6px 4px;overflow:hidden}
         #inscricoesTable .acoes-list{display:flex;align-items:center;justify-content:flex-end;gap:0;flex-wrap:nowrap;direction:ltr;min-width:0}
         #inscricoesTable .acoes-list .btn-action{flex:0 0 21px;width:21px;padding:3px 0;font-size:14px;line-height:1;white-space:nowrap}
         #inscricoesTable .acoes-list .btn-action small{font-size:9px;margin-left:-2px}
@@ -1209,6 +1209,13 @@ function renderTabela() {
         const documentosBtn = p.id
             ? `<button class="btn-action" title="Documentos (${documentosInscricao.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:#16a34a"><i class="fas fa-folder-open"></i>${documentosInscricao.length ? ` <small>${documentosInscricao.length}</small>` : ''}</button>`
             : '';
+        const registroAtividades = p.registroAtividades || {};
+        const registroAtividadesCompleto = registroAtividades.concluido === true;
+        const registroAtividadesColor = registroAtividadesCompleto ? '#16a34a' : '#764ba2';
+        const registroAtividadesTitle = registroAtividadesCompleto
+            ? 'Visualizar registro de atividades preenchido'
+            : 'Abrir registro de atividades e enviar ao proponente';
+        const registroAtividadesIcon = registroAtividadesCompleto ? 'fa-clipboard-check' : 'fa-clipboard-list';
 
         let stClass = 'st-pendente', stText = 'Pendente';
         if ((item.status||'').includes('Completo')) { stClass='st-completo'; stText='Completo'; }
@@ -1219,6 +1226,7 @@ function renderTabela() {
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
+            <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" onclick="abrirRegistroAtividades(${originalIndex})" style="color:${registroAtividadesColor}"><i class="fas ${registroAtividadesIcon}"></i></button>
             <button class="btn-action" title="Enviar formulário de atividades ao proponente" aria-label="Enviar formulário de atividades ao proponente" onclick="abrirEmailFormularioAtividades(${originalIndex})" style="color:#2563eb"><i class="fas fa-clipboard-list"></i></button>
             ${documentosBtn}
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
@@ -1289,6 +1297,20 @@ function abrirTermoPendenteEmNovaAba() {
     if (!p?.id) return;
     const termoWindow = window.open(`/termo?id=${encodeURIComponent(p.id)}`, '_blank');
     if (!termoWindow) alert('Permita pop-ups deste site para abrir o termo.');
+}
+
+function abrirRegistroAtividades(idx) {
+    if (userRole !== 'admin') return;
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p?.id) {
+        alert('Esta inscrição não possui identificador para abrir o registro de atividades.');
+        return;
+    }
+    const registroWindow = window.open(
+        `/registro-atividades?id=${encodeURIComponent(p.id)}&admin=1`,
+        '_blank'
+    );
+    if (!registroWindow) alert('Permita pop-ups deste site para abrir o registro de atividades.');
 }
 
 async function enviarLinkTermoPendente() {

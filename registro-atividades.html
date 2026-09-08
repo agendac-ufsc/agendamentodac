@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Registro de atividades — DAC/UFSC</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --purple: #764ba2;
+            --purple-dark: #5b347f;
+            --blue: #2563eb;
+            --green: #15803d;
+            --text: #263244;
+            --muted: #667085;
+            --border: #e5e7eb;
+            --bg: #f5f7fb;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, Arial, sans-serif;
+        }
+        .topbar {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            padding: 24px 20px;
+            box-shadow: 0 2px 12px rgba(36, 40, 70, .14);
+        }
+        .topbar-inner { max-width: 920px; margin: auto; display: flex; align-items: center; gap: 14px; }
+        .brand-mark {
+            width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center;
+            background: rgba(255,255,255,.18); font-size: 21px;
+        }
+        .brand-title { font-size: 17px; font-weight: 800; }
+        .brand-subtitle { margin-top: 4px; color: rgba(255,255,255,.82); font-size: 12px; }
+        .page { max-width: 920px; margin: 26px auto 50px; padding: 0 16px; }
+        .card {
+            background: #fff; border: 1px solid var(--border); border-radius: 14px;
+            padding: 24px; margin-bottom: 16px; box-shadow: 0 3px 12px rgba(20, 30, 55, .035);
+        }
+        .card h1 { margin: 0 0 8px; font-size: 23px; color: #202938; }
+        .card h2 { margin: 0 0 8px; font-size: 17px; color: #303b4d; }
+        .intro, .help { color: var(--muted); font-size: 13px; line-height: 1.65; margin: 0; }
+        .basic-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 20px; }
+        .info-box { background: #f8fafc; border: 1px solid #edf0f4; border-radius: 9px; padding: 12px 14px; }
+        .info-label { color: #7b8493; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .035em; }
+        .info-value { margin-top: 5px; color: #253143; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+        .event-list { display: grid; gap: 10px; margin-top: 17px; }
+        .event-row {
+            display: grid; grid-template-columns: minmax(0, 1fr) 190px; align-items: center; gap: 16px;
+            border: 1px solid #e8eaf0; border-radius: 10px; padding: 14px 15px; background: #fcfcfd;
+        }
+        .event-name { font-weight: 700; font-size: 13px; color: #364152; }
+        .event-date { margin-top: 5px; color: #70798a; font-size: 12px; }
+        .field { margin-top: 18px; }
+        label { display: block; color: #3c4758; font-size: 13px; font-weight: 700; margin-bottom: 7px; }
+        input[type="number"], input[type="text"], textarea {
+            width: 100%; border: 1.5px solid #d9dee7; border-radius: 8px; padding: 10px 12px;
+            color: var(--text); background: #fff; font: inherit; font-size: 13px; outline: none;
+        }
+        input:focus, textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(118,75,162,.10); }
+        textarea { min-height: 105px; resize: vertical; line-height: 1.5; }
+        input:disabled, textarea:disabled { opacity: 1; color: #394454; background: #f8fafc; cursor: default; }
+        .upload-box {
+            margin-top: 17px; padding: 18px; border: 1.5px dashed #c7cedb; border-radius: 10px;
+            background: #fbfcff; text-align: center;
+        }
+        .upload-box i { color: var(--purple); font-size: 23px; }
+        .upload-box p { margin: 7px 0 12px; color: var(--muted); font-size: 12px; }
+        input[type="file"] { width: 100%; color: #586274; font-size: 12px; }
+        .file-list { display: grid; gap: 7px; margin-top: 10px; text-align: left; }
+        .file-item {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 9px 11px; border-radius: 8px; background: #f5f3ff; color: #4c3b68; font-size: 12px;
+        }
+        .file-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .file-item a { color: var(--purple); font-weight: 700; text-decoration: none; white-space: nowrap; }
+        .status {
+            display: none; padding: 12px 14px; border-radius: 9px; margin-top: 16px;
+            font-size: 13px; line-height: 1.5;
+        }
+        .status.show { display: block; }
+        .status.info { color: #1e40af; background: #eff6ff; border: 1px solid #bfdbfe; }
+        .status.success { color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; }
+        .status.error { color: #991b1b; background: #fff1f2; border: 1px solid #fecdd3; }
+        .admin-note {
+            background: #f5f3ff; border: 1px solid #ddd6fe; color: #5b347f; border-radius: 9px;
+            padding: 13px 15px; font-size: 13px; line-height: 1.55; margin-bottom: 17px;
+        }
+        .completed-note {
+            display: none; background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534;
+            border-radius: 9px; padding: 13px 15px; font-size: 13px; line-height: 1.55; margin-bottom: 17px;
+        }
+        .completed-note.show { display: block; }
+        .actions {
+            display: flex; justify-content: space-between; align-items: center; gap: 10px;
+            flex-wrap: wrap; margin-top: 22px;
+        }
+        .actions-right { display: flex; gap: 9px; flex-wrap: wrap; }
+        button {
+            border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer;
+            font: inherit; font-size: 13px; font-weight: 700; transition: .16s ease;
+        }
+        button:hover:not(:disabled) { transform: translateY(-1px); filter: brightness(.98); }
+        button:disabled { opacity: .6; cursor: not-allowed; }
+        .btn-secondary { color: #4b5563; background: #eef0f3; }
+        .btn-primary { color: #fff; background: var(--purple); }
+        .btn-success { color: #fff; background: var(--green); }
+        .btn-blue { color: #fff; background: var(--blue); }
+        .hidden { display: none !important; }
+        .loading { text-align: center; color: var(--purple); padding: 60px 0; font-size: 15px; }
+        .error-page { display: none; text-align: center; color: #991b1b; padding: 35px 10px; }
+        @media (max-width: 650px) {
+            .topbar { padding: 18px 16px; }
+            .page { margin-top: 16px; padding: 0 10px; }
+            .card { padding: 18px; }
+            .basic-grid { grid-template-columns: 1fr; gap: 9px; }
+            .event-row { grid-template-columns: 1fr; gap: 10px; }
+            .actions, .actions-right { width: 100%; }
+            .actions button { flex: 1; }
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand-mark"><i class="fa-solid fa-clipboard-check"></i></div>
+            <div>
+                <div class="brand-title">DAC — Registro de atividades</div>
+                <div class="brand-subtitle">Universidade Federal de Santa Catarina · Departamento Artístico Cultural</div>
+            </div>
+        </div>
+    </header>
+
+    <main class="page">
+        <div id="loading" class="loading"><i class="fa-solid fa-spinner fa-spin"></i> Carregando registro...</div>
+        <div id="errorPage" class="error-page"></div>
+        <div id="content" class="hidden">
+            <section class="card">
+                <h1>Registro de atividades</h1>
+                <p class="intro">Preencha as informações sobre a realização do evento e envie os registros solicitados ao DAC.</p>
+                <div id="adminNote" class="admin-note hidden"></div>
+                <div id="completedNote" class="completed-note"></div>
+                <div class="basic-grid">
+                    <div class="info-box"><div class="info-label">Proponente</div><div id="infoNome" class="info-value">—</div></div>
+                    <div class="info-box"><div class="info-label">E-mail</div><div id="infoEmail" class="info-value">—</div></div>
+                    <div class="info-box"><div class="info-label">Local</div><div id="infoLocal" class="info-value">—</div></div>
+                    <div class="info-box"><div class="info-label">Evento</div><div id="infoEvento" class="info-value">—</div></div>
+                </div>
+            </section>
+
+            <section class="card">
+                <h2>Data, horário e público</h2>
+                <p class="help">Informe o total de público de cada data e horário apresentados abaixo.</p>
+                <div id="eventList" class="event-list"></div>
+            </section>
+
+            <section class="card">
+                <h2>Registros</h2>
+                <p class="help">(máx. 5) — sugestões: montagem, entrada do público, plateia, apresentação.</p>
+                <div id="uploadBox" class="upload-box">
+                    <i class="fa-solid fa-cloud-arrow-up"></i>
+                    <p>Selecione até 5 arquivos de registro do(s) evento(s).</p>
+                    <input id="files" type="file" multiple accept="image/*,video/*,application/pdf">
+                    <div id="selectedFiles" class="file-list"></div>
+                </div>
+                <div id="savedFiles" class="file-list"></div>
+            </section>
+
+            <section class="card">
+                <div class="field">
+                    <label for="autores">Autor dos Registros</label>
+                    <input id="autores" type="text" placeholder="Nome de quem realizou os registros">
+                </div>
+                <div class="field">
+                    <label for="observacao">Observação (conte brevemente como foi e se houve alguma ocorrência não esperada)</label>
+                    <textarea id="observacao" placeholder="Conte brevemente como foi a atividade..."></textarea>
+                </div>
+                <div class="field">
+                    <label for="sugestao">Fique à vontade para deixar aqui sua sugestão de melhoria para o DAC.</label>
+                    <textarea id="sugestao" placeholder="Sua sugestão"></textarea>
+                </div>
+                <div id="status" class="status" role="status" aria-live="polite"></div>
+                <div class="actions">
+                    <button type="button" class="btn-secondary" onclick="window.close()"><i class="fa-solid fa-arrow-left"></i> Fechar</button>
+                    <div class="actions-right">
+                        <button id="btnEnviarAdmin" type="button" class="btn-blue hidden" onclick="enviarLinkAdmin()"><i class="fa-solid fa-paper-plane"></i> Enviar para o proponente</button>
+                        <button id="btnPDF" type="button" class="btn-success hidden" onclick="baixarPDF()"><i class="fa-regular fa-file-pdf"></i> Baixar PDF</button>
+                        <button id="btnEnviar" type="button" class="btn-primary" onclick="enviarRegistro()"><i class="fa-solid fa-paper-plane"></i> Enviar registro</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const id = params.get('id') || '';
+        const isAdmin = params.get('admin') === '1';
+        let currentData = null;
+        let selectedFiles = [];
+
+        const $ = id => document.getElementById(id);
+        const esc = value => String(value ?? '')
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        const showStatus = (message, type = 'info') => {
+            const el = $('status');
+            el.textContent = message;
+            el.className = `status show ${type}`;
+        };
+        const formatDate = value => {
+            const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            return match ? `${match[3]}/${match[2]}/${match[1]}` : String(value || '');
+        };
+        const formatBytes = size => {
+            const n = Number(size || 0);
+            if (n < 1024) return `${n} B`;
+            if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+            return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+        };
+
+        function renderFiles(files, target, links = false) {
+            const list = $(target);
+            list.innerHTML = '';
+            (files || []).forEach(file => {
+                const row = document.createElement('div');
+                row.className = 'file-item';
+                const name = document.createElement('span');
+                name.textContent = `${file.nome || 'Registro'}${file.tamanho ? ` · ${formatBytes(file.tamanho)}` : ''}`;
+                row.appendChild(name);
+                if (links && file.downloadUrl) {
+                    const link = document.createElement('a');
+                    link.href = file.downloadUrl;
+                    link.textContent = 'Baixar';
+                    link.target = '_blank';
+                    link.rel = 'noopener';
+                    row.appendChild(link);
+                }
+                list.appendChild(row);
+            });
+        }
+
+        function renderEvents() {
+            const eventos = currentData?.eventos || [];
+            $('eventList').innerHTML = eventos.map((evento, index) => {
+                const dataHorario = [formatDate(evento.data), evento.horario].filter(Boolean).join(' · ') || 'Data e horário conforme o agendamento';
+                return `
+                    <div class="event-row">
+                        <div>
+                            <div class="event-name">${esc(evento.label || `Evento ${index + 1}`)}</div>
+                            <div class="event-date"><i class="fa-regular fa-calendar"></i> ${esc(dataHorario)}</div>
+                        </div>
+                        <div>
+                            <label for="publico-${index}">total de público</label>
+                            <input id="publico-${index}" data-publico-index="${index}" type="number" min="0" step="1" inputmode="numeric" value="${esc(evento.totalPublico ?? '')}" placeholder="0">
+                        </div>
+                    </div>`;
+            }).join('');
+            if (isAdmin || currentData?.registro?.concluido) {
+                document.querySelectorAll('[data-publico-index]').forEach(input => input.disabled = true);
+            }
+        }
+
+        function renderPage() {
+            const registro = currentData.registro || {};
+            $('infoNome').textContent = currentData.nome || '—';
+            $('infoEmail').textContent = currentData.email || '—';
+            $('infoLocal').textContent = currentData.localNome || '—';
+            $('infoEvento').textContent = currentData.evento || '—';
+            renderEvents();
+            $('autores').value = registro.autores || '';
+            $('observacao').value = registro.observacao || '';
+            $('sugestao').value = registro.sugestao || '';
+            renderFiles([], 'selectedFiles');
+            renderFiles(registro.arquivos || [], 'savedFiles', true);
+
+            const concluido = registro.concluido === true;
+            const editavel = !isAdmin && !concluido;
+            $('adminNote').classList.toggle('hidden', !isAdmin);
+            $('adminNote').textContent = isAdmin
+                ? (concluido
+                    ? 'Visualização administrativa: este registro já foi preenchido e enviado pelo proponente.'
+                    : registro.enviadoEm
+                        ? `Visualização administrativa: o link foi enviado para ${currentData.email || 'o proponente'}${registro.prazo ? ` e o prazo informado foi ${registro.prazo}.` : '.'}`
+                        : 'Visualização administrativa: o formulário ainda não foi enviado ao proponente.')
+                : '';
+            $('completedNote').classList.toggle('show', concluido);
+            $('completedNote').textContent = concluido
+                ? `Registro enviado em ${registro.concluidoEm ? new Date(registro.concluidoEm).toLocaleString('pt-BR') : 'data não informada'}.`
+                : '';
+            $('uploadBox').classList.toggle('hidden', !editavel);
+            ['autores', 'observacao', 'sugestao'].forEach(field => $(field).disabled = !editavel);
+            $('btnEnviar').classList.toggle('hidden', !editavel);
+            $('btnEnviarAdmin').classList.toggle('hidden', !isAdmin || concluido);
+            $('btnPDF').classList.toggle('hidden', !concluido);
+            if (isAdmin && concluido) showStatus('Registro preenchido disponível para consulta e download.', 'success');
+            if (concluido && !isAdmin) showStatus('Este registro já foi enviado. Obrigado!', 'success');
+        }
+
+        function renderSelectedFiles() {
+            renderFiles(selectedFiles.map(file => ({ nome: file.name, tamanho: file.size })), 'selectedFiles');
+        }
+
+        $('files').addEventListener('change', event => {
+            const files = Array.from(event.target.files || []);
+            if (files.length > 5) {
+                event.target.value = '';
+                selectedFiles = [];
+                renderSelectedFiles();
+                showStatus('Selecione no máximo 5 registros.', 'error');
+                return;
+            }
+            selectedFiles = files;
+            renderSelectedFiles();
+        });
+
+        async function carregar() {
+            if (!id) {
+                $('loading').classList.add('hidden');
+                $('errorPage').style.display = 'block';
+                $('errorPage').textContent = 'Não foi informado o identificador da inscrição.';
+                return;
+            }
+            try {
+                const response = await fetch(`/api/registro-atividades/${encodeURIComponent(id)}?_=${Date.now()}`);
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'Não foi possível carregar o registro.');
+                currentData = data;
+                $('loading').classList.add('hidden');
+                $('content').classList.remove('hidden');
+                renderPage();
+            } catch (error) {
+                $('loading').classList.add('hidden');
+                $('errorPage').style.display = 'block';
+                $('errorPage').textContent = error.message;
+            }
+        }
+
+        async function enviarLinkAdmin() {
+            const btn = $('btnEnviarAdmin');
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+            showStatus('Enviando o link e a confirmação administrativa...', 'info');
+            try {
+                const response = await fetch('/api/admin/enviar-registro-atividades', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ id, baseUrl: window.location.origin })
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível enviar o registro.');
+                showStatus(
+                    data.dacEmailSent === false
+                        ? `Link enviado para ${currentData.email}, mas a confirmação ao DAC não foi entregue.`
+                        : `Link enviado para ${currentData.email}. A confirmação também foi enviada ao DAC.`,
+                    data.dacEmailSent === false ? 'error' : 'success'
+                );
+                await carregar();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        }
+
+        async function enviarRegistro() {
+            const autores = $('autores').value.trim();
+            if (!autores) {
+                showStatus('Informe o nome dos autores dos registros.', 'error');
+                $('autores').focus();
+                return;
+            }
+            const eventos = Array.from(document.querySelectorAll('[data-publico-index]')).map(input => ({
+                totalPublico: input.value.trim()
+            }));
+            if (eventos.some(item => item.totalPublico === '' || !/^\d+$/.test(item.totalPublico))) {
+                showStatus('Informe um total de público válido para cada evento.', 'error');
+                return;
+            }
+            const btn = $('btnEnviar');
+            const original = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Enviando...';
+            showStatus('Enviando o registro e os arquivos...', 'info');
+            try {
+                const form = new FormData();
+                form.append('id', id);
+                form.append('eventos', JSON.stringify(eventos));
+                form.append('autores', autores);
+                form.append('observacao', $('observacao').value.trim());
+                form.append('sugestao', $('sugestao').value.trim());
+                selectedFiles.forEach(file => form.append('registros', file, file.name));
+                const response = await fetch('/api/registro-atividades', { method: 'POST', body: form });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível enviar o registro.');
+                showStatus('Registro enviado com sucesso ao DAC.', 'success');
+                await carregar();
+            } catch (error) {
+                showStatus(error.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = original;
+            }
+        }
+
+        function baixarPDF() {
+            if (!currentData?.registro?.concluido || !window.jspdf?.jsPDF) {
+                showStatus('Não foi possível preparar o PDF.', 'error');
+                return;
+            }
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+            const margin = 16;
+            const pageWidth = 210;
+            let y = 18;
+            const line = (text, size = 10, bold = false, color = [45, 55, 72]) => {
+                doc.setFont('helvetica', bold ? 'bold' : 'normal');
+                doc.setFontSize(size);
+                doc.setTextColor(...color);
+                const lines = doc.splitTextToSize(String(text || '—'), pageWidth - margin * 2);
+                if (y + lines.length * 5 > 280) { doc.addPage(); y = 18; }
+                doc.text(lines, margin, y);
+                y += lines.length * 5 + 2;
+            };
+            doc.setFillColor(118, 75, 162);
+            doc.rect(0, 0, pageWidth, 31, 'F');
+            doc.setTextColor(255, 255, 255);
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(18);
+            doc.text('Registro de atividades', margin, 14);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.text('UFSC — Departamento Artístico Cultural (DAC)', margin, 22);
+            y = 42;
+            line('Dados do proponente', 13, true, [91, 52, 127]);
+            line(`Proponente: ${currentData.nome}`);
+            line(`E-mail: ${currentData.email}`);
+            line(`Local: ${currentData.localNome}`);
+            line(`Evento: ${currentData.evento}`);
+            y += 3;
+            line('Data, horário e total de público', 13, true, [91, 52, 127]);
+            (currentData.registro.eventos || currentData.eventos || []).forEach((evento, index) => {
+                const when = [formatDate(evento.data), evento.horario].filter(Boolean).join(' · ') || 'Conforme agendamento';
+                line(`${evento.label || `Evento ${index + 1}`}: ${when} — total de público: ${evento.totalPublico ?? '—'}`);
+            });
+            y += 3;
+            line('Autor dos Registros', 13, true, [91, 52, 127]);
+            line(currentData.registro.autores);
+            line('Observação', 13, true, [91, 52, 127]);
+            line(currentData.registro.observacao || 'Não informado');
+            line('Sugestão de melhoria para o DAC', 13, true, [91, 52, 127]);
+            line(currentData.registro.sugestao || 'Não informado');
+            line('Arquivos enviados', 13, true, [91, 52, 127]);
+            (currentData.registro.arquivos || []).forEach((arquivo, index) => line(`${index + 1}. ${arquivo.nome}`));
+            line(`Enviado em: ${currentData.registro.concluidoEm ? new Date(currentData.registro.concluidoEm).toLocaleString('pt-BR') : '—'}`, 9, false, [100, 110, 125]);
+            const safe = String(currentData.evento || 'evento').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]+/g, '_');
+            doc.save(`Registro_Atividades_${safe || 'DAC'}.pdf`);
+        }
+
+        carregar();
+    </script>
+</body>
+</html>
