@@ -69,61 +69,58 @@
         input:focus, textarea:focus { border-color: var(--purple); box-shadow: 0 0 0 3px rgba(118,75,162,.10); }
         textarea { min-height: 105px; resize: vertical; line-height: 1.5; }
         input:disabled, textarea:disabled { opacity: 1; color: #394454; background: #f8fafc; cursor: default; }
-        /* O upload segue o mesmo padrão acessível usado no modo unificado:
-           toda a área funciona como o seletor de arquivos. */
-        .upload-zone {
-            position: relative; min-height: 108px; display: flex; align-items: center;
-            justify-content: center; overflow: hidden; margin-top: 17px; padding: 16px 18px;
-            border: 1.5px dashed #c4b5fd; border-radius: 12px;
-            background: linear-gradient(180deg, #fbfaff 0%, #f7f5ff 100%);
-            color: #4c1d95; cursor: pointer;
+        /* Cada arquivo ocupa seu próprio cartão, como no Google Forms.
+           Depois de selecionar um arquivo, permanece um cartão vazio para o próximo. */
+        .upload-slots {
+            display: grid; gap: 9px; margin-top: 17px;
+        }
+        .upload-slot {
+            position: relative; min-height: 74px; display: flex; align-items: center;
+            gap: 12px; padding: 12px 14px; border: 1.5px solid #ddd6fe;
+            border-radius: 10px; background: #fbfaff; color: #4c1d95;
+        }
+        .upload-slot-empty {
+            min-height: 88px; justify-content: center; border-style: dashed; cursor: pointer;
             transition: border-color .2s, background .2s, box-shadow .2s;
         }
-        .upload-zone:hover {
-            border-color: #8b5cf6;
-            background: linear-gradient(180deg, #f8f5ff 0%, #f2edff 100%);
+        .upload-slot-empty:hover {
+            border-color: #8b5cf6; background: #f7f3ff;
             box-shadow: 0 5px 14px rgba(118, 75, 162, .10);
         }
-        .upload-zone:focus-within {
+        .upload-slot-empty:focus-within {
             outline: 3px solid rgba(99, 102, 241, .20); outline-offset: 2px; border-color: #667eea;
         }
-        .upload-zone.has-files {
-            border-style: solid; border-color: #22c55e;
-            background: linear-gradient(180deg, #f0fdf4 0%, #ecfdf5 100%); color: #166534;
-        }
-        .upload-zone.has-files:hover { border-color: #15803d; }
-        .upload-zone.readonly {
+        .upload-slot.readonly {
             cursor: default; opacity: .84; border-color: #c7cedb;
             background: #f8fafc; color: #667085;
         }
-        .upload-zone.readonly:hover { border-color: #c7cedb; background: #f8fafc; box-shadow: none; }
-        .upload-zone.readonly .upload-zone-icon { background: #eef0f3; color: #667085; }
-        .upload-zone.readonly .upload-zone-action { color: #667085; }
-        .upload-zone input[type="file"] {
+        .upload-slot-icon {
+            width: 32px; height: 32px; flex: 0 0 32px; display: grid; place-items: center;
+            border-radius: 50%; background: #ede9fe; color: #6d28d9; font-size: 18px;
+            font-weight: 700; line-height: 1;
+        }
+        .upload-slot-file .upload-slot-icon { background: #dcfce7; color: #15803d; }
+        .upload-slot-content { min-width: 0; flex: 1; display: grid; gap: 3px; }
+        .upload-slot-title {
+            color: inherit; font-size: 13px; font-weight: 700;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .upload-slot-action { color: #6b7280; font-size: 12px; }
+        .upload-slot-file .upload-slot-action { color: #15803d; }
+        .upload-slot input[type="file"] {
             position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%;
             margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer;
         }
-        .upload-zone-content {
-            position: relative; z-index: 1; width: 100%; display: flex; flex-direction: column;
-            align-items: center; gap: 5px; pointer-events: none; text-align: center;
+        .upload-slot-download {
+            flex: 0 0 auto; color: var(--purple); font-size: 12px; font-weight: 700;
+            text-decoration: none; white-space: nowrap;
         }
-        .upload-zone-icon {
-            width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%;
-            background: #ede9fe; color: #6d28d9; font-size: 20px; font-weight: 700; line-height: 1;
+        .upload-slot-download:hover { text-decoration: underline; }
+        .upload-slot-remove {
+            position: relative; z-index: 3; flex: 0 0 auto; padding: 5px 7px;
+            color: #6b7280; background: transparent; font-size: 12px;
         }
-        .upload-zone.has-files .upload-zone-icon { background: #dcfce7; color: #15803d; }
-        .upload-zone-title { color: inherit; font-size: 14px; font-weight: 700; }
-        .upload-zone-action { color: #6b7280; font-size: 12px; }
-        .upload-zone.has-files .upload-zone-action { color: #15803d; }
-        .upload-zone-files {
-            display: flex; flex-wrap: wrap; justify-content: center; gap: 5px;
-            max-width: 100%; margin-top: 3px;
-        }
-        .upload-file-chip {
-            max-width: min(100%, 280px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-            padding: 4px 8px; border-radius: 999px; background: rgba(255, 255, 255, .85);
-            border: 1px solid #bbf7d0; color: #166534; font-size: 11px;
-        }
+        .upload-slot-remove:hover:not(:disabled) { color: #991b1b; transform: none; filter: none; }
         .file-list { display: grid; gap: 7px; margin-top: 10px; text-align: left; }
         .file-item {
             display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -227,16 +224,8 @@
             <section class="card">
                 <h2>Registros</h2>
                 <p class="help">(máx. 5) — sugestões: montagem, entrada do público, plateia, apresentação.</p>
-                <div id="uploadBox" class="upload-zone" role="group">
-                    <div class="upload-zone-content">
-                        <span class="upload-zone-icon" aria-hidden="true">↑</span>
-                        <strong class="upload-zone-title">Adicionar arquivos</strong>
-                        <span class="upload-zone-action">Clique em qualquer parte desta área para escolher</span>
-                        <span id="selectedFiles" class="upload-zone-files" aria-live="polite"></span>
-                    </div>
-                    <input id="files" type="file" multiple accept="image/*,video/*,application/pdf">
-                </div>
-                <p class="help">Selecione até 5 arquivos de registro do(s) evento(s).</p>
+                <div id="uploadBox" class="upload-slots" role="group" aria-label="Arquivos de registro"></div>
+                <p class="help">Adicione um arquivo por vez. Você pode enviar até 5 arquivos de registro do(s) evento(s).</p>
                 <div class="saved-files-header">
                     <span>Arquivos enviados</span>
                     <button id="btnZip" type="button" class="btn-secondary hidden" onclick="baixarArquivosZip()">
@@ -276,7 +265,9 @@
         const id = params.get('id') || '';
         const isAdmin = params.get('admin') === '1';
         let currentData = null;
+        const MAX_FILES = 5;
         let selectedFiles = [];
+        let selectedFileUrls = [];
 
         const $ = id => document.getElementById(id);
         const esc = value => String(value ?? '')
@@ -319,35 +310,91 @@
             });
         }
 
-        function atualizarZonaUpload(files) {
-            const zone = $('uploadBox');
-            const title = zone.querySelector('.upload-zone-title');
-            const action = zone.querySelector('.upload-zone-action');
-            const icon = zone.querySelector('.upload-zone-icon');
-            const list = $('selectedFiles');
-            const temArquivos = files.length > 0;
+        function liberarUrlsArquivosSelecionados() {
+            selectedFileUrls.forEach(url => URL.revokeObjectURL(url));
+            selectedFileUrls = [];
+        }
 
-            zone.classList.toggle('has-files', temArquivos);
-            icon.textContent = temArquivos ? '✓' : '↑';
-            title.textContent = temArquivos
-                ? `${files.length} arquivo${files.length === 1 ? '' : 's'} selecionado${files.length === 1 ? '' : 's'}`
-                : 'Adicionar arquivos';
-            action.textContent = temArquivos
-                ? 'Clique em qualquer parte para trocar a seleção'
-                : 'Clique em qualquer parte desta área para escolher';
-            list.replaceChildren();
-            files.slice(0, 3).forEach(file => {
-                const chip = document.createElement('span');
-                chip.className = 'upload-file-chip';
-                chip.title = file.name;
-                chip.textContent = file.name;
-                list.appendChild(chip);
+        function renderUploadSlots(editavel = !isAdmin && !currentData?.registro?.concluido) {
+            const box = $('uploadBox');
+            box.replaceChildren();
+            liberarUrlsArquivosSelecionados();
+
+            selectedFiles.forEach((file, index) => {
+                const url = URL.createObjectURL(file);
+                selectedFileUrls[index] = url;
+                const row = document.createElement('div');
+                row.className = 'upload-slot upload-slot-file';
+
+                const icon = document.createElement('span');
+                icon.className = 'upload-slot-icon';
+                icon.textContent = '✓';
+                icon.setAttribute('aria-hidden', 'true');
+
+                const content = document.createElement('div');
+                content.className = 'upload-slot-content';
+                const title = document.createElement('strong');
+                title.className = 'upload-slot-title';
+                title.title = file.name;
+                title.textContent = file.name;
+                const action = document.createElement('span');
+                action.className = 'upload-slot-action';
+                action.textContent = `${formatBytes(file.size)} · arquivo selecionado`;
+                content.append(title, action);
+
+                const download = document.createElement('a');
+                download.className = 'upload-slot-download';
+                download.href = url;
+                download.download = file.name;
+                download.textContent = 'Baixar';
+                download.setAttribute('aria-label', `Baixar ${file.name}`);
+
+                row.append(icon, content, download);
+                if (editavel) {
+                    const remove = document.createElement('button');
+                    remove.type = 'button';
+                    remove.className = 'upload-slot-remove';
+                    remove.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                    remove.title = 'Remover arquivo';
+                    remove.setAttribute('aria-label', `Remover ${file.name}`);
+                    remove.addEventListener('click', () => {
+                        selectedFiles.splice(index, 1);
+                        renderUploadSlots(true);
+                    });
+                    row.appendChild(remove);
+                }
+                box.appendChild(row);
             });
-            if (files.length > 3) {
-                const chip = document.createElement('span');
-                chip.className = 'upload-file-chip';
-                chip.textContent = `+${files.length - 3} outro${files.length - 3 === 1 ? '' : 's'}`;
-                list.appendChild(chip);
+
+            if (editavel && selectedFiles.length < MAX_FILES) {
+                const empty = document.createElement('label');
+                empty.className = 'upload-slot upload-slot-empty';
+                empty.innerHTML = `
+                    <span class="upload-slot-icon" aria-hidden="true">↑</span>
+                    <span class="upload-slot-content">
+                        <strong class="upload-slot-title">Adicionar arquivo ${selectedFiles.length + 1} de ${MAX_FILES}</strong>
+                        <span class="upload-slot-action">Clique aqui para escolher um arquivo</span>
+                    </span>
+                    <input type="file" accept="image/*,video/*,application/pdf">
+                `;
+                empty.querySelector('input').addEventListener('change', event => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    selectedFiles.push(file);
+                    renderUploadSlots(true);
+                });
+                box.appendChild(empty);
+            } else if (!editavel && !selectedFiles.length) {
+                const empty = document.createElement('div');
+                empty.className = 'upload-slot upload-slot-readonly readonly';
+                empty.innerHTML = `
+                    <span class="upload-slot-icon" aria-hidden="true">${currentData?.registro?.concluido ? '✓' : '↑'}</span>
+                    <span class="upload-slot-content">
+                        <strong class="upload-slot-title">${currentData?.registro?.concluido ? 'Upload concluído' : 'Adicionar arquivos'}</strong>
+                        <span class="upload-slot-action">${currentData?.registro?.concluido ? 'Os arquivos enviados aparecem abaixo' : 'Disponível no link enviado ao proponente'}</span>
+                    </span>
+                `;
+                box.appendChild(empty);
             }
         }
 
@@ -374,6 +421,7 @@
 
         function renderPage() {
             const registro = currentData.registro || {};
+            const concluido = registro.concluido === true;
             $('infoNome').textContent = currentData.nome || '—';
             $('infoEmail').textContent = currentData.email || '—';
             $('infoLocal').textContent = currentData.localNome || '—';
@@ -382,10 +430,9 @@
             $('autores').value = registro.autores || '';
             $('observacao').value = registro.observacao || '';
             $('sugestao').value = registro.sugestao || '';
-            renderSelectedFiles();
+            renderUploadSlots(!isAdmin && !concluido);
             renderFiles(registro.arquivos || [], 'savedFiles', true);
 
-            const concluido = registro.concluido === true;
             const editavel = !isAdmin && !concluido;
             $('adminNote').classList.toggle('hidden', !isAdmin);
             $('adminNote').textContent = isAdmin
@@ -399,18 +446,6 @@
             $('completedNote').textContent = concluido
                 ? `Registro enviado em ${registro.concluidoEm ? new Date(registro.concluidoEm).toLocaleString('pt-BR') : 'data não informada'}.`
                 : '';
-            $('uploadBox').classList.toggle('readonly', !editavel);
-            $('files').disabled = !editavel;
-            if (!editavel) {
-                const title = $('uploadBox').querySelector('.upload-zone-title');
-                const action = $('uploadBox').querySelector('.upload-zone-action');
-                const icon = $('uploadBox').querySelector('.upload-zone-icon');
-                icon.textContent = concluido ? '✓' : '↑';
-                title.textContent = concluido ? 'Upload concluído' : 'Adicionar arquivos';
-                action.textContent = concluido
-                    ? 'Os arquivos enviados aparecem abaixo'
-                    : 'Disponível no link enviado ao proponente';
-            }
             ['autores', 'observacao', 'sugestao'].forEach(field => $(field).disabled = !editavel);
             $('btnEnviar').classList.toggle('hidden', !editavel);
             $('btnEnviarAdmin').classList.toggle('hidden', !isAdmin || concluido);
@@ -419,23 +454,6 @@
             if (isAdmin && concluido) showStatus('Registro preenchido disponível para consulta e download.', 'success');
             if (concluido && !isAdmin) showStatus('Este registro já foi enviado. Obrigado!', 'success');
         }
-
-        function renderSelectedFiles() {
-            atualizarZonaUpload(selectedFiles);
-        }
-
-        $('files').addEventListener('change', event => {
-            const files = Array.from(event.target.files || []);
-            if (files.length > 5) {
-                event.target.value = '';
-                selectedFiles = [];
-                renderSelectedFiles();
-                showStatus('Selecione no máximo 5 registros.', 'error');
-                return;
-            }
-            selectedFiles = files;
-            renderSelectedFiles();
-        });
 
         async function carregar() {
             if (!id) {
@@ -523,6 +541,7 @@
                         ? 'Registro salvo, mas o aviso por e-mail ao DAC não foi entregue.'
                         : 'Registro enviado com sucesso ao DAC.';
                 const statusType = data.dacEmailSent === false ? 'error' : 'success';
+                selectedFiles = [];
                 await carregar();
                 showStatus(statusMessage, statusType);
             } catch (error) {
