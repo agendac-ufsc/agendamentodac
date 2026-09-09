@@ -1227,7 +1227,7 @@ function renderTabela() {
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" onclick="abrirRegistroAtividades(${originalIndex})" style="color:${registroAtividadesColor}"><i class="fas ${registroAtividadesIcon}"></i></button>
-            <button class="btn-action" title="Enviar formulário de atividades ao proponente" aria-label="Enviar formulário de atividades ao proponente" onclick="abrirEmailFormularioAtividades(${originalIndex})" style="color:#2563eb"><i class="fas fa-clipboard-list"></i></button>
+            <button class="btn-action" title="Formulário antigo desativado" aria-label="Formulário antigo desativado" disabled aria-disabled="true" tabindex="-1" style="color:#94a3b8;cursor:not-allowed;opacity:.65"><i class="fas fa-clipboard-list"></i></button>
             ${documentosBtn}
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
@@ -1883,47 +1883,6 @@ function formatarDataBrasileira(data) {
         month: '2-digit',
         year: 'numeric'
     });
-}
-
-function abrirEmailFormularioAtividades(idx) {
-    const p = allUnificados[idx]?.primeiraEtapa;
-    if (!p?.email) {
-        alert('Esta inscrição não possui um e-mail válido para envio.');
-        return;
-    }
-
-    const formularioUrl = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
-    const prazo = formatarDataBrasileira(adicionarDiasUteis(new Date(), 5));
-    const mensagem = `Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
-
-As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:
-
-Formulário Atividades DAC 2026
-
-Pedimos que o formulário seja preenchido até o dia ${prazo}.
-
-Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já, pela colaboração.
-
-Atenciosamente,
-
---
-Comissão de Pauta
-Departamento Artístico Cultural
-Secretaria de Cultura, Arte e Esporte
-Universidade Federal de Santa Catarina`;
-
-    _emailRapidoData = {
-        email: p.email,
-        nome: p.nome || '',
-        evento: p.evento || '',
-        linkLabel: 'Formulário Atividades DAC 2026',
-        linkUrl: formularioUrl
-    };
-    document.getElementById('emailRapidoPara').value = p.email;
-    document.getElementById('emailRapidoAssunto').value = 'Formulário Atividades DAC 2026';
-    document.getElementById('emailRapidoMensagem').value = mensagem;
-    document.getElementById('emailRapidoStatus').textContent = '';
-    openModal('modalEmailRapido');
 }
 
 async function sendEmailRapido() {

@@ -1009,9 +1009,6 @@ const escapeHtml = (value) => String(value ?? '')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-const ATIVIDADES_FORMULARIO_URL = 'https://docs.google.com/forms/d/1CVycogEYCWiVRUf1HngQrfWaIScR_4KEROKc7OoJkZQ/viewform?edit_requested=true#responses';
-const ATIVIDADES_FORMULARIO_LABEL = 'Formulário Atividades DAC 2026';
-const ATIVIDADES_ENVIADAS_PREFIX = 'atividades_formulario_enviado:';
 const REGISTRO_ATIVIDADES_ENVIADO_PREFIX = 'registro_atividades_link_enviado:';
 const ATIVIDADES_CONFIRMACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
 const ATIVIDADES_ATRASO_INICIAL_MS = 10 * 60 * 1000;
@@ -1287,49 +1284,6 @@ async function buscarInscricoesLegadasParaAtividades() {
     }
 }
 
-function criarMensagemFormularioAtividades(prazo) {
-    return `Conforme previsto no item 13.1.9. do Edital de Ocupação dos Espaços do DAC, solicitamos, por gentileza, o envio de informações complementares sobre a realização de seu evento no DAC, para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público, registros fotográficos, ocorrências, sugestões e demais observações.
-
-As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:
-
-${ATIVIDADES_FORMULARIO_LABEL}
-
-Pedimos que o formulário seja preenchido até o dia ${prazo}.
-
-Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já, pela colaboração.
-
-Atenciosamente,
-
---
-Comissão de Pauta
-Departamento Artístico Cultural
-Secretaria de Cultura, Arte e Esporte
-Universidade Federal de Santa Catarina`;
-}
-
-function criarHtmlFormularioAtividades(nome, mensagem) {
-    const mensagemHtml = escapeHtml(mensagem)
-        .replace(/\n/g, '<br>')
-        .replace(
-            escapeHtml(ATIVIDADES_FORMULARIO_LABEL),
-            `<a href="${escapeHtml(ATIVIDADES_FORMULARIO_URL)}" style="color:#2563eb;font-weight:600;text-decoration:underline" target="_blank" rel="noopener noreferrer">${escapeHtml(ATIVIDADES_FORMULARIO_LABEL)}</a>`
-        );
-    return `
-    <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
-        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
-            <h2 style="margin:0;color:#fff;font-size:18px">DAC — Departamento Artístico Cultural</h2>
-            <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">UFSC — Secretaria de Cultura, Arte e Esporte</p>
-        </div>
-        <div style="padding:28px">
-            <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>!</p>
-            <div style="font-size:14px;color:#444;line-height:1.8;margin:18px 0;white-space:pre-wrap">${mensagemHtml}</div>
-            <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
-            <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato diretamente com a equipe do DAC pelo e-mail <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold;">pautas.dac@contato.ufsc.br</a>.</p>
-            <p style="font-size:11px;color:#aaa;margin-top:20px">UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC</p>
-        </div>
-    </div>`;
-}
-
 function obterOrigemPublicaAutomatica() {
     const candidatos = [
         process.env.PUBLIC_APP_URL,
@@ -1483,156 +1437,6 @@ async function consultarStatusFormularioBrevo(estado) {
     }
 }
 
-function criarConfirmacaoFormularioAtividadesHtml(agendamento, email, ultimoEvento) {
-    return `
-    <div style="font-family:sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:10px;overflow:hidden;color:#333">
-        <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:22px 28px">
-            <h2 style="margin:0;color:#fff;font-size:18px">Formulário de atividades entregue</h2>
-            <p style="margin:4px 0 0;color:rgba(255,255,255,.8);font-size:12px">Confirmação automática — DAC/UFSC</p>
-        </div>
-        <div style="padding:28px">
-            <p style="font-size:15px">O Brevo confirmou a entrega do formulário de atividades ao servidor de e-mail do proponente.</p>
-            <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;font-size:13px;line-height:1.7">
-                <p style="margin:0"><strong>Proponente:</strong> ${escapeHtml(agendamento.nome || 'Não informado')}</p>
-                <p style="margin:0"><strong>E-mail destinatário:</strong> ${escapeHtml(email)}</p>
-                <p style="margin:0"><strong>Evento:</strong> ${escapeHtml(agendamento.evento || 'Não informado')}</p>
-                <p style="margin:0"><strong>Término considerado:</strong> ${escapeHtml(ultimoEvento.data)} — ${escapeHtml(ultimoEvento.horario)}</p>
-            </div>
-        </div>
-    </div>`;
-}
-
-async function enviarFormularioAtividadesAoProponente({
-    chaveEnvio,
-    estadoAnterior,
-    agendamento,
-    email,
-    ultimoEvento,
-    agora
-}) {
-    const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
-    const resultado = await sendEmail(
-        email,
-        'Formulário Atividades DAC 2026',
-        criarHtmlFormularioAtividades(agendamento.nome, criarMensagemFormularioAtividades(prazo))
-    );
-    const tentativas = Number(estadoAnterior?.tentativas || 0) + 1;
-    const mensagemId = resultado?.messageId || null;
-    const mensagensAnteriores = Array.isArray(estadoAnterior?.mensagens)
-        ? estadoAnterior.mensagens
-        : [];
-    const mensagens = mensagemId
-        ? [...mensagensAnteriores, { messageId: mensagemId, enviadoEm: agora.toISOString() }]
-        : mensagensAnteriores;
-    const proximaTentativaEm = new Date(agora.getTime() + ATIVIDADES_INTERVALO_REENVIO_MS).toISOString();
-    const estado = {
-        ...(estadoAnterior || {}),
-        status: resultado ? 'pending' : 'unknown',
-        email,
-        enviadoEm: estadoAnterior?.enviadoEm || agora.toISOString(),
-        ultimaTentativaEm: agora.toISOString(),
-        proximaTentativaEm,
-        tentativas,
-        mensagens,
-        ultimoEvento: ultimoEvento.fimDate.toISOString()
-    };
-    await redis.set(chaveEnvio, estado);
-
-    if (resultado) {
-        console.log(`✅ [Atividades] Formulário aceito pelo Brevo para ${email}; aguardando confirmação de entrega.`);
-    } else {
-        console.error(`❌ [Atividades] Falha ao solicitar o formulário para ${email}; nova tentativa após o intervalo configurado.`);
-    }
-    return resultado;
-}
-
-async function processarConfirmacaoFormularioAtividades({
-    chaveEnvio,
-    estado,
-    agendamento,
-    email,
-    ultimoEvento,
-    agora
-}) {
-    if (!estado) return;
-
-    // Marcadores antigos não possuem messageId e não podem ser reconciliados com segurança.
-    // Estados novos sem messageId são retentados apenas após o intervalo, para evitar
-    // uma nova mensagem a cada ciclo do servidor.
-    if (!Array.isArray(estado.mensagens) || !estado.mensagens.length) {
-        if (
-            estado.status !== 'unknown'
-            || Number(estado.tentativas || 0) >= ATIVIDADES_MAX_TENTATIVAS
-            || (estado.proximaTentativaEm && agora < new Date(estado.proximaTentativaEm))
-        ) {
-            return;
-        }
-        await enviarFormularioAtividadesAoProponente({
-            chaveEnvio,
-            estadoAnterior: estado,
-            agendamento,
-            email,
-            ultimoEvento,
-            agora
-        });
-        return;
-    }
-
-    const status = await consultarStatusFormularioBrevo(estado);
-    if (status.status === 'delivered') {
-        if (
-            estado.dacEmailSent === true
-            || (estado.dacProximaTentativaEm && agora < new Date(estado.dacProximaTentativaEm))
-        ) {
-            return;
-        }
-
-        const confirmacao = await sendEmail(
-            ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
-            'Confirmação: formulário de atividades entregue',
-            criarConfirmacaoFormularioAtividadesHtml(agendamento, email, ultimoEvento)
-        );
-        const novoEstado = {
-            ...estado,
-            status: 'delivered',
-            proponenteEntregueEm: agora.toISOString(),
-            dacEmailSent: Boolean(confirmacao),
-            dacEmailTentativaEm: agora.toISOString(),
-            dacProximaTentativaEm: confirmacao
-                ? null
-                : new Date(agora.getTime() + ATIVIDADES_INTERVALO_REENVIO_MS).toISOString()
-        };
-        await redis.set(chaveEnvio, novoEstado);
-        if (confirmacao) {
-            console.log(`✅ [Atividades] Entrega confirmada para ${email}; confirmação enviada ao DAC.`);
-        } else {
-            console.error(`❌ [Atividades] Entrega confirmada para ${email}, mas a confirmação ao DAC falhou.`);
-        }
-        return;
-    }
-
-    const proximaTentativa = estado.proximaTentativaEm
-        ? new Date(estado.proximaTentativaEm)
-        : new Date(0);
-    const podeTentarNovamente = (
-        status.status === 'deferred'
-        && Number(estado.tentativas || 0) < ATIVIDADES_MAX_TENTATIVAS
-        && agora >= proximaTentativa
-    );
-    if (podeTentarNovamente) {
-        await enviarFormularioAtividadesAoProponente({
-            chaveEnvio,
-            estadoAnterior: estado,
-            agendamento,
-            email,
-            ultimoEvento,
-            agora
-        });
-    } else if (status.status === 'failed') {
-        console.error(`❌ [Atividades] O Brevo rejeitou o formulário para ${email}; nenhuma confirmação será enviada ao DAC.`);
-    }
-}
-
 function criarConfirmacaoNovoRegistroHtml(agendamento, email, ultimoEvento) {
     const nome = agendamento.nome || agendamento.termoDados?.nomeCompleto || 'Proponente';
     const evento = agendamento.evento || agendamento.termoDados?.nomeEvento || 'Seu evento';
@@ -1770,28 +1574,6 @@ async function verificarEnviosAutomaticosFormulario() {
             if (!ultimoEvento) continue;
             const primeiraTentativaEm = new Date(ultimoEvento.fimDate.getTime() + ATIVIDADES_ATRASO_INICIAL_MS);
             if (agora < primeiraTentativaEm) continue;
-
-            const chaveEnvio = `${ATIVIDADES_ENVIADAS_PREFIX}${agendamento.id}:${ultimoEvento.fimDate.toISOString()}`;
-            const estadoEnvio = await redis.get(chaveEnvio);
-            if (!estadoEnvio) {
-                await enviarFormularioAtividadesAoProponente({
-                    chaveEnvio,
-                    estadoAnterior: null,
-                    agendamento,
-                    email,
-                    ultimoEvento,
-                    agora
-                });
-            } else {
-                await processarConfirmacaoFormularioAtividades({
-                    chaveEnvio,
-                    estado: estadoEnvio,
-                    agendamento,
-                    email,
-                    ultimoEvento,
-                    agora
-                });
-            }
 
             const chaveNovoRegistro = `${REGISTRO_ATIVIDADES_ENVIADO_PREFIX}${agendamento.id}:${ultimoEvento.fimDate.toISOString()}`;
             const estadoNovoRegistro = await redis.get(chaveNovoRegistro);
