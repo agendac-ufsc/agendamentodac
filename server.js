@@ -1607,6 +1607,25 @@ async function verificarEnviosAutomaticosFormulario() {
     }
 }
 
+// A Vercel Cron chama esta rota em produção para executar a verificação
+// periódica. O intervalo local continua ativo no Replit, mas não é confiável
+// em funções serverless porque a instância pode ser encerrada entre requisições.
+app.get('/api/cron/verificar-atividades', async (req, res) => {
+    const autorizacao = String(req.headers.authorization || '');
+    const cronSecret = limparConfiguracaoBrevo(process.env.CRON_SECRET);
+    if (!cronSecret || autorizacao !== `Bearer ${cronSecret}`) {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+
+    try {
+        await verificarEnviosAutomaticosFormulario();
+        return res.json({ success: true });
+    } catch (error) {
+        console.error('❌ [Cron] Falha ao verificar envios automáticos de atividades:', error.message);
+        return res.status(500).json({ error: 'Falha ao verificar envios automáticos.' });
+    }
+});
+
 app.post('/api/agendar', async (req, res) => {
     try {
         const { nome, email, telefone, evento, etapas, local, modoTeste = false } = req.body;
