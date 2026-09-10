@@ -5,3 +5,4 @@
 - [Arquivos do Google Forms](google-forms-files.md) — links do Forms exigem autenticação nos pedidos de metadados e conteúdo, além de acesso da conta de serviço aos arquivos.
 - [Reinício do servidor no preview](workflow-server-restart.md) — alterações no server.js exigem reiniciar o workflow Node antes de testar as rotas.
 - [Entrega de e-mails](email-delivery.md) — todos os fluxos Brevo devem usar o mesmo remetente validado; aceitação pela API não garante entrega na caixa de entrada.
+- [Recursos do ambiente](replit-resource-limits.md) — instalações e reinícios podem falhar com EAGAIN quando vários workflows consomem processos simultaneamente.
