@@ -1614,9 +1614,14 @@ async function verificarEnviosAutomaticosFormulario() {
 // periódica. O intervalo local continua ativo no Replit, mas não é confiável
 // em funções serverless porque a instância pode ser encerrada entre requisições.
 app.get('/api/cron/verificar-atividades', async (req, res) => {
-    const autorizacao = String(req.headers.authorization || '');
+    const autorizacao = String(req.headers.authorization || '').trim();
     const cronSecret = limparConfiguracaoBrevo(process.env.CRON_SECRET);
-    if (!cronSecret || autorizacao !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+        console.error('❌ [Cron] CRON_SECRET não está configurado no ambiente de produção.');
+        return res.status(503).json({ error: 'Cron não configurado.' });
+    }
+    const tokenRecebido = autorizacao.replace(/^Bearer\s+/i, '').trim();
+    if (!/^Bearer\s+/i.test(autorizacao) || tokenRecebido !== cronSecret) {
         return res.status(401).json({ error: 'Não autorizado' });
     }
 
