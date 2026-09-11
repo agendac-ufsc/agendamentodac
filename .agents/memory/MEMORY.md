@@ -6,3 +6,4 @@
 - [Reinício do servidor no preview](workflow-server-restart.md) — alterações no server.js exigem reiniciar o workflow Node antes de testar as rotas.
 - [Entrega de e-mails](email-delivery.md) — todos os fluxos Brevo devem usar o mesmo remetente validado; aceitação pela API não garante entrega na caixa de entrada.
 - [Recursos do ambiente](replit-resource-limits.md) — instalações e reinícios podem falhar com EAGAIN quando vários workflows consomem processos simultaneamente.
+- [GitHub via Git](github-token-git.md) — use GIT_ASKPASS temporário quando o extraheader rejeitar um token aceito pela API.
