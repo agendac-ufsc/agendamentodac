@@ -1,0 +1,59 @@
+name: Verificar registro de atividades
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/5 * * * *"
+
+jobs:
+  verificar:
+    name: Verificar envios pendentes
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Chamar verificador de atividades
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ENDPOINT_URL: https://agendamentodac.vercel.app/api/cron/verificar-atividades
+        run: |
+          set -u
+
+          if [ -z "$CRON_SECRET" ]; then
+            echo "::error::O secret CRON_SECRET não está configurado nos Secrets do GitHub."
+            exit 1
+          fi
+
+          response_file="$(mktemp)"
+          trap 'rm -f "$response_file"' EXIT
+
+          set +e
+          http_status="$(curl \
+            --silent \
+            --show-error \
+            --location \
+            --max-time 60 \
+            --output "$response_file" \
+            --write-out "%{http_code}" \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            "$ENDPOINT_URL")"
+          curl_exit=$?
+          set -e
+
+          if [ "$curl_exit" -ne 0 ]; then
+            echo "::error::Não foi possível chamar o endpoint (curl exit $curl_exit)."
+            exit "$curl_exit"
+          fi
+
+          echo "Endpoint respondeu HTTP $http_status."
+
+          case "$http_status" in
+            2??)
+              echo "Verificação executada com sucesso."
+              ;;
+            *)
+              echo "::error::O endpoint rejeitou ou falhou na verificação."
+              echo "Resposta: $(head -c 300 "$response_file")"
+              exit 1
+              ;;
+          esac
