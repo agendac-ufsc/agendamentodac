@@ -1011,7 +1011,10 @@ const escapeHtml = (value) => String(value ?? '')
 
 const REGISTRO_ATIVIDADES_ENVIADO_PREFIX = 'registro_atividades_link_enviado:';
 const ATIVIDADES_CONFIRMACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
-const ATIVIDADES_ATRASO_INICIAL_MS = 10 * 60 * 1000;
+// O cron da Vercel verifica a cada cinco minutos. A elegibilidade começa
+// no horário de término para que o envio aconteça na próxima verificação,
+// dentro da janela máxima de dez minutos solicitada.
+const ATIVIDADES_ATRASO_INICIAL_MS = 0;
 const ATIVIDADES_INTERVALO_REENVIO_MS = 10 * 60 * 1000;
 const ATIVIDADES_MAX_TENTATIVAS = 3;
 

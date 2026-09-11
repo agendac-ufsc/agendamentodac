@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "crons": [
+    {
+      "path": "/api/cron/verificar-atividades",
+      "schedule": "*/5 * * * *"
+    }
+  ],
   "builds": [
     {
       "src": "server.js",
