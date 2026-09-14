@@ -1226,6 +1226,7 @@ async function buscarDatasEventosLegados(agendamento) {
 }
 
 let atividadesLegadasCache = { atualizadoEm: 0, inscricoes: [] };
+let atividadesCalendarioCache = { atualizadoEm: 0, eventos: [] };
 
 async function buscarInscricoesLegadasParaAtividades() {
     const agora = Date.now();
@@ -2643,25 +2644,32 @@ app.post('/api/registro-atividades', uploadRegistrosAtividades.array('registros'
 async function buscarDatasCalendarioLegada(nomeEvento) {
     if (!nomeEvento) return [];
     try {
-        if (!googleAuthClient) await initGoogleAuth();
-        const agora = new Date();
-        const tMin = new Date(agora.getFullYear() - 1, 0, 1).toISOString();
-        const tMax = new Date(agora.getFullYear() + 3, 11, 31).toISOString();
-        const buscar = async (calendarId, local) => {
-            try {
-                const r = await calendar.events.list({
-                    auth: googleAuthClient, calendarId, timeMin: tMin, timeMax: tMax,
-                    singleEvents: true, orderBy: 'startTime', maxResults: 2500
-                });
-                return (r.data.items || [])
-                    .filter(e => e.start && (e.start.dateTime || e.start.date))
-                    .map(e => ({ ...e, _calNome: local }));
-            } catch { return []; }
-        };
-        const eventos = [
-            ...(await buscar(CALENDAR_IDS.teatro, 'Teatro Carmen Fossari')),
-            ...(await buscar(CALENDAR_IDS.igrejinha, 'Igrejinha da UFSC'))
-        ];
+        const agoraMs = Date.now();
+        let eventos = atividadesCalendarioCache.eventos;
+        if (agoraMs - atividadesCalendarioCache.atualizadoEm >= 5 * 60 * 1000) {
+            if (!googleAuthClient) await initGoogleAuth();
+            const agora = new Date();
+            const tMin = new Date(agora.getFullYear() - 1, 0, 1).toISOString();
+            const tMax = new Date(agora.getFullYear() + 3, 11, 31).toISOString();
+            const buscar = async (calendarId, local) => {
+                try {
+                    const r = await calendar.events.list({
+                        auth: googleAuthClient, calendarId, timeMin: tMin, timeMax: tMax,
+                        singleEvents: true, orderBy: 'startTime', maxResults: 2500
+                    });
+                    return (r.data.items || [])
+                        .filter(e => e.start && (e.start.dateTime || e.start.date))
+                        .map(e => ({ ...e, _calNome: local }));
+                } catch { return []; }
+            };
+            const [eventosTeatro, eventosIgrejinha] = await Promise.all([
+                buscar(CALENDAR_IDS.teatro, 'Teatro Carmen Fossari'),
+                buscar(CALENDAR_IDS.igrejinha, 'Igrejinha da UFSC')
+            ]);
+            eventos = [...eventosTeatro, ...eventosIgrejinha];
+            atividadesCalendarioCache = { atualizadoEm: agoraMs, eventos };
+        }
+
         const normalizar = s => (s || '').toLowerCase()
             .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
             .replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, ' ').trim();
