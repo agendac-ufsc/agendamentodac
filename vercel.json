@@ -8,6 +8,10 @@
   },
   "routes": [
     {
+      "src": "^/api/documentos-teste/upload$",
+      "dest": "/api/documentos-teste/upload.js"
+    },
+    {
       "src": "^/$",
       "dest": "/api/home.js"
     },
