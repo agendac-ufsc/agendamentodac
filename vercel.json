@@ -28,6 +28,22 @@
       "dest": "/api/admin-documents.js"
     },
     {
+      "src": "^/api/registro-atividades$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/api/registro-atividades/[^/]+$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/api/registro-atividades/[^/]+/arquivo/[^/]+$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/api/registro-atividades/[^/]+/arquivos\\.zip$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
       "src": "^/$",
       "dest": "/api/home.js"
     },
