@@ -1,0 +1,59 @@
+~/workspace$ git pull
+remote: Enumerating objects: 141, done.
+remote: Counting objects: 100% (141/141), done.
+remote: Compressing objects: 100% (64/64), done.
+remote: Total 137 (delta 93), reused 116 (delta 72), pack-reused 0 (from 0)
+Receiving objects: 100% (137/137), 1023.58 KiB | 9.57 MiB/s, done.
+Resolving deltas: 100% (93/93), completed with 4 local objects.
+From https://github.com/agendac-ufsc/agendamentodac
+   28eacce..7faf076  main       -> origin/main
+Updating 28eacce..7faf076
+Fast-forward
+ .agents/agent_assets_metadata.toml                                                |    8 +
+ .backups/BACKUPS.md                                                               |   23 +
+ .backups/index_backup_2026-07-02.html                                             | 1158 ++++++++++++++++++++++++++++++++++++++
+ ...sted-agora-quero-outra-corre-o-Nos-eventos-de-teste-que-fa-o_1783613164019.txt |  126 +++++
+ attached_assets/image_1783612124966.png                                           |  Bin 0 -> 20784 bytes
+ attached_assets/image_1783612627474.png                                           |  Bin 0 -> 68368 bytes
+ attached_assets/image_1783688868606.png                                           |  Bin 0 -> 87523 bytes
+ attached_assets/image_1783690867008.png                                           |  Bin 0 -> 16052 bytes
+ attached_assets/image_1783691954070.png                                           |  Bin 0 -> 14711 bytes
+ attached_assets/image_1783692155669.png                                           |  Bin 0 -> 35424 bytes
+ attached_assets/image_1783693910701.png                                           |  Bin 0 -> 35536 bytes
+ attached_assets/image_1783694601760.png                                           |  Bin 0 -> 9594 bytes
+ attached_assets/image_1783696485689.png                                           |  Bin 0 -> 54087 bytes
+ attached_assets/image_1784123792269.png                                           |  Bin 0 -> 32985 bytes
+ attached_assets/image_1784208680877.png                                           |  Bin 0 -> 8864 bytes
+ attached_assets/image_1784293265264.png                                           |  Bin 0 -> 10655 bytes
+ attached_assets/image_1784293509922.png                                           |  Bin 0 -> 60002 bytes
+ attached_assets/image_1784295215243.png                                           |  Bin 0 -> 273742 bytes
+ attached_assets/image_1784296133783.png                                           |  Bin 0 -> 12534 bytes
+ attached_assets/image_1784296439931.png                                           |  Bin 0 -> 236908 bytes
+ attached_assets/image_1784296498911.png                                           |  Bin 0 -> 86430 bytes
+ docs/incidents/2026-04-23-incidente-excluir-tudo-teatro.md                        |  200 +++++++
+ index.html                                                                        |  314 +++++++++--
+ server.js                                                                         |   34 +-
+ 24 files changed, 1804 insertions(+), 59 deletions(-)
+ create mode 100644 .agents/agent_assets_metadata.toml
+ create mode 100644 .backups/BACKUPS.md
+ create mode 100644 .backups/index_backup_2026-07-02.html
+ create mode 100644 attached_assets/Pasted-agora-quero-outra-corre-o-Nos-eventos-de-teste-que-fa-o_1783613164019.txt
+ create mode 100644 attached_assets/image_1783612124966.png
+ create mode 100644 attached_assets/image_1783612627474.png
+ create mode 100644 attached_assets/image_1783688868606.png
+ create mode 100644 attached_assets/image_1783690867008.png
+ create mode 100644 attached_assets/image_1783691954070.png
+ create mode 100644 attached_assets/image_1783692155669.png
+ create mode 100644 attached_assets/image_1783693910701.png
+ create mode 100644 attached_assets/image_1783694601760.png
+ create mode 100644 attached_assets/image_1783696485689.png
+ create mode 100644 attached_assets/image_1784123792269.png
+ create mode 100644 attached_assets/image_1784208680877.png
+ create mode 100644 attached_assets/image_1784293265264.png
+ create mode 100644 attached_assets/image_1784293509922.png
+ create mode 100644 attached_assets/image_1784295215243.png
+ create mode 100644 attached_assets/image_1784296133783.png
+ create mode 100644 attached_assets/image_1784296439931.png
+ create mode 100644 attached_assets/image_1784296498911.png
+ create mode 100644 docs/incidents/2026-04-23-incidente-excluir-tudo-teatro.md
+~/workspace$ 

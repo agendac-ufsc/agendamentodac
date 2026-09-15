@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Agendamento DAC"
+description = "Sistema web de agendamento do DAC, com páginas públicas, administração, avaliação e registro de atividades."
+version = "1.0.0"
+id = "artifacts/agendamento-dac"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 18107
+
+[services.development]
+run = "pnpm --filter @workspace/agendamento-dac run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/agendamento-dac", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/agendamento-dac/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "18107"
+BASE_PATH = "/"

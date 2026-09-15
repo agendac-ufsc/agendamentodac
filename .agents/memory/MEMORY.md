@@ -1,0 +1,1 @@
+- [Workflow secrets](workflow-secrets.md) — after adding project secrets, restart every managed workflow that consumes them.
