@@ -6,6 +6,16 @@
       "includeFiles": "artifacts/agendamento-dac/index*.html"
     }
   },
+  "routes": [
+    {
+      "src": "^/$",
+      "dest": "/api/home.js"
+    },
+    {
+      "src": "^/index\\.html$",
+      "dest": "/api/home.js"
+    }
+  ],
   "rewrites": [
     {
       "source": "/",
