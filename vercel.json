@@ -3,10 +3,7 @@
   "outputDirectory": "artifacts/agendamento-dac/dist/public",
   "functions": {
     "api/home.js": {
-      "includeFiles": [
-        "artifacts/agendamento-dac/index.html",
-        "artifacts/agendamento-dac/index-teste.html"
-      ]
+      "includeFiles": "artifacts/agendamento-dac/index*.html"
     }
   },
   "rewrites": [
