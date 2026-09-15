@@ -1,4 +1,5 @@
 {
+  "buildCommand": "pnpm -r --if-present run build",
   "outputDirectory": "artifacts/agendamento-dac/dist/public",
   "rewrites": [
     {
@@ -8,6 +9,22 @@
     {
       "source": "/admin/:path*",
       "destination": "/admin.html"
+    },
+    {
+      "source": "/avaliador",
+      "destination": "/avaliador.html"
+    },
+    {
+      "source": "/termo",
+      "destination": "/termo.html"
+    },
+    {
+      "source": "/registro-atividades",
+      "destination": "/registro-atividades.html"
+    },
+    {
+      "source": "/registro-atividades/:path*",
+      "destination": "/registro-atividades.html"
     }
   ]
 }
