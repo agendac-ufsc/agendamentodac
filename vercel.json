@@ -1,3 +1,13 @@
 {
-  "outputDirectory": "artifacts/agendamento-dac/dist/public"
+  "outputDirectory": "artifacts/agendamento-dac/dist/public",
+  "rewrites": [
+    {
+      "source": "/admin",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/index.html"
+    }
+  ]
 }
