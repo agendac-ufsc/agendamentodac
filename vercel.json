@@ -1,7 +1,23 @@
 {
   "buildCommand": "pnpm -r --if-present run build",
   "outputDirectory": "artifacts/agendamento-dac/dist/public",
+  "functions": {
+    "api/home.js": {
+      "includeFiles": [
+        "artifacts/agendamento-dac/index.html",
+        "artifacts/agendamento-dac/index-teste.html"
+      ]
+    }
+  },
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/home"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/api/home"
+    },
     {
       "source": "/admin",
       "destination": "/admin.html"
