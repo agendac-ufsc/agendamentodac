@@ -1,0 +1,5 @@
+# The Vercel deployment serves the static HTML files and the Node API.
+# The generated React/Vite source is not imported by any deployed function
+# and can trigger Vercel's automatic TypeScript compilation.
+artifacts/agendamento-dac/src/
+artifacts/agendamento-dac/vite.config.ts
