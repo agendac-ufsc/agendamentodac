@@ -1,1 +1,2 @@
 - [Workflow secrets](workflow-secrets.md) — after adding project secrets, restart every managed workflow that consumes them.
+- [Corepack for pnpm workflows](corepack-pnpm-workflows.md) — use Corepack when the project pins pnpm and the global wrapper loops during workflow startup.
