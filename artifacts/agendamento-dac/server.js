@@ -934,6 +934,7 @@ const clearBlacklist = async () => {
 const BREVO_DEFAULT_SENDER = 'agendac.ufsc@gmail.com';
 const BREVO_SENDER_NAME = 'DAC - UFSC';
 const BREVO_REPLY_TO = 'pautas.dac@contato.ufsc.br';
+const BREVO_REQUEST_TIMEOUT_MS = 15000;
 
 function limparConfiguracaoBrevo(valor) {
     return String(valor || '').replace(/^["']|["']$/g, '').trim();
@@ -992,6 +993,7 @@ const sendEmail = async (to, subject, htmlContent) => {
     };
     try {
         const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
+            timeout: BREVO_REQUEST_TIMEOUT_MS,
             headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }
         });
         console.log(`✅ [Brevo] E-mail aceito para envio: ${response.data?.messageId || 'messageId não informado'}`);
@@ -1014,6 +1016,27 @@ const ATIVIDADES_CONFIRMACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
 const ATIVIDADES_ATRASO_INICIAL_MS = 10 * 60 * 1000;
 const ATIVIDADES_INTERVALO_REENVIO_MS = 10 * 60 * 1000;
 const ATIVIDADES_MAX_TENTATIVAS = 3;
+const ATIVIDADES_GOOGLE_TIMEOUT_MS = 10000;
+const ATIVIDADES_LEGADAS_TIMEOUT_MS = 12000;
+
+function executarComPrazo(operacao, prazoMs, descricao) {
+    return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error(`${descricao} excedeu o prazo de ${prazoMs} ms.`));
+        }, prazoMs);
+
+        Promise.resolve()
+            .then(operacao)
+            .then(resultado => {
+                clearTimeout(timer);
+                resolve(resultado);
+            })
+            .catch(error => {
+                clearTimeout(timer);
+                reject(error);
+            });
+    });
+}
 
 function adicionarDiasUteisServidor(dataInicial, quantidade) {
     const data = new Date(dataInicial);
@@ -1198,7 +1221,8 @@ async function buscarDatasEventosLegados(agendamento) {
                 timeMax: new Date(agora.getFullYear() + 3, 11, 31).toISOString(),
                 singleEvents: true,
                 orderBy: 'startTime',
-                maxResults: 2500
+                maxResults: 2500,
+                timeout: ATIVIDADES_GOOGLE_TIMEOUT_MS
             });
             return resposta.data.items || [];
         }));
@@ -1229,25 +1253,39 @@ async function buscarInscricoesLegadasParaAtividades() {
     if (agora - atividadesLegadasCache.atualizadoEm < 5 * 60 * 1000) {
         return atividadesLegadasCache.inscricoes;
     }
-    if (!googleAuthClient) await initGoogleAuth();
-    await getConfigs('verificação automática de formulários legados');
+    if (!googleAuthClient) {
+        await executarComPrazo(
+            () => initGoogleAuth(),
+            ATIVIDADES_GOOGLE_TIMEOUT_MS,
+            'Autenticação Google para formulários legados'
+        );
+    }
+    await executarComPrazo(
+        () => getConfigs('verificação automática de formulários legados'),
+        ATIVIDADES_GOOGLE_TIMEOUT_MS,
+        'Leitura da configuração para formulários legados'
+    );
 
     try {
         let response;
         try {
             response = await sheets.spreadsheets.values.get({
                 auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
-                range: 'Respostas ao formulário 1!A:ZZ'
+                range: 'Respostas ao formulário 1!A:ZZ',
+                timeout: ATIVIDADES_GOOGLE_TIMEOUT_MS
             });
         } catch {
             const meta = await sheets.spreadsheets.get({
-                auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID
+                auth: googleAuthClient,
+                spreadsheetId: SPREADSHEET_ID,
+                timeout: ATIVIDADES_GOOGLE_TIMEOUT_MS
             });
             const nomeAba = meta.data?.sheets?.[0]?.properties?.title;
             if (!nomeAba) return [];
             response = await sheets.spreadsheets.values.get({
                 auth: googleAuthClient, spreadsheetId: SPREADSHEET_ID,
-                range: `'${nomeAba}'!A:ZZ`
+                range: `'${nomeAba}'!A:ZZ`,
+                timeout: ATIVIDADES_GOOGLE_TIMEOUT_MS
             });
         }
 
@@ -1419,7 +1457,7 @@ async function consultarStatusFormularioBrevo(estado) {
     try {
         const response = await axios.get(
             `https://api.brevo.com/v3/smtp/statistics/events?${params.toString()}`,
-            { headers: { 'api-key': apiKey } }
+            { timeout: BREVO_REQUEST_TIMEOUT_MS, headers: { 'api-key': apiKey } }
         );
         const ids = new Set(mensagens.map(item => item?.messageId).filter(Boolean));
         const eventos = (response.data?.events || []).filter(item => ids.has(item.messageId));
@@ -1554,7 +1592,20 @@ async function verificarEnviosAutomaticosFormulario() {
     try {
         const agora = new Date();
         const agendamentosRedis = await getAgendamentos();
-        const agendamentosLegados = await buscarInscricoesLegadasParaAtividades();
+        console.log(`[Atividades] ${agendamentosRedis.length} inscrição(ões) atuais carregada(s) do Redis.`);
+
+        let agendamentosLegados = [];
+        try {
+            agendamentosLegados = await executarComPrazo(
+                () => buscarInscricoesLegadasParaAtividades(),
+                ATIVIDADES_LEGADAS_TIMEOUT_MS,
+                'Busca de inscrições legadas'
+            );
+            console.log(`[Atividades] ${agendamentosLegados.length} inscrição(ões) legada(s) carregada(s).`);
+        } catch (error) {
+            console.warn(`⚠️ [Atividades] Consulta legada ignorada nesta execução: ${error.message}`);
+        }
+
         const agendamentos = [...agendamentosRedis, ...agendamentosLegados]
             .filter((agendamento, index, lista) =>
                 lista.findIndex(item => String(item.id) === String(agendamento.id)) === index
@@ -1574,6 +1625,8 @@ async function verificarEnviosAutomaticosFormulario() {
             if (!ultimoEvento) continue;
             const primeiraTentativaEm = new Date(ultimoEvento.fimDate.getTime() + ATIVIDADES_ATRASO_INICIAL_MS);
             if (agora < primeiraTentativaEm) continue;
+
+            console.log(`ℹ️ [Atividades] Inscrição elegível verificada: ${agendamento.id} (${email}).`);
 
             const chaveNovoRegistro = `${REGISTRO_ATIVIDADES_ENVIADO_PREFIX}${agendamento.id}:${ultimoEvento.fimDate.toISOString()}`;
             const estadoNovoRegistro = await redis.get(chaveNovoRegistro);
