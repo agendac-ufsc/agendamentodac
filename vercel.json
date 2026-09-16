@@ -12,6 +12,10 @@
       "dest": "/api/documentos-teste/upload.js"
     },
     {
+      "src": "^/api/admin/inscricoes/[^/]+$",
+      "dest": "/api/admin-documents.js"
+    },
+    {
       "src": "^/api/admin/inscricoes/[^/]+/documentos$",
       "dest": "/api/admin-documents.js"
     },
