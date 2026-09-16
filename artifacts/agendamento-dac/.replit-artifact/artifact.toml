@@ -12,7 +12,7 @@ paths = [ "/" ]
 localPort = 18107
 
 [services.development]
-run = "pnpm --filter @workspace/agendamento-dac run dev"
+run = "corepack pnpm --filter @workspace/agendamento-dac run dev"
 
 [services.production]
 build = [ "pnpm", "--filter", "@workspace/agendamento-dac", "run", "build" ]
