@@ -1,6 +1,66 @@
 {
+  "buildCommand": "pnpm --filter @workspace/agendamento-dac run build",
   "outputDirectory": "artifacts/agendamento-dac/dist/public",
+  "functions": {
+    "api/home.js": {
+      "includeFiles": "artifacts/agendamento-dac/index*.html"
+    }
+  },
+  "routes": [
+    {
+      "src": "^/api/documentos-teste/upload$",
+      "dest": "/api/documentos-teste/upload.js"
+    },
+    {
+      "src": "^/api/admin/inscricoes/[^/]+/documentos$",
+      "dest": "/api/admin-documents.js"
+    },
+    {
+      "src": "^/api/admin/inscricoes/[^/]+/documentos\\.zip$",
+      "dest": "/api/admin-documents.js"
+    },
+    {
+      "src": "^/api/admin/inscricoes/[^/]+/documentos/[^/]+$",
+      "dest": "/api/admin-documents.js"
+    },
+    {
+      "src": "^/api/admin/documentos/[^/]+/[^/]+$",
+      "dest": "/api/admin-documents.js"
+    },
+    {
+      "src": "^/api/registro-atividades$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/api/registro-atividades/[^/]+$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/api/registro-atividades/[^/]+/arquivo/[^/]+$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/api/registro-atividades/[^/]+/arquivos\\.zip$",
+      "dest": "/api/registro-atividades.js"
+    },
+    {
+      "src": "^/$",
+      "dest": "/api/home.js"
+    },
+    {
+      "src": "^/index\\.html$",
+      "dest": "/api/home.js"
+    }
+  ],
   "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/home"
+    },
+    {
+      "source": "/index.html",
+      "destination": "/api/home"
+    },
     {
       "source": "/admin",
       "destination": "/admin.html"
@@ -8,6 +68,22 @@
     {
       "source": "/admin/:path*",
       "destination": "/admin.html"
+    },
+    {
+      "source": "/avaliador",
+      "destination": "/avaliador.html"
+    },
+    {
+      "source": "/termo",
+      "destination": "/termo.html"
+    },
+    {
+      "source": "/registro-atividades",
+      "destination": "/registro-atividades.html"
+    },
+    {
+      "source": "/registro-atividades/:path*",
+      "destination": "/registro-atividades.html"
     }
   ]
 }

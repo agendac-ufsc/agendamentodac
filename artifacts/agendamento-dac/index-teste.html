@@ -1560,7 +1560,6 @@
         let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
         let somenteFinaisDeSemana = false; // Se true, bloqueia seg/ter/qua no calendário
         let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
-        let formsLinkProximaEtapaTeste = '';
         let tipoPessoaTesteAtual = null;
         let inscricaoTesteId = null;
         let finalizacaoInscricaoEmAndamento = false;
@@ -2212,15 +2211,6 @@
                     msg.className = 'message continue-message';
                     submitBtn.style.display = 'none';
 
-                    formsLinkProximaEtapaTeste = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
-                    try {
-                        const configRes = await fetch('/api/config');
-                        const config = await configRes.json();
-                        if (config.formsLink) formsLinkProximaEtapaTeste = config.formsLink;
-                    } catch (e) {
-                        console.error('Erro ao buscar link do forms:', e);
-                    }
-
                     document.querySelectorAll('input[name="tipoProponenteTeste"]').forEach(input => input.checked = false);
                     atualizarBotaoAvancarTeste();
                     mostrarTelaTeste('tipoProponenteSection');
@@ -2748,12 +2738,6 @@
             mostrarTelaTeste('categoriaPropostaSection');
         }
 
-        function abrirFormularioTeste() {
-            if (!formsLinkProximaEtapaTeste) return;
-            window.open(formsLinkProximaEtapaTeste, '_blank', 'noopener');
-            setTimeout(() => location.reload(), 800);
-        }
-
         // ── SELEÇÃO DE LOCAL ──────────────────────────────────
         const locaisNomes = {
             teatro: '🎭 Teatro Carmen Fossari',
@@ -2861,7 +2845,6 @@
             currentStepContext = null;
             tipoPessoaTesteAtual = null;
             inscricaoTesteId = null;
-            formsLinkProximaEtapaTeste = '';
             dataInicioEdital = null;
             globalCurrentMonth = new Date();
 
