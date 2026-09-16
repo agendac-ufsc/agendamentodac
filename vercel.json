@@ -8,6 +8,10 @@
   },
   "routes": [
     {
+      "src": "^/api/cron/verificar-atividades$",
+      "dest": "/api/cron/verificar-atividades.js"
+    },
+    {
       "src": "^/api/documentos-teste/upload$",
       "dest": "/api/documentos-teste/upload.js"
     },
