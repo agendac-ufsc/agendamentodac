@@ -1978,7 +1978,7 @@ async function deleteInscricao(id) {
     }
     if (!confirm('Excluir esta inscrição?')) return;
     try {
-        const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const r = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}`, { method: 'DELETE' });
         let body = {};
         try { body = await r.json(); } catch(_) {}
         if (r.ok && body.success !== false) {
@@ -2091,7 +2091,7 @@ async function confirmDeleteAllInscricoes() {
             const quantidadeExcluida = exclusaoSelecionados.length;
             const falhas = [];
             for (const id of exclusaoSelecionados) {
-                const r = await fetch(`/api/agendamentos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                const r = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}`, { method: 'DELETE' });
                 const body = await r.json().catch(() => ({}));
                 if (!r.ok || body.success === false) falhas.push(id);
             }

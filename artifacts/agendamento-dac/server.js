@@ -3432,8 +3432,10 @@ app.delete('/api/agendamentos-selecionados', async (req, res) => {
     res.json({ success: falhas.length === 0, processados: ids.length, falhas });
 });
 
-// Rota alternativa para compatibilidade com admin.html (usando ID em vez de email)
-app.delete('/api/agendamentos/:id', async (req, res) => {
+// Exclusão por ID. A rota /api/admin/inscricoes/:id é a preferida no Vercel,
+// pois passa pelo agrupamento de funções administrativas; a rota antiga é
+// mantida para compatibilidade com instalações anteriores.
+async function excluirAgendamentoPorId(req, res) {
     const { id } = req.params;
     try {
         if (!id || id === 'undefined') {
@@ -3466,7 +3468,10 @@ app.delete('/api/agendamentos/:id', async (req, res) => {
         console.error('❌ Erro ao deletar agendamento:', error.message);
         res.status(500).json({ success: false, error: 'Erro ao deletar agendamento' });
     }
-});
+}
+
+app.delete('/api/admin/inscricoes/:id', excluirAgendamentoPorId);
+app.delete('/api/agendamentos/:id', excluirAgendamentoPorId);
 
 // Rota para exclusão geral de todos os agendamentos
 app.delete('/api/admin/excluir-tudo', async (req, res) => {
