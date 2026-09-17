@@ -111,6 +111,16 @@
         .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:2000}
         .modal.open{display:flex}
         .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+        .modal-confirm-box{width:90%;max-width:470px;border-top:4px solid #764ba2;padding:26px 28px}
+        .modal-confirm-box.modal-confirm-danger{border-top-color:#dc2626}
+        .modal-confirm-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#ede9fe;color:#764ba2;font-size:20px;margin-bottom:12px}
+        .modal-confirm-danger .modal-confirm-icon{background:#fee2e2;color:#dc2626}
+        .modal-confirm-box h3{border:0;margin:0 0 10px;padding:0;color:#374151}
+        .modal-confirm-message{white-space:pre-line;font-size:14px;line-height:1.6;color:#4b5563;margin:0}
+        .modal-confirm-password{display:none;margin-top:16px}
+        .modal-confirm-password.visible{display:block}
+        .modal-confirm-error{display:none;color:#b91c1c;font-size:12px;margin:7px 0 0}
+        .modal-confirm-error.visible{display:block}
         .modal-box h3{font-size:18px;margin-bottom:16px;color:#444;border-bottom:1px solid #eee;padding-bottom:12px}
         .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
         .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
@@ -704,6 +714,24 @@
                     onclick="confirmDeleteAllInscricoes()">
                 <i class="fas fa-trash"></i> Confirmar exclusão
             </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL CONFIRMAÇÃO PADRONIZADA ═══ -->
+<div class="modal" id="modalConfirmacao" onclick="cancelarConfirmacao()">
+    <div class="modal-box modal-confirm-box" id="modalConfirmacaoBox" onclick="event.stopPropagation()">
+        <div class="modal-confirm-icon" id="modalConfirmacaoIcon"><i class="fas fa-question"></i></div>
+        <h3 id="modalConfirmacaoTitulo">Confirmar ação</h3>
+        <p id="modalConfirmacaoMensagem" class="modal-confirm-message"></p>
+        <div id="modalConfirmacaoSenhaWrap" class="modal-confirm-password">
+            <label for="modalConfirmacaoSenha" style="font-size:13px;font-weight:600;color:#374151">Senha administrativa</label>
+            <input type="password" id="modalConfirmacaoSenha" class="form-input" placeholder="Digite a senha do painel" autocomplete="current-password" spellcheck="false" onkeydown="if(event.key==='Enter') confirmarDialogo()">
+            <p id="modalConfirmacaoErro" class="modal-confirm-error">Digite a senha para continuar.</p>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" type="button" onclick="cancelarConfirmacao()">Cancelar</button>
+            <button id="btnConfirmarDialogo" class="btn-save-modal" type="button" onclick="confirmarDialogo()">Confirmar</button>
         </div>
     </div>
 </div>
@@ -1369,7 +1397,7 @@ async function enviarLinkRegistroAtividades(idx, btn) {
         alert('Esta inscrição não possui e-mail para receber o link.');
         return;
     }
-    if (!confirm(`Enviar o link do Registro de atividades para ${p.email}?`)) return;
+    if (!(await showConfirmDialog(`Enviar o link do Registro de atividades para ${p.email}?`))) return;
 
     const original = btn?.innerHTML || '<i class="fas fa-paper-plane"></i>';
     if (btn) {
@@ -1697,7 +1725,7 @@ async function reenviarTermoParaProponente() {
     if (userRole !== 'admin' || termoEditorIndex === null) return;
     const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
     if (!p?.email) return;
-    if (!confirm(`Reenviar o link do termo para ${p.email}?\n\nO proponente poderá revisar os dados, reaprová-los e enviar uma nova versão.`)) return;
+    if (!(await showConfirmDialog(`Reenviar o link do termo para ${p.email}?\n\nO proponente poderá revisar os dados, reaprová-los e enviar uma nova versão.`))) return;
     const status = document.getElementById('adminTermoStatus');
     const btn = document.getElementById('btnReenviarTermoEdicao');
     const original = btn.innerHTML;
@@ -1988,7 +2016,7 @@ async function enviarDivulgacaoManual() {
         status.style.color = '#dc2626';
         return;
     }
-    if (!confirm('Enviar a mensagem de divulgação para ' + _divulgacaoData.email + '?')) return;
+    if (!(await showConfirmDialog('Enviar a mensagem de divulgação para ' + _divulgacaoData.email + '?'))) return;
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
     status.textContent = '';
@@ -2089,9 +2117,10 @@ async function deleteInscricao(id) {
         alert('Não foi possível excluir: esta inscrição não possui um ID individual.');
         return;
     }
-    if (!confirm('Excluir esta inscrição?')) return;
+    const confirmacao = await showConfirmDialog('Excluir esta inscrição? Esta ação não pode ser desfeita.', { requirePassword: true, danger: true, title: 'Confirmar exclusão', confirmLabel: '<i class=\"fas fa-trash\"></i> Excluir' });
+    if (!confirmacao?.confirmed) return;
     try {
-        const r = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}`, { method: 'DELETE' });
+        const r = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: confirmacao.password }) });
         let body = {};
         try { body = await r.json(); } catch(_) {}
         if (r.ok && body.success !== false) {
@@ -2251,7 +2280,7 @@ async function enviarLinksTermoMassa() {
     const resultado = document.getElementById('termosResultado');
 
     if (emails.length === 0) { alert('Cole ao menos um e-mail válido.'); return; }
-    if (!confirm(`Enviar link do Termo Digital para ${emails.length} e-mail(s)?`)) return;
+    if (!(await showConfirmDialog(`Enviar link do Termo Digital para ${emails.length} e-mail(s)?`))) return;
 
     resultado.style.display = 'block';
     resultado.innerHTML = `<div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Enviando ${emails.length} e-mail(s)...</div>`;
@@ -2306,7 +2335,7 @@ async function enviarLinksTermoMassa() {
 async function enviarTermosSelecionados() {
     const checks = document.querySelectorAll('.insc-check:checked');
     if (checks.length === 0) { alert('Selecione ao menos uma inscrição.'); return; }
-    if (!confirm(`Enviar termos para ${checks.length} proponente(s)?`)) return;
+    if (!(await showConfirmDialog(`Enviar termos para ${checks.length} proponente(s)?`))) return;
 
     const inscricoes = [];
     checks.forEach(c => {
@@ -2691,7 +2720,7 @@ async function addAvaliador() {
 }
 
 async function removeAvaliador(id) {
-    if (!confirm('Remover este avaliador?')) return;
+    if (!(await showConfirmDialog('Remover este avaliador?'))) return;
     await fetch(`/api/evaluators/${id}`, { method: 'DELETE' });
     await loadAvaliadores();
 }
@@ -2999,6 +3028,57 @@ function desbloquearData(d) {
 // ══════════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+let confirmDialogResolver = null;
+function finishConfirmDialog(value) {
+    const modal = document.getElementById('modalConfirmacao');
+    if (modal) modal.classList.remove('open');
+    const resolver = confirmDialogResolver;
+    confirmDialogResolver = null;
+    if (resolver) resolver(value);
+}
+function cancelarConfirmacao() { finishConfirmDialog(false); }
+function confirmarDialogo() {
+    const modal = document.getElementById('modalConfirmacao');
+    const requiresPassword = modal?.dataset.requirePassword === 'true';
+    if (requiresPassword) {
+        const input = document.getElementById('modalConfirmacaoSenha');
+        const error = document.getElementById('modalConfirmacaoErro');
+        const password = input?.value || '';
+        if (!password) { error?.classList.add('visible'); input?.focus(); return; }
+        finishConfirmDialog({ confirmed: true, password });
+        return;
+    }
+    finishConfirmDialog(true);
+}
+function showConfirmDialog(message, options = {}) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('modalConfirmacao');
+        const box = document.getElementById('modalConfirmacaoBox');
+        const icon = document.getElementById('modalConfirmacaoIcon');
+        const title = document.getElementById('modalConfirmacaoTitulo');
+        const messageEl = document.getElementById('modalConfirmacaoMensagem');
+        const passwordWrap = document.getElementById('modalConfirmacaoSenhaWrap');
+        const passwordInput = document.getElementById('modalConfirmacaoSenha');
+        const error = document.getElementById('modalConfirmacaoErro');
+        const confirmButton = document.getElementById('btnConfirmarDialogo');
+        confirmDialogResolver = resolve;
+        modal.dataset.requirePassword = options.requirePassword ? 'true' : 'false';
+        box.classList.toggle('modal-confirm-danger', Boolean(options.danger));
+        icon.innerHTML = options.danger ? '<i class="fas fa-exclamation-triangle"></i>' : '<i class="fas fa-question"></i>';
+        title.textContent = options.title || 'Confirmar ação';
+        messageEl.textContent = message;
+        passwordWrap.classList.toggle('visible', Boolean(options.requirePassword));
+        passwordInput.value = '';
+        error.classList.remove('visible');
+        confirmButton.innerHTML = options.confirmLabel || 'Confirmar';
+        openModal('modalConfirmacao');
+        if (options.requirePassword) setTimeout(() => passwordInput.focus(), 0);
+    });
+}
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && confirmDialogResolver) cancelarConfirmacao();
+});
+
 document.querySelectorAll('.modal').forEach(m => m.addEventListener('click', e => { if (e.target === m) m.classList.remove('open'); }));
 
 // ══════════════════════════════════════════════════
@@ -3151,7 +3231,7 @@ async function baixarDocumentosZip() {
 
 async function excluirDocumento(inscricaoId, documentoId) {
     if (userRole !== 'admin') return;
-    if (!confirm('Excluir este documento permanentemente? Esta ação não pode ser desfeita.')) return;
+    if (!(await showConfirmDialog('Excluir este documento permanentemente? Esta ação não pode ser desfeita.', { danger: true, title: 'Excluir documento', confirmLabel: '<i class=\"fas fa-trash\"></i> Excluir' }))) return;
     const status = document.getElementById('documentosInscricaoStatus');
     status.style.color = '#666';
     status.textContent = 'Excluindo documento...';
