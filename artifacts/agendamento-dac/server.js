@@ -1948,13 +1948,48 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
 
         if (!jaConcluida) {
             const comprovante = criarHtmlComprovanteInscricaoTeste({ ...agendamento, ...dados, email });
-            const enviado = await sendEmail(
-                [email, 'pautas.dac@contato.ufsc.br'],
-                `✅ Inscrição validada: ${dados.evento} — DAC/UFSC`,
-                comprovante
-            );
-            if (!enviado) {
-                return res.status(502).json({ error: 'A inscrição foi salva, mas não foi possível enviar o comprovante por e-mail.' });
+            const localConfirmacao = agendamento.localNome
+                || (agendamento.local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
+            const notificacaoAdmin = `
+            <div style="font-family:sans-serif;max-width:680px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+                <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 30px;text-align:center">
+                    <h2 style="margin:0;color:#fff;font-size:19px">Confirmação de inscrição enviada</h2>
+                    <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Notificação administrativa — DAC/UFSC</p>
+                </div>
+                <div style="padding:28px 30px">
+                    <p style="font-size:15px;margin-top:0">A inscrição foi concluída, e o e-mail de confirmação foi enviado ao proponente.</p>
+                    <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:0 0 20px">
+                        <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Proponente:</strong> ${escapeHtml(dados.nome || 'N/A')}</p>
+                        <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>E-mail:</strong> ${escapeHtml(email)}</p>
+                        <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Telefone:</strong> ${escapeHtml(dados.telefone || agendamento.telefone || 'N/A')}</p>
+                        <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Nome do evento:</strong> ${escapeHtml(dados.evento || agendamento.evento || 'N/A')}</p>
+                        <p style="margin:0;font-size:13px;color:#555"><strong>Local:</strong> ${escapeHtml(localConfirmacao)}</p>
+                    </div>
+                    <p style="font-size:13px;color:#555;line-height:1.6;margin:0">O comprovante completo permanece no e-mail encaminhado ao proponente. A inscrição também foi registrada no sistema e os eventos foram sincronizados com o calendário.</p>
+                    <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
+                    <p style="font-size:11px;color:#aaa;text-align:center">
+                        UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
+                        Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+                    </p>
+                </div>
+            </div>`;
+            const [enviadoProponente, enviadoAdmin] = await Promise.all([
+                sendEmail(
+                    email,
+                    `✅ Inscrição validada: ${dados.evento} — DAC/UFSC`,
+                    comprovante
+                ),
+                sendEmail(
+                    'pautas.dac@contato.ufsc.br',
+                    `📩 Confirmação enviada: ${dados.evento} — ${dados.nome || ''} — DAC/UFSC`,
+                    notificacaoAdmin
+                )
+            ]);
+            if (!enviadoProponente) {
+                return res.status(502).json({ error: 'A inscrição foi salva, mas não foi possível enviar o comprovante ao proponente.' });
+            }
+            if (!enviadoAdmin) {
+                console.error('⚠️ [E-mail] Comprovante enviado ao proponente, mas a notificação ao DAC falhou.');
             }
         }
         return res.json({ success: true, validada: true, id });
