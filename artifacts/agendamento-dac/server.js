@@ -427,6 +427,8 @@ let BOTOES_HOME = {
 };
 let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.';
 let MOSTRAR_BOTOES_DESATIVADOS = true;
+const MENSAGEM_DIVULGACAO_PADRAO = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento contendo as informações essenciais (o quê, onde, quando e quanto custa) para os seguintes e-mails: divulgadac@contato.ufsc.br e  ivo.caoe@ufsc.br\n\nRessaltamos que esse envio deve ocorrer com, no mínimo, 7 (sete) dias de antecedência em relação à data de realização do evento, a fim de viabilizar sua inclusão em nossas mídias.\nEm caso de dúvidas sobre o processo de divulgação, solicitamos que o contato seja feito diretamente com os e-mails informados acima.";
+let MENSAGEM_DIVULGACAO = MENSAGEM_DIVULGACAO_PADRAO;
 let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
 const CONFIG_KEY = 'agendamentos_config';
@@ -537,7 +539,8 @@ const getConfigs = async (caller = 'unknown') => {
                     responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
                     botoesHome: BOTOES_HOME,
                     mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
-                    mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS
+                    mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS,
+                    mensagemDivulgacao: MENSAGEM_DIVULGACAO
                 };
             } else {
                 console.warn(`[getConfigs] ⚠️ Nenhum valor encontrado no Redis para chave "${CONFIG_KEY}" — usando padrões em memória`);
@@ -562,7 +565,8 @@ const getConfigs = async (caller = 'unknown') => {
         responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
         botoesHome: BOTOES_HOME,
         mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
-        mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS
+        mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS,
+        mensagemDivulgacao: MENSAGEM_DIVULGACAO
     };
 };
 
@@ -637,6 +641,9 @@ const saveConfigs = async (configs) => {
         if (configs.mostrarBotoesDesativados !== undefined) {
             MOSTRAR_BOTOES_DESATIVADOS = normalizarBooleano(configs.mostrarBotoesDesativados, true);
         }
+        if (configs.mensagemDivulgacao !== undefined) {
+            MENSAGEM_DIVULGACAO = String(configs.mensagemDivulgacao || '').trim() || MENSAGEM_DIVULGACAO_PADRAO;
+        }
 
         if (redis) {
             const configToSave = {
@@ -652,7 +659,8 @@ const saveConfigs = async (configs) => {
                 responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                 botoesHome: BOTOES_HOME,
                 mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
-                mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS
+                mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS,
+                mensagemDivulgacao: MENSAGEM_DIVULGACAO
             };
             console.log(`[saveConfigs] gravando no Redis — sheet: ${cleanSpreadsheetId} | forms: ${FORMS_LINK?.slice(0,60)}`);
             const setResult = await redis.set(CONFIG_KEY, configToSave);
@@ -758,12 +766,12 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, avaliacoesNecessarias, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, avaliacoesNecessarias, responsavelTermoNome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
@@ -1071,32 +1079,39 @@ function formatarDataBrasileiraServidor(data) {
     }).format(data);
 }
 
-function obterFimDoUltimoEvento(agendamento) {
+function obterEventosCronograma(agendamento) {
     const eventosRegistrados = Array.isArray(agendamento?.etapas?.evento)
         ? agendamento.etapas.evento
         : agendamento?.etapas?.evento
             ? [agendamento.etapas.evento]
             : [];
-    // Inscrições antigas podem não ter etapas estruturadas, mas ter as datas
-    // recuperadas diretamente do Google Calendar pelo processo de legado.
     const eventosLegados = Array.isArray(agendamento?.calendarDates)
         ? agendamento.calendarDates
         : [];
-    const candidatos = [...eventosRegistrados, ...eventosLegados].map(item => {
+    return [...eventosRegistrados, ...eventosLegados].map(item => {
         const data = String(item?.data || '');
         const horario = String(item?.horario || '');
         const dataMatch = data.match(/^(\d{4})-(\d{2})-(\d{2})$/) || data.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
         const horaMatch = horario.match(/(\d{1,2}:\d{2})\s*(?:às|a|-)\s*(\d{1,2}:\d{2})/i);
         if (!dataMatch || !horaMatch) return null;
         const ano = dataMatch[1].length === 4 ? dataMatch[1] : dataMatch[3];
-        const mes = dataMatch[1].length === 4 ? dataMatch[2] : dataMatch[2];
+        const mes = dataMatch[2];
         const dia = dataMatch[1].length === 4 ? dataMatch[3] : dataMatch[1];
+        const inicio = horaMatch[1];
         const fim = horaMatch[2];
-        const fimIso = `${ano}-${mes}-${dia}T${fim}:00-03:00`;
-        const fimDate = new Date(fimIso);
-        return Number.isNaN(fimDate.getTime()) ? null : { fimDate, data, horario };
+        const inicioDate = new Date(ano + '-' + mes + '-' + dia + 'T' + inicio + ':00-03:00');
+        const fimDate = new Date(ano + '-' + mes + '-' + dia + 'T' + fim + ':00-03:00');
+        if (Number.isNaN(inicioDate.getTime()) || Number.isNaN(fimDate.getTime())) return null;
+        return { inicioDate, fimDate, data, horario };
     }).filter(Boolean);
-    return candidatos.sort((a, b) => a.fimDate - b.fimDate).at(-1) || null;
+}
+
+function obterFimDoUltimoEvento(agendamento) {
+    return obterEventosCronograma(agendamento).sort((a, b) => a.fimDate - b.fimDate).at(-1) || null;
+}
+
+function obterInicioDoPrimeiroEvento(agendamento) {
+    return obterEventosCronograma(agendamento).sort((a, b) => a.inicioDate - b.inicioDate).at(0) || null;
 }
 
 function ehRascunhoUnificado(agendamento) {
@@ -1614,6 +1629,84 @@ async function processarConfirmacaoNovoRegistro({
     }
 }
 
+
+const DIVULGACAO_MIDIA_ENVIADA_PREFIX = 'divulgacao_midia_enviada:';
+const DIVULGACAO_ANTECEDENCIA_MS = 10 * 24 * 60 * 60 * 1000;
+
+function obterMensagemDivulgacao(configs) {
+    return String(configs?.mensagemDivulgacao || MENSAGEM_DIVULGACAO || MENSAGEM_DIVULGACAO_PADRAO).trim();
+}
+
+function personalizarMensagemDivulgacao(mensagem, nome) {
+    return String(mensagem || MENSAGEM_DIVULGACAO_PADRAO).replace(
+        /\{\{\s*nome(?:\s+do\s+proponente)?\s*\}\}|\[nome(?:\s+do\s+proponente)?\]/gi,
+        nome || 'Proponente'
+    );
+}
+
+function criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }) {
+    const texto = personalizarMensagemDivulgacao(mensagem, nome);
+    const textoHtml = escapeHtml(texto).replace(/\n/g, '<br>');
+    return [
+        '<div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">',
+        '<div style="background:linear-gradient(135deg,#0f766e,#0e7490);padding:24px 28px">',
+        '<h2 style="margin:0;color:#fff;font-size:19px">Divulgação institucional</h2>',
+        '<p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>',
+        '</div>',
+        '<div style="padding:28px">',
+        '<div style="font-size:14px;color:#444;line-height:1.8">' + textoHtml + '</div>',
+        evento ? '<p style="font-size:12px;color:#888;margin-top:24px">Evento: ' + escapeHtml(evento) + '</p>' : '',
+        '<hr style="border:0;border-top:1px solid #eee;margin:24px 0">',
+        '<p style="font-size:11px;color:#aaa;margin:0">UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)</p>',
+        '</div>',
+        '</div>'
+    ].join('');
+}
+
+async function enviarDivulgacaoInstitucional(agendamento, mensagem, origem) {
+    const email = String(agendamento?.email || '').trim().toLowerCase();
+    const nome = agendamento?.nome || agendamento?.termoDados?.nomeCompleto || 'Proponente';
+    const evento = agendamento?.evento || agendamento?.termoDados?.nomeEvento || 'seu evento';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+    const assunto = 'Divulgação institucional — ' + evento + ' — DAC/UFSC';
+    const resultado = await sendEmail(email, assunto, criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }));
+    if (resultado) console.log('✅ [Divulgação] E-mail ' + (origem || 'manual') + ' aceito pelo Brevo para ' + email + '.');
+    return resultado;
+}
+
+async function verificarEnviosAutomaticosDivulgacao() {
+    if (!redis || !process.env.BREVO_API_KEY) return;
+    try {
+        const agora = new Date();
+        const configs = await getConfigs('cron divulgação institucional');
+        const mensagem = obterMensagemDivulgacao(configs);
+        const agendamentos = (await getAgendamentos()).filter(agendamento => !ehRascunhoUnificado(agendamento));
+        for (const agendamento of agendamentos) {
+            const email = String(agendamento.email || '').trim().toLowerCase();
+            if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+            let primeiroEvento = obterInicioDoPrimeiroEvento(agendamento);
+            if (!primeiroEvento && agendamento.isLegada) {
+                const eventosLegados = await buscarDatasCalendarioLegada(agendamento.evento);
+                primeiroEvento = obterInicioDoPrimeiroEvento({ ...agendamento, calendarDates: eventosLegados });
+            }
+            if (!primeiroEvento) continue;
+            const disparoEm = new Date(primeiroEvento.inicioDate.getTime() - DIVULGACAO_ANTECEDENCIA_MS);
+            if (agora < disparoEm) continue;
+            const chave = DIVULGACAO_MIDIA_ENVIADA_PREFIX + agendamento.id + ':' + primeiroEvento.inicioDate.toISOString();
+            if (await redis.get(chave)) continue;
+            const resultado = await enviarDivulgacaoInstitucional(agendamento, mensagem, 'automático');
+            if (!resultado) continue;
+            await redis.set(chave, {
+                status: 'sent', origem: 'automatica', email,
+                enviadoEm: agora.toISOString(),
+                primeiroEvento: primeiroEvento.inicioDate.toISOString(), mensagem
+            });
+        }
+    } catch (error) {
+        console.error('❌ [Divulgação] Erro na verificação automática:', error.message);
+    }
+}
+
 async function verificarEnviosAutomaticosFormulario() {
     if (!redis || !process.env.BREVO_API_KEY) return;
     try {
@@ -1699,6 +1792,7 @@ app.get('/api/cron/verificar-atividades', async (req, res) => {
 
     try {
         await verificarEnviosAutomaticosFormulario();
+        await verificarEnviosAutomaticosDivulgacao();
         return res.json({ success: true });
     } catch (error) {
         console.error('❌ [Cron] Falha ao verificar envios automáticos de atividades:', error.message);
@@ -4246,6 +4340,37 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
                 console.error('❌ [Calendar] Erro geral ao atualizar eventos:', e.message);
             }
         })();
+    }
+});
+
+// Envio manual e registro da mensagem de divulgação institucional.
+app.post('/api/admin/enviar-divulgacao', async (req, res) => {
+    const { id, mensagem } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'ID da inscrição não fornecido.' });
+    try {
+        const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(id));
+        if (!agendamento) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        const email = String(agendamento.email || '').trim().toLowerCase();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+            return res.status(400).json({ error: 'A inscrição não possui um e-mail válido para envio.' });
+        }
+        const configs = await getConfigs('envio manual divulgação institucional');
+        const mensagemFinal = String(mensagem || '').trim() || obterMensagemDivulgacao(configs);
+        const primeiroEvento = obterInicioDoPrimeiroEvento(agendamento);
+        const resultado = await enviarDivulgacaoInstitucional(agendamento, mensagemFinal, 'manual');
+        if (!resultado) return res.status(502).json({ error: 'Não foi possível enviar o e-mail de divulgação.' });
+        if (redis && primeiroEvento) {
+            const chave = DIVULGACAO_MIDIA_ENVIADA_PREFIX + agendamento.id + ':' + primeiroEvento.inicioDate.toISOString();
+            await redis.set(chave, {
+                status: 'sent', origem: 'manual', email,
+                enviadoEm: new Date().toISOString(),
+                primeiroEvento: primeiroEvento.inicioDate.toISOString(), mensagem: mensagemFinal
+            });
+        }
+        res.json({ success: true, email, messageId: resultado.messageId || null });
+    } catch (error) {
+        console.error('❌ [Divulgação] Erro no envio manual:', error.message);
+        res.status(500).json({ error: 'Erro ao enviar o e-mail de divulgação.' });
     }
 });
 
