@@ -3688,6 +3688,12 @@ async function excluirAgendamentoPorId(req, res) {
             return res.status(400).json({ success: false, error: 'ID não fornecido' });
         }
 
+        const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
+        const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+        if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
+            return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
+        }
+
         const agendamentos = await getAgendamentos();
         // Parâmetros de URL são strings; comparar de forma normalizada evita
         // tratar uma inscrição válida como Forms-only quando o ID foi salvo
