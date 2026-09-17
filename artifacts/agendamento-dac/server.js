@@ -1021,6 +1021,7 @@ const escapeHtml = (value) => String(value ?? '')
 
 const REGISTRO_ATIVIDADES_ENVIADO_PREFIX = 'registro_atividades_link_enviado:';
 const ATIVIDADES_CONFIRMACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
+const DIVULGACAO_DAC_EMAIL = 'pautas.dac@contato.ufsc.br';
 const ATIVIDADES_ATRASO_INICIAL_MS = 10 * 60 * 1000;
 const ATIVIDADES_INTERVALO_REENVIO_MS = 10 * 60 * 1000;
 const ATIVIDADES_MAX_TENTATIVAS = 3;
@@ -1646,7 +1647,10 @@ function personalizarMensagemDivulgacao(mensagem, nome) {
 
 function criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }) {
     const texto = personalizarMensagemDivulgacao(mensagem, nome);
-    const textoHtml = escapeHtml(texto).replace(/\n/g, '<br>');
+    const textoHtml = escapeHtml(texto)
+        .replace(/divulgadac@contato\.ufsc\.br/gi, matched => '<a href=\"mailto:divulgadac@contato.ufsc.br\" style=\"color:#0e7490;font-weight:600;text-decoration:underline\">' + matched + '</a>')
+        .replace(/ivo\.caoe@ufsc\.br/gi, matched => '<a href=\"mailto:ivo.caoe@ufsc.br\" style=\"color:#0e7490;font-weight:600;text-decoration:underline\">' + matched + '</a>')
+        .replace(/\n/g, '<br>');
     return [
         '<div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">',
         '<div style="background:linear-gradient(135deg,#0f766e,#0e7490);padding:24px 28px">',
@@ -1663,6 +1667,27 @@ function criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }) {
     ].join('');
 }
 
+function criarHtmlAvisoDivulgacaoParaDac({ nome, email, evento, origem, enviadoEm }) {
+    const origemTexto = origem === 'automático'
+        ? 'automático — disparo de 10 dias antes'
+        : (origem || 'manual');
+    return '<div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">'
+        + '<div style="background:linear-gradient(135deg,#0f766e,#0e7490);padding:24px 28px">'
+        + '<h2 style="margin:0;color:#fff;font-size:19px">Aviso de divulgação institucional</h2>'
+        + '<p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">DAC — acompanhamento de envios</p>'
+        + '</div>'
+        + '<div style="padding:28px;font-size:14px;color:#444;line-height:1.8">'
+        + '<p>O email de divulgação institucional foi enviado ao proponente.</p>'
+        + '<p><strong>Proponente:</strong> ' + escapeHtml(nome) + '<br>'
+        + '<strong>Email:</strong> <a href="mailto:' + escapeHtml(email) + '">' + escapeHtml(email) + '</a><br>'
+        + '<strong>Evento:</strong> ' + escapeHtml(evento) + '<br>'
+        + '<strong>Origem:</strong> ' + escapeHtml(origemTexto) + '<br>'
+        + '<strong>Enviado em:</strong> ' + escapeHtml(enviadoEm) + '</p>'
+        + '<hr style="border:0;border-top:1px solid #eee;margin:24px 0">'
+        + '<p style="font-size:11px;color:#aaa;margin:0">UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)</p>'
+        + '</div></div>';
+}
+
 async function enviarDivulgacaoInstitucional(agendamento, mensagem, origem) {
     const email = String(agendamento?.email || '').trim().toLowerCase();
     const nome = agendamento?.nome || agendamento?.termoDados?.nomeCompleto || 'Proponente';
@@ -1670,7 +1695,20 @@ async function enviarDivulgacaoInstitucional(agendamento, mensagem, origem) {
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
     const assunto = 'Divulgação institucional — ' + evento + ' — DAC/UFSC';
     const resultado = await sendEmail(email, assunto, criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }));
-    if (resultado) console.log('✅ [Divulgação] E-mail ' + (origem || 'manual') + ' aceito pelo Brevo para ' + email + '.');
+    if (!resultado) return null;
+    const enviadoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    const avisoAssunto = 'Aviso: divulgação institucional enviada — ' + evento + ' — DAC/UFSC';
+    const aviso = await sendEmail(
+        DIVULGACAO_DAC_EMAIL,
+        avisoAssunto,
+        criarHtmlAvisoDivulgacaoParaDac({ nome, email, evento, origem, enviadoEm })
+    );
+    if (aviso) {
+        console.log('✅ [Divulgação] Aviso de envio encaminhado para ' + DIVULGACAO_DAC_EMAIL + '.');
+    } else {
+        console.error('❌ [Divulgação] O email ao proponente foi aceito, mas o aviso para ' + DIVULGACAO_DAC_EMAIL + ' falhou.');
+    }
+    console.log('✅ [Divulgação] E-mail ' + (origem || 'manual') + ' aceito pelo Brevo para ' + email + '.');
     return resultado;
 }
 
