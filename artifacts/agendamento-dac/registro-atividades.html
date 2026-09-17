@@ -203,7 +203,7 @@
                 <div id="adminNote" class="admin-note hidden"></div>
                 <div id="completedNote" class="completed-note"></div>
                 <div class="admin-top-actions">
-                    <button id="btnEnviarAdmin" type="button" class="btn-blue hidden" onclick="enviarLinkAdmin()">
+                    <button id="btnEnviarAdmin" type="button" class="btn-blue hidden" style="display:none" onclick="enviarLinkAdmin()">
                         <i class="fa-solid fa-paper-plane"></i> Enviar formulário ao proponente
                     </button>
                 </div>
@@ -264,6 +264,10 @@
         const params = new URLSearchParams(window.location.search);
         const id = params.get('id') || '';
         const isAdmin = params.get('admin') === '1';
+        // Fluxo manual/legado preservado para emergência, mas desativado para
+        // evitar um segundo envio ao proponente.
+        // Palavra-chave de reativação: REATIVAR_AVIAO_ROXO_ATIVIDADES
+        const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = false;
         let currentData = null;
         const MAX_FILES = 5;
         let selectedFiles = [];
@@ -448,7 +452,8 @@
                 : '';
             ['autores', 'observacao', 'sugestao'].forEach(field => $(field).disabled = !editavel);
             $('btnEnviar').classList.toggle('hidden', !editavel);
-            $('btnEnviarAdmin').classList.toggle('hidden', !isAdmin || concluido);
+            $('btnEnviarAdmin').classList.toggle('hidden', !ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO || !isAdmin || concluido);
+            $('btnEnviarAdmin').style.display = ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO && isAdmin && !concluido ? '' : 'none';
             $('btnPDF').classList.toggle('hidden', !concluido);
             $('btnZip').classList.toggle('hidden', !isAdmin || !Array.isArray(registro.arquivos) || !registro.arquivos.length);
             if (isAdmin && concluido) showStatus('Registro preenchido disponível para consulta e download.', 'success');
@@ -478,6 +483,10 @@
         }
 
         async function enviarLinkAdmin() {
+            if (!ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO) {
+                showStatus('O envio manual legado está desativado. O sistema enviará o registro automaticamente após o evento.', 'error');
+                return;
+            }
             const btn = $('btnEnviarAdmin');
             const original = btn.innerHTML;
             btn.disabled = true;

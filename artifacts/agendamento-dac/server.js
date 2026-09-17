@@ -1019,6 +1019,11 @@ const ATIVIDADES_MAX_TENTATIVAS = 3;
 const ATIVIDADES_GOOGLE_TIMEOUT_MS = 10000;
 const ATIVIDADES_LEGADAS_TIMEOUT_MS = 12000;
 
+// Fluxo manual/legado do avião roxo. Mantido para emergência, mas desligado
+// para impedir que o proponente receba um segundo e-mail além do envio automático.
+// Palavra-chave de reativação: REATIVAR_AVIAO_ROXO_ATIVIDADES
+const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = false;
+
 function executarComPrazo(operacao, prazoMs, descricao) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -2413,6 +2418,12 @@ app.get('/api/registro-atividades/:id/arquivos.zip', async (req, res) => {
 });
 
 app.post('/api/admin/enviar-registro-atividades', async (req, res) => {
+    if (!ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO) {
+        return res.status(410).json({
+            error: 'O envio manual legado de atividades está desativado. O envio automático pelo cron permanece ativo.'
+        });
+    }
+
     const { id, baseUrl } = req.body || {};
     const idNormalizado = String(id || '').trim();
     const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
