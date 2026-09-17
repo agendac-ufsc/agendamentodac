@@ -4351,11 +4351,28 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
             </p>
         </div>`;
 
+        const htmlAdmin = `
+        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px;text-align:center">
+                <h2 style="margin:0;color:#fff;font-size:19px">Termo de Autorização enviado</h2>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Notificação administrativa — DAC/UFSC</p>
+            </div>
+            <div style="padding:28px">
+                <p style="font-size:15px;margin-top:0">O Termo de Autorização foi enviado ao proponente para leitura e assinatura digital.</p>
+                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                    <p style="margin:0 0 8px;font-size:13px;color:#555"><strong>Proponente:</strong> ${escapeHtml(nome || 'N/A')}</p>
+                    <p style="margin:0 0 8px;font-size:13px;color:#555"><strong>E-mail:</strong> ${escapeHtml(email)}</p>
+                    <p style="margin:0 0 8px;font-size:13px;color:#555"><strong>Evento:</strong> ${escapeHtml(evento || 'N/A')}</p>
+                    <p style="margin:0;font-size:13px;color:#555"><strong>Local:</strong> ${escapeHtml(localNome)}</p>
+                </div>
+                <p style="font-size:13px;color:#555;line-height:1.6;margin:0">A mensagem completa, com o link para abrir o termo, foi encaminhada somente ao proponente.</p>
+            </div>
+        </div>`;
+
         try {
-            const resp = await axios.post('https://api.brevo.com/v3/smtp/email', {
+            await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: BREVO_SENDER_NAME, email: senderEmail },
                 to: [{ email: email, name: nome || email }],
-                cc: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
                 replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
                 subject: `Termo de Autorização — ${evento || 'Seu Projeto'} — DAC/UFSC`,
                 htmlContent
@@ -4364,6 +4381,20 @@ app.post('/api/enviar-termos-digitais', async (req, res) => {
             });
             enviados++;
             console.log(`✅ Termo enviado para ${email}`);
+            try {
+                await axios.post('https://api.brevo.com/v3/smtp/email', {
+                    sender: { name: BREVO_SENDER_NAME, email: senderEmail },
+                    to: [{ email: 'pautas.dac@contato.ufsc.br', name: 'DAC - UFSC' }],
+                    replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
+                    subject: `📩 Termo enviado: ${evento || 'Seu Projeto'} — ${nome || ''} — DAC/UFSC`,
+                    htmlContent: htmlAdmin
+                }, {
+                    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }
+                });
+                console.log(`✅ Notificação administrativa do termo enviada para ${email}`);
+            } catch (adminError) {
+                console.error(`⚠️ Termo enviado para ${email}, mas a notificação ao DAC falhou:`, adminError.response?.data || adminError.message);
+            }
         } catch (e) {
             erros++;
             console.error(`❌ Erro ao enviar termo para ${email}:`, e.response?.data || e.message);
@@ -4689,19 +4720,49 @@ app.post('/api/enviar-links-termo', async (req, res) => {
             'Em caso de dúvidas, entre em contato com pautas.dac@contato.ufsc.br.'
         ].join('\n');
 
+        const htmlAdmin = `
+        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
+            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px;text-align:center">
+                <h2 style="margin:0;color:#fff;font-size:19px">Termo Digital enviado</h2>
+                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Notificação administrativa — DAC/UFSC</p>
+            </div>
+            <div style="padding:28px">
+                <p style="font-size:15px;margin-top:0">O link do Termo Digital foi enviado ao proponente para conferência e assinatura.</p>
+                <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
+                    <p style="margin:0 0 8px;font-size:13px;color:#555"><strong>Proponente:</strong> ${escapeHtml(nome || 'N/A')}</p>
+                    <p style="margin:0 0 8px;font-size:13px;color:#555"><strong>E-mail:</strong> ${escapeHtml(emailDestino)}</p>
+                    <p style="margin:0 0 8px;font-size:13px;color:#555"><strong>Evento:</strong> ${escapeHtml(evento || 'N/A')}</p>
+                    <p style="margin:0;font-size:13px;color:#555"><strong>Local:</strong> ${escapeHtml(localExibir)}</p>
+                </div>
+                <p style="font-size:13px;color:#555;line-height:1.6;margin:0">A mensagem completa, com o link para abrir o termo, foi encaminhada somente ao proponente.</p>
+            </div>
+        </div>`;
+
         try {
             const respostaBrevo = await axios.post('https://api.brevo.com/v3/smtp/email', {
                 sender: { name: BREVO_SENDER_NAME, email: senderEmail },
                 to: [{ email: emailDestino, name: nome || emailDestino }],
-                cc: [{ email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME }],
                 replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
                 subject: `Seu Termo Digital — ${evento || 'Projeto DAC'} — DAC/UFSC`,
                 htmlContent,
                 textContent
             }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+            let dacEmailSent = true;
+            try {
+                await axios.post('https://api.brevo.com/v3/smtp/email', {
+                    sender: { name: BREVO_SENDER_NAME, email: senderEmail },
+                    to: [{ email: BREVO_REPLY_TO, name: 'DAC - UFSC' }],
+                    replyTo: { email: BREVO_REPLY_TO, name: BREVO_SENDER_NAME },
+                    subject: `📩 Termo Digital enviado: ${evento || 'Projeto DAC'} — ${nome || ''} — DAC/UFSC`,
+                    htmlContent: htmlAdmin
+                }, { headers: { 'api-key': apiKey, 'Content-Type': 'application/json' } });
+            } catch (adminError) {
+                dacEmailSent = false;
+                console.error(`⚠️ Termo Digital enviado para ${emailDestino}, mas a notificação ao DAC falhou:`, adminError.response?.data || adminError.message);
+            }
             enviados++;
-            detalhes.push({ email: emailDestino, id, nome, evento, status: 'enviado' });
-            console.log(`✅ Link do termo aceito pelo Brevo para ${emailDestino} (inscrição ${id}) — messageId: ${respostaBrevo.data?.messageId || 'não informado'}`);
+            detalhes.push({ email: emailDestino, id, nome, evento, status: 'enviado', dacEmailSent });
+            console.log(`✅ Link do termo aceito pelo Brevo para ${emailDestino} (inscrição ${id}) — messageId: ${respostaBrevo.data?.messageId || 'não informado'}; notificação administrativa: ${dacEmailSent ? 'enviada' : 'falhou'}`);
         } catch (e) {
             erros++;
             detalhes.push({ email: emailDestino, id, nome, evento, status: 'erro', msg: e.response?.data?.message || e.message });
