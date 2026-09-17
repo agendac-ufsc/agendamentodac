@@ -1018,6 +1018,8 @@ const ATIVIDADES_INTERVALO_REENVIO_MS = 10 * 60 * 1000;
 const ATIVIDADES_MAX_TENTATIVAS = 3;
 const ATIVIDADES_GOOGLE_TIMEOUT_MS = 10000;
 const ATIVIDADES_LEGADAS_TIMEOUT_MS = 12000;
+// Se o envio ocorrer no dia 17, seis dias corridos resultam no prazo do dia 23.
+const ATIVIDADES_PRAZO_DIAS_CORRIDOS = 6;
 
 // Fluxo manual/legado do avião roxo. Mantido para emergência, mas desligado
 // para impedir que o proponente receba um segundo e-mail além do envio automático.
@@ -1051,6 +1053,12 @@ function adicionarDiasUteisServidor(dataInicial, quantidade) {
         const dia = data.getDay();
         if (dia !== 0 && dia !== 6) adicionados++;
     }
+    return data;
+}
+
+function adicionarDiasCorridosServidor(dataInicial, quantidade) {
+    const data = new Date(dataInicial);
+    data.setDate(data.getDate() + quantidade);
     return data;
 }
 
@@ -1366,25 +1374,39 @@ function criarHtmlLinkRegistroAtividadesAutomatico({ nome, evento, prazo, link, 
         <div style="padding:26px 28px">
             <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>!</p>
             <p style="font-size:14px;color:#555;line-height:1.7">
-                Como o evento <strong>${escapeHtml(evento || 'seu evento')}</strong> foi encerrado,
-                solicitamos o preenchimento do Registro de atividades.
+                Conforme previsto no item 13.1.9 do Edital de Ocupação dos Espaços do DAC,
+                solicitamos, por gentileza, o envio de informações complementares sobre a realização
+                do evento <strong>${escapeHtml(evento || 'seu evento')}</strong> no DAC, para fins de
+                elaboração do relatório das atividades realizadas, incluindo dados como número total de
+                público, registros fotográficos, ocorrências, sugestões e demais observações.
             </p>
             <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:14px 16px;margin:20px 0;font-size:13px;line-height:1.7">
                 <strong>Término considerado:</strong>
                 ${escapeHtml(ultimoEvento?.data || 'Data não informada')}
                 ${ultimoEvento?.horario ? ` — ${escapeHtml(ultimoEvento.horario)}` : ''}
             </div>
+            <p style="font-size:14px;color:#555;line-height:1.7">
+                As informações deverão ser encaminhadas por meio do preenchimento do formulário
+                disponível no botão abaixo:
+            </p>
             <div style="text-align:center;margin:24px 0">
                 <a href="${escapeHtml(link)}" style="display:inline-block;background:#764ba2;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:8px">Preencher registro de atividades</a>
             </div>
             <p style="font-size:13px;color:#666">Pedimos que o formulário seja preenchido até o dia <strong>${escapeHtml(prazo)}</strong>.</p>
-            <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato com
-                <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>.
+            <p style="font-size:13px;color:#555;line-height:1.7">
+                Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já,
+                pela colaboração.
             </p>
             <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
-            <p style="font-size:11px;color:#aaa">
-                UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
-                Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
+            <p style="font-size:13px;color:#555;line-height:1.7;margin-bottom:0">
+                Atenciosamente,<br><br>
+                Comissão de Pauta<br>
+                Departamento Artístico Cultural<br>
+                Secretaria de Cultura, Arte e Esporte<br>
+                Universidade Federal de Santa Catarina<br><br>
+                <span style="font-size:12px;color:#777">
+                    Dúvidas: <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>
+                </span>
             </p>
         </div>
     </div>`;
@@ -1409,7 +1431,7 @@ async function enviarRegistroAtividadesAutomatico(agendamento, ultimoEvento, ago
     const link = `${origin}/registro-atividades?id=${encodeURIComponent(id)}`;
     const nome = agendamento.nome || agendamento.termoDados?.nomeCompleto || 'Proponente';
     const evento = agendamento.evento || agendamento.termoDados?.nomeEvento || 'Seu evento';
-    const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(agora, 5));
+    const prazo = formatarDataBrasileiraServidor(adicionarDiasCorridosServidor(agora, ATIVIDADES_PRAZO_DIAS_CORRIDOS));
     const resultado = await sendEmail(
         email,
         `Registro de atividades — ${evento} — DAC/UFSC`,
@@ -2448,50 +2470,44 @@ app.post('/api/admin/enviar-registro-atividades', async (req, res) => {
         const link = `${origin}/registro-atividades?id=${encodeURIComponent(idNormalizado)}`;
         const nome = inscricao.nome || inscricao.termoDados?.nomeCompleto || 'Proponente';
         const evento = inscricao.evento || inscricao.termoDados?.nomeEvento || 'Seu evento';
-        const prazo = formatarDataBrasileiraServidor(adicionarDiasUteisServidor(new Date(), 5));
+        const prazo = formatarDataBrasileiraServidor(
+            adicionarDiasCorridosServidor(new Date(), ATIVIDADES_PRAZO_DIAS_CORRIDOS)
+        );
+        const ultimoEvento = obterFimDoUltimoEvento(inscricao);
         const nomeSeguro = escapeHtml(nome);
         const eventoSeguro = escapeHtml(evento);
         const emailSeguro = escapeHtml(email);
-        const linkSeguro = escapeHtml(link);
 
-        const htmlProponente = `
-        <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
-            <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
-                <h2 style="margin:0;color:#fff;font-size:19px">Registro de atividades</h2>
-                <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">UFSC — Departamento Artístico Cultural (DAC)</p>
-            </div>
-            <div style="padding:26px 28px">
-                <p style="font-size:15px">Olá, <strong>${nomeSeguro}</strong>!</p>
-                <p style="font-size:14px;color:#555;line-height:1.7">
-                    Conforme previsto no item 13.1.9 do Edital de Ocupação dos Espaços do DAC,
-                    solicitamos o preenchimento do Registro de atividades referente ao evento
-                    <strong>${eventoSeguro}</strong>.
-                </p>
-                <div style="text-align:center;margin:24px 0">
-                    <a href="${linkSeguro}" style="display:inline-block;background:#764ba2;color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:8px">Preencher registro de atividades</a>
-                </div>
-                <p style="font-size:13px;color:#666">Pedimos que o formulário seja preenchido até o dia <strong>${escapeHtml(prazo)}</strong>.</p>
-                <p style="font-size:13px;color:#555">Em caso de dúvidas, entre em contato com
-                    <a href="mailto:pautas.dac@contato.ufsc.br" style="color:#764ba2;font-weight:bold">pautas.dac@contato.ufsc.br</a>.
-                </p>
-                <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
-                <p style="font-size:11px;color:#aaa">
-                    UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
-                    Rua Desembargador Vitor Lima, 117 — Trindade — CEP 88040-400 — Florianópolis/SC
-                </p>
-            </div>
-        </div>`;
+        const htmlProponente = criarHtmlLinkRegistroAtividadesAutomatico({
+            nome,
+            evento,
+            prazo,
+            link,
+            ultimoEvento
+        });
         const textProponente = [
             `Olá, ${nome}!`,
             '',
-            `Solicitamos o preenchimento do Registro de atividades referente ao evento ${evento}.`,
+            'Conforme previsto no item 13.1.9 do Edital de Ocupação dos Espaços do DAC,',
+            `solicitamos, por gentileza, o envio de informações complementares sobre a realização do evento ${evento} no DAC,`,
+            'para fins de elaboração do relatório das atividades realizadas, incluindo dados como número total de público,',
+            'registros fotográficos, ocorrências, sugestões e demais observações.',
             '',
-            'Acesse o formulário:',
+            'As informações deverão ser encaminhadas por meio do preenchimento do formulário disponível no link abaixo:',
             link,
             '',
             `Pedimos que o formulário seja preenchido até o dia ${prazo}.`,
             '',
-            'Em caso de dúvidas, entre em contato com pautas.dac@contato.ufsc.br.'
+            'Permanecemos à disposição para quaisquer esclarecimentos e agradecemos, desde já, pela colaboração.',
+            '',
+            'Atenciosamente,',
+            '',
+            'Comissão de Pauta',
+            'Departamento Artístico Cultural',
+            'Secretaria de Cultura, Arte e Esporte',
+            'Universidade Federal de Santa Catarina',
+            '',
+            'Dúvidas: pautas.dac@contato.ufsc.br.'
         ].join('\n');
 
         await axios.post('https://api.brevo.com/v3/smtp/email', {
