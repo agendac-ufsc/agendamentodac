@@ -503,7 +503,12 @@
                         <textarea id="cfgMensagemBotoesDesativados" class="form-input" rows="3" maxlength="300" placeholder="Ex: As inscrições estão encerradas no momento." style="resize:vertical;font-size:13px"></textarea>
                         <p style="font-size:11px;color:#999;margin:4px 0 0">Esta mensagem aparece em um aviso quando o proponente clicar em um botão desativado.</p>
                     </div>
-                     <div style="margin-top:14px;padding:12px 14px;background:#fff;border:1px solid #eef0f3;border-radius:10px">
+                     <div style="margin-top:14px;padding:12px 14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px">
+                         <label class="form-label" style="font-size:13px;color:#115e59;font-weight:600;margin-bottom:6px;display:block"><i class="fas fa-bullhorn" style="color:#0f766e;margin-right:6px"></i>Mensagem de divulgação institucional</label>
+                         <textarea id="cfgMensagemDivulgacao" class="form-input" rows="7" maxlength="2000" placeholder="Use {{nome}} para inserir o nome do proponente." style="resize:vertical;font-size:13px"></textarea>
+                         <p style="font-size:11px;color:#5f6f73;margin:5px 0 0;line-height:1.45">Este texto será usado no ícone de divulgação e no envio automático 10 dias antes do primeiro evento. Use <strong>{{nome}}</strong> onde o nome do proponente deve aparecer.</p>
+                     </div>
+<div style="margin-top:14px;padding:12px 14px;background:#fff;border:1px solid #eef0f3;border-radius:10px">
                          <div class="home-btn-head">
                              <div>
                                  <label class="form-label" style="font-size:13px;color:#333;font-weight:600;margin:0;display:block">Mostrar botões desativados na página inicial</label>
@@ -641,6 +646,36 @@
             <button class="btn-close-modal" onclick="closeModal('modalEmailRapido')">Cancelar</button>
             <button id="btnEnviarEmailRapido" class="btn-save-modal" style="background:#764ba2" onclick="sendEmailRapido()">
                 <i class="fas fa-paper-plane"></i> Enviar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════ MODAL DIVULGAÇÃO INSTITUCIONAL ═══ -->
+<div class="modal" id="modalDivulgacao">
+    <div class="modal-box" style="max-width:680px;border-top:4px solid #0f766e">
+        <h3><i class="fas fa-bullhorn" style="color:#0f766e"></i> Divulgação institucional</h3>
+        <div style="font-size:12px;color:#5f6f73;margin:-8px 0 16px;padding:10px 12px;background:#f0fdfa;border-radius:6px;border-left:3px solid #0f766e;line-height:1.5">
+            <i class="fas fa-info-circle"></i> O envio automático acontece uma vez, 10 dias antes do primeiro evento da inscrição. O texto abaixo pode ser ajustado antes de um envio manual.
+        </div>
+        <div class="form-field">
+            <label>Proponente</label>
+            <input type="text" id="divulgacaoParaNome" class="form-input" readonly style="background:#f5f5f5;color:#666;cursor:default">
+        </div>
+        <div class="form-field">
+            <label>E-mail de destino</label>
+            <input type="text" id="divulgacaoParaEmail" class="form-input" readonly style="background:#f5f5f5;color:#666;cursor:default">
+        </div>
+        <div class="form-field">
+            <label>Mensagem</label>
+            <textarea id="divulgacaoMensagem" class="form-input" rows="10" maxlength="2000" style="resize:vertical;font-family:inherit;font-size:14px;line-height:1.55"></textarea>
+            <p style="font-size:11px;color:#888;margin:5px 0 0">A versão salva nas Configurações usa <strong>{{nome}}</strong>; aqui o nome já aparece preenchido para este envio.</p>
+        </div>
+        <div id="divulgacaoStatus" style="font-size:13px;margin-bottom:8px;min-height:18px"></div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" onclick="closeModal('modalDivulgacao')">Cancelar</button>
+            <button id="btnEnviarDivulgacao" class="btn-save-modal" style="background:#0f766e" onclick="enviarDivulgacaoManual()">
+                <i class="fas fa-paper-plane"></i> Enviar ao proponente
             </button>
         </div>
     </div>
@@ -1233,6 +1268,7 @@ function renderTabela() {
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" onclick="abrirRegistroAtividades(${originalIndex})" style="color:${registroAtividadesColor}"><i class="fas ${registroAtividadesIcon}"></i></button>
              ${ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO ? `<button class="btn-action" title="Enviar link do Registro de atividades ao proponente" aria-label="Enviar link do Registro de atividades ao proponente" onclick="enviarLinkRegistroAtividades(${originalIndex}, this)" style="color:#764ba2"><i class="fas fa-paper-plane"></i></button>` : ''}
+            <button class="btn-action" title="Enviar divulgação institucional ao proponente (automático 10 dias antes do primeiro evento)" aria-label="Enviar divulgação institucional" onclick="abrirDivulgacao(${originalIndex})" style="color:#0f766e"><i class="fas fa-bullhorn"></i></button>
             ${documentosBtn}
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
@@ -1905,6 +1941,74 @@ async function salvarEtapas() {
         status.style.color = '#dc2626';
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-save"></i> Salvar Alterações';
+    }
+}
+
+
+const MENSAGEM_DIVULGACAO_PADRAO_ADMIN = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento contendo as informações essenciais (o quê, onde, quando e quanto custa) para os seguintes e-mails: divulgadac@contato.ufsc.br e  ivo.caoe@ufsc.br\n\nRessaltamos que esse envio deve ocorrer com, no mínimo, 7 (sete) dias de antecedência em relação à data de realização do evento, a fim de viabilizar sua inclusão em nossas mídias.\nEm caso de dúvidas sobre o processo de divulgação, solicitamos que o contato seja feito diretamente com os e-mails informados acima.";
+let _divulgacaoData = {};
+
+function personalizarMensagemDivulgacaoAdmin(mensagem, nome) {
+    return String(mensagem || MENSAGEM_DIVULGACAO_PADRAO_ADMIN).replace(
+        /\{\{\s*nome(?:\s+do\s+proponente)?\s*\}\}|\[nome(?:\s+do\s+proponente)?\]/gi,
+        nome || 'Proponente'
+    );
+}
+
+async function abrirDivulgacao(idx) {
+    if (userRole !== 'admin') return;
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p?.id) {
+        alert('Esta inscrição não possui um ID individual para o envio.');
+        return;
+    }
+    _divulgacaoData = { id: String(p.id), email: p.email || '', nome: p.nome || 'Proponente' };
+    document.getElementById('divulgacaoParaNome').value = _divulgacaoData.nome;
+    document.getElementById('divulgacaoParaEmail').value = _divulgacaoData.email;
+    document.getElementById('divulgacaoMensagem').value = 'Carregando mensagem...';
+    document.getElementById('divulgacaoStatus').textContent = '';
+    document.getElementById('btnEnviarDivulgacao').disabled = false;
+    document.getElementById('btnEnviarDivulgacao').innerHTML = '<i class="fas fa-paper-plane"></i> Enviar ao proponente';
+    openModal('modalDivulgacao');
+    try {
+        const r = await fetch('/api/config?_=' + Date.now(), { cache: 'no-store' });
+        const c = await r.json();
+        document.getElementById('divulgacaoMensagem').value = personalizarMensagemDivulgacaoAdmin(c.mensagemDivulgacao, _divulgacaoData.nome);
+    } catch (e) {
+        document.getElementById('divulgacaoMensagem').value = personalizarMensagemDivulgacaoAdmin(MENSAGEM_DIVULGACAO_PADRAO_ADMIN, _divulgacaoData.nome);
+    }
+}
+
+async function enviarDivulgacaoManual() {
+    const mensagem = document.getElementById('divulgacaoMensagem').value.trim();
+    const status = document.getElementById('divulgacaoStatus');
+    const btn = document.getElementById('btnEnviarDivulgacao');
+    if (!mensagem) {
+        status.textContent = 'Preencha a mensagem antes de enviar.';
+        status.style.color = '#dc2626';
+        return;
+    }
+    if (!confirm('Enviar a mensagem de divulgação para ' + _divulgacaoData.email + '?')) return;
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+    status.textContent = '';
+    try {
+        const r = await fetch('/api/admin/enviar-divulgacao', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: _divulgacaoData.id, mensagem })
+        });
+        const data = await r.json();
+        if (!r.ok || !data.success) throw new Error(data.error || 'Falha no envio.');
+        status.textContent = '✅ E-mail enviado com sucesso para o proponente.';
+        status.style.color = '#16a34a';
+        btn.innerHTML = '<i class="fas fa-check"></i> Enviado';
+        setTimeout(() => closeModal('modalDivulgacao'), 1800);
+    } catch (e) {
+        status.textContent = '❌ ' + e.message;
+        status.style.color = '#dc2626';
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar ao proponente';
     }
 }
 
@@ -2660,6 +2764,8 @@ async function loadConfigs() {
         setChk('cfgBtnEnsaioAtivo',  en.ativo); set('cfgBtnEnsaioTexto',  en.texto || 'Agendar Apenas Ensaio'); set('cfgBtnEnsaioDataInicio', en.dataInicio || '');
         const msgEl = document.getElementById('cfgMensagemBotoesDesativados');
         if (msgEl) msgEl.value = c.mensagemBotoesDesativados || 'As inscrições estão encerradas no momento.';
+        const msgDivulgacao = document.getElementById('cfgMensagemDivulgacao');
+        if (msgDivulgacao) msgDivulgacao.value = c.mensagemDivulgacao || MENSAGEM_DIVULGACAO_PADRAO_ADMIN;
          setChk('cfgMostrarBotoesDesativados', c.mostrarBotoesDesativados !== false);
         const disp = document.getElementById('cfgDisputa');
         if (disp) disp.checked = c.permitirDisputa !== false;
@@ -2764,6 +2870,7 @@ async function saveConfigs() {
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
         responsavelTermoNome: (document.getElementById('termoResponsavelNome')?.value || '').trim() || 'Andréa Búrigo Ventura',
         mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',
+        mensagemDivulgacao: (document.getElementById('cfgMensagemDivulgacao')?.value || '').trim() || MENSAGEM_DIVULGACAO_PADRAO_ADMIN,
          mostrarBotoesDesativados: document.getElementById('cfgMostrarBotoesDesativados')?.checked !== false,
         botoesHome: {
             interno: { ativo: !!document.getElementById('cfgBtnInternoAtivo')?.checked, texto: (document.getElementById('cfgBtnInternoTexto')?.value || '').trim() || 'Edital Interno', dataInicio: (document.getElementById('cfgBtnInternoDataInicio')?.value || '') || null },
