@@ -3204,20 +3204,19 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                         const htmlAdmin = `
                         <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
                             <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 30px;text-align:center">
-                                <h2 style="margin:0;color:#fff;font-size:19px">Nova Inscrição Completa — DAC/UFSC</h2>
-                                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Etapas 1 e 2 concluídas</p>
+                                <h2 style="margin:0;color:#fff;font-size:19px">Confirmação de inscrição enviada</h2>
+                                <p style="margin:6px 0 0;color:rgba(255,255,255,.8);font-size:13px">Notificação administrativa — DAC/UFSC</p>
                             </div>
                             <div style="padding:28px 30px">
-                                <p style="font-size:15px;margin-top:0">Uma nova inscrição foi concluída com as duas etapas preenchidas:</p>
+                                <p style="font-size:15px;margin-top:0">A inscrição foi concluída com as duas etapas preenchidas, e o e-mail de confirmação foi enviado ao proponente.</p>
                                 <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:0 0 20px">
-                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Proponente:</strong> ${p.nome || 'N/A'}</p>
-                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>E-mail:</strong> ${p.email || 'N/A'}</p>
-                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Telefone:</strong> ${p.telefone || 'N/A'}</p>
-                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Nome do Evento:</strong> ${p.evento || 'N/A'}</p>
-                                    <p style="margin:0;font-size:13px;color:#555"><strong>Local:</strong> ${localNomeResolvido}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Proponente:</strong> ${escapeHtml(p.nome || 'N/A')}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>E-mail:</strong> ${escapeHtml(p.email || 'N/A')}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Telefone:</strong> ${escapeHtml(p.telefone || 'N/A')}</p>
+                                    <p style="margin:0 0 6px;font-size:13px;color:#555"><strong>Nome do evento:</strong> ${escapeHtml(p.evento || 'N/A')}</p>
+                                    <p style="margin:0;font-size:13px;color:#555"><strong>Local:</strong> ${escapeHtml(localNomeResolvido)}</p>
                                 </div>
-                                <p style="font-size:14px;font-weight:600;margin-bottom:6px">Cronograma solicitado:</p>
-                                ${tabelaEtapas}
+                                <p style="font-size:13px;color:#555;line-height:1.6;margin:0">O comprovante completo permanece no e-mail encaminhado ao proponente. A inscrição também foi registrada no sistema e os eventos foram sincronizados com o calendário.</p>
                                 <hr style="border:0;border-top:1px solid #eee;margin:24px 0">
                                 <p style="font-size:11px;color:#aaa;text-align:center">
                                     UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)<br>
@@ -3227,7 +3226,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                         </div>`;
                         sendEmail(
                             'pautas.dac@contato.ufsc.br',
-                            `📋 Inscrição Completa: ${p.evento || 'Novo Projeto'} — ${p.nome || ''} — DAC/UFSC`,
+                            `📩 Confirmação enviada: ${p.evento || 'Novo Projeto'} — ${p.nome || ''} — DAC/UFSC`,
                             htmlAdmin
                         ).catch(err => console.error(`⚠️ [E-mail] Erro ao notificar admin sobre inscrição completa:`, err.message));
 
