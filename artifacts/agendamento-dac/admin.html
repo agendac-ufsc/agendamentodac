@@ -116,6 +116,9 @@
         .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
         .modal-confirm-box{width:90%;max-width:470px;border-top:4px solid #764ba2;padding:26px 28px}
         .modal-confirm-box.modal-confirm-danger{border-top-color:#dc2626}
+        .modal-confirm-box.modal-confirm-success{border-top-color:#0f766e}
+        .modal-confirm-success .modal-confirm-icon{background:#ccfbf1;color:#0f766e}
+        .modal-confirm-success .btn-save-modal{background:#0f766e}
         .modal-confirm-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#ede9fe;color:#764ba2;font-size:20px;margin-bottom:12px}
         .modal-confirm-danger .modal-confirm-icon{background:#fee2e2;color:#dc2626}
         .modal-confirm-box h3{border:0;margin:0 0 10px;padding:0;color:#374151}
@@ -2284,7 +2287,7 @@ async function confirmDeleteAllInscricoes() {
                 throw new Error(body.error || 'Senha administrativa incorreta.');
             }
             closeExcluirTudoModal();
-            alert(quantidadeExcluida + ' inscrição(ão) selecionada(s) excluída(s) com sucesso.');
+            await showConfirmDialog(quantidadeExcluida + ' inscrição(ão) selecionada(s) excluída(s) com sucesso.', { title: 'Exclusão concluída', confirmLabel: 'OK', hideCancel: true, success: true });
         } else {
             const r = await fetch('/api/admin/excluir-tudo', {
                 method: 'DELETE',
@@ -2296,11 +2299,11 @@ async function confirmDeleteAllInscricoes() {
                 throw new Error(body.error || 'Senha administrativa incorreta.');
             }
             closeExcluirTudoModal();
-            alert('Limpeza iniciada. Atualize em alguns segundos.');
+            await showConfirmDialog('Limpeza iniciada. Atualize em alguns segundos.', { title: 'Exclusão iniciada', confirmLabel: 'OK', hideCancel: true, success: true });
         }
         loadData();
     } catch (e) {
-        alert('Erro ao iniciar exclusão: ' + e.message);
+        await showConfirmDialog('Erro ao iniciar exclusão: ' + e.message, { title: 'Não foi possível excluir', confirmLabel: 'OK', hideCancel: true, danger: true });
         if (btn) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-trash"></i> Confirmar exclusão';
@@ -3118,16 +3121,19 @@ function showConfirmDialog(message, options = {}) {
         const passwordInput = document.getElementById('modalConfirmacaoSenha');
         const error = document.getElementById('modalConfirmacaoErro');
         const confirmButton = document.getElementById('btnConfirmarDialogo');
+        const cancelButton = modal.querySelector('.btn-close-modal');
         confirmDialogResolver = resolve;
         modal.dataset.requirePassword = options.requirePassword ? 'true' : 'false';
         box.classList.toggle('modal-confirm-danger', Boolean(options.danger));
-        icon.innerHTML = options.danger ? '<i class="fas fa-exclamation-triangle"></i>' : '<i class="fas fa-question"></i>';
+        box.classList.toggle('modal-confirm-success', Boolean(options.success));
+        icon.innerHTML = options.danger ? '<i class="fas fa-exclamation-triangle"></i>' : options.success ? '<i class="fas fa-check-circle"></i>' : '<i class="fas fa-question"></i>';
         title.textContent = options.title || 'Confirmar ação';
         messageEl.textContent = message;
         passwordWrap.classList.toggle('visible', Boolean(options.requirePassword));
         passwordInput.value = '';
         error.classList.remove('visible');
         confirmButton.innerHTML = options.confirmLabel || 'Confirmar';
+        if (cancelButton) cancelButton.style.display = options.hideCancel ? 'none' : '';
         openModal('modalConfirmacao');
         if (options.requirePassword) setTimeout(() => passwordInput.focus(), 0);
     });
