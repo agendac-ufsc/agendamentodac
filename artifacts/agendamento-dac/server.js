@@ -3696,6 +3696,12 @@ app.delete('/api/admin/excluir/:email', async (req, res) => {
 // Exclusão em lote: processa sequencialmente para evitar disputas entre
 // leituras/gravações do Redis quando várias inscrições são removidas juntas.
 app.delete('/api/agendamentos-selecionados', async (req, res) => {
+    const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
+    const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+    if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
+        return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
+    }
+
     const entradas = Array.isArray(req.body?.inscricoes) ? req.body.inscricoes : [];
     let ids;
     if (entradas.length > 0) {
@@ -3792,6 +3798,12 @@ app.delete('/api/agendamentos/:id', excluirAgendamentoPorId);
 // Rota para exclusão geral de todos os agendamentos
 app.delete('/api/admin/excluir-tudo', async (req, res) => {
     try {
+        const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
+        const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+        if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
+            return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
+        }
+
         if (!googleAuthClient) await initGoogleAuth();
 
         // === AUDITORIA: registrar quem disparou a exclusão geral ===
