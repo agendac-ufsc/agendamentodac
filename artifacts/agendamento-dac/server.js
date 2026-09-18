@@ -1535,11 +1535,11 @@ function criarConfirmacaoNovoRegistroHtml(agendamento, email, ultimoEvento) {
     return `
     <div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">
         <div style="background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px">
-            <h2 style="margin:0;color:#fff;font-size:19px">Novo Registro de atividades entregue</h2>
+            <h2 style="margin:0;color:#fff;font-size:19px">Novo Registro de atividades enviado</h2>
             <p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">Confirmação automática — DAC/UFSC</p>
         </div>
         <div style="padding:26px 28px;font-size:14px;line-height:1.6">
-            <p>O Brevo confirmou a entrega do link do Registro de atividades ao servidor de e-mail do proponente.</p>
+            <p>O link do Registro de atividades foi enviado ao e-mail do proponente.</p>
             <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">
                 <p style="margin:0 0 8px"><strong>Proponente:</strong> ${escapeHtml(nome)}</p>
                 <p style="margin:0 0 8px"><strong>E-mail:</strong> ${escapeHtml(email)}</p>
