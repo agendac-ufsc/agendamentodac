@@ -1313,9 +1313,9 @@ function renderTabela() {
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
+            <button class="btn-action" title="Enviar divulgação institucional ao proponente (automático 10 dias antes do primeiro evento)" aria-label="Enviar divulgação institucional" onclick="abrirDivulgacao(${originalIndex})" style="color:#0f766e"><i class="fas fa-bullhorn"></i></button>
             <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" onclick="abrirRegistroAtividades(${originalIndex})" style="color:${registroAtividadesColor}"><i class="fas ${registroAtividadesIcon}"></i></button>
              ${ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO ? `<button class="btn-action" title="Enviar link do Registro de atividades ao proponente" aria-label="Enviar link do Registro de atividades ao proponente" onclick="enviarLinkRegistroAtividades(${originalIndex}, this)" style="color:#764ba2"><i class="fas fa-paper-plane"></i></button>` : ''}
-            <button class="btn-action" title="Enviar divulgação institucional ao proponente (automático 10 dias antes do primeiro evento)" aria-label="Enviar divulgação institucional" onclick="abrirDivulgacao(${originalIndex})" style="color:#0f766e"><i class="fas fa-bullhorn"></i></button>
             ${documentosBtn}
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
         ` : '';
