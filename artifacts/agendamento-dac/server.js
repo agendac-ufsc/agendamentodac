@@ -417,7 +417,10 @@ let HORARIOS_LIMITES = {
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 let AVALIACOES_NECESSARIAS = 3;
-let MODO_INSCRICAO = 'duas-etapas';
+// O modo unificado é o padrão permanente. O modo de 2 etapas só pode ser
+// ativado com a chave explícita de emergência abaixo.
+const MODO_2_ETAPAS_CHAVE_EMERGENCIA = 'DAC-EMERGENCIA-MODO-2-ETAPAS';
+let MODO_INSCRICAO = 'unificado';
 const RESPONSAVEL_TERMO_NOME_PADRAO = 'Andréa Búrigo Ventura';
 let RESPONSAVEL_TERMO_NOME = RESPONSAVEL_TERMO_NOME_PADRAO;
 let BOTOES_HOME = {
@@ -432,7 +435,11 @@ let MENSAGEM_DIVULGACAO = MENSAGEM_DIVULGACAO_PADRAO;
 let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
 const CONFIG_KEY = 'agendamentos_config';
-const normalizarModoInscricao = modo => modo === 'unificado' ? 'unificado' : 'duas-etapas';
+const normalizarModoInscricao = (modo, chaveEmergencia = '') => {
+    if (modo === 'unificado') return 'unificado';
+    if (modo === 'duas-etapas' && String(chaveEmergencia).trim() === MODO_2_ETAPAS_CHAVE_EMERGENCIA) return 'duas-etapas';
+    return 'unificado';
+};
 const normalizarBooleano = (valor, padrao) => {
     if (typeof valor === 'boolean') return valor;
     if (typeof valor === 'string') {
@@ -500,7 +507,7 @@ const getConfigs = async (caller = 'unknown') => {
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
-                MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao);
+                MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
                 if (configs.avaliacoesNecessarias !== undefined) {
                     const n = parseInt(configs.avaliacoesNecessarias, 10);
                     if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
@@ -613,7 +620,7 @@ const saveConfigs = async (configs) => {
             TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
         }
         if (configs.modoInscricao !== undefined) {
-            MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao);
+            MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
         }
         if (configs.avaliacoesNecessarias !== undefined) {
             const n = parseInt(configs.avaliacoesNecessarias, 10);
@@ -655,6 +662,7 @@ const saveConfigs = async (configs) => {
                 datasBloqueadas: DATAS_BLOQUEADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                 modoInscricao: MODO_INSCRICAO,
+                ...(MODO_INSCRICAO === 'duas-etapas' ? { modoInscricaoEmergencia: MODO_2_ETAPAS_CHAVE_EMERGENCIA } : {}),
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
                 responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                 botoesHome: BOTOES_HOME,
@@ -766,12 +774,15 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome });
+    if (modoInscricao === 'duas-etapas' && String(modoInscricaoEmergencia || '').trim() !== MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
+        return res.status(403).json({ success: false, error: 'O modo de 2 etapas está bloqueado. Informe a chave de emergência autorizada.' });
+    }
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
