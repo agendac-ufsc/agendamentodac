@@ -1292,12 +1292,21 @@ function renderTabela() {
             ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> termo concluído${termoEditLink}</div>`
             : '';
         const termoClick = `abrirEditorTermo(${originalIndex})`;
+        const dadosProponenteValidados = Boolean(
+            String(p.nome || '').trim()
+            && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(p.email || '').trim())
+            && String(p.telefone || '').trim()
+        );
+        const dadosProponenteColor = dadosProponenteValidados ? '#16a34a' : '#6b7280';
+        const dadosProponenteTitle = dadosProponenteValidados
+            ? 'Dados do proponente validados — ver contato'
+            : 'Dados do proponente incompletos — ver contato';
         const divulgacaoInstitucional = p.divulgacaoInstitucional || {};
         const divulgacaoEnviada = divulgacaoInstitucional.enviado === true;
         const divulgacaoBloqueada = !termoAssinado;
         const divulgacaoColor = divulgacaoBloqueada
             ? '#cbd5e1'
-            : (divulgacaoEnviada ? '#16a34a' : '#0f766e');
+            : (divulgacaoEnviada ? '#16a34a' : '#2563eb');
         const divulgacaoTitle = divulgacaoBloqueada
             ? 'Aguardando termo de autorização completo'
             : (divulgacaoEnviada
@@ -1307,8 +1316,10 @@ function renderTabela() {
             ? ''
             : `abrirDivulgacao(${originalIndex})`;
         const documentosInscricao = Array.isArray(p.documentos) ? p.documentos : [];
+        const documentosValidados = documentosInscricao.length > 0;
+        const documentosColor = documentosValidados ? '#16a34a' : '#92400e';
         const documentosBtn = p.id
-            ? `<button class="btn-action" title="Documentos (${documentosInscricao.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:#16a34a"><i class="fas fa-folder-open"></i>${documentosInscricao.length ? ` <small>${documentosInscricao.length}</small>` : ''}</button>`
+            ? `<button class="btn-action" title="Documentos (${documentosInscricao.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:${documentosColor}"><i class="fas fa-folder-open"></i>${documentosInscricao.length ? ` <small>${documentosInscricao.length}</small>` : ''}</button>`
             : '';
         const registroAtividades = p.registroAtividades || {};
         const registroAtividadesCompleto = registroAtividades.concluido === true;
@@ -1329,7 +1340,7 @@ function renderTabela() {
         const rowClass = stText==='Cancelado' ? 'row-cancelada' : '';
 
         const acoes = userRole === 'admin' ? `
-            <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
+            <button class="btn-action" title="${dadosProponenteTitle}" onclick="showContact(${originalIndex})" style="color:${dadosProponenteColor}"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
             <button class="btn-action" title="${divulgacaoTitle}" aria-label="${divulgacaoTitle}" ${divulgacaoBloqueada ? 'disabled' : ''} ${divulgacaoClick ? `onclick="${divulgacaoClick}"` : ''} style="color:${divulgacaoColor};${divulgacaoBloqueada ? 'opacity:.45;cursor:not-allowed' : ''}"><i class="fas fa-bullhorn"></i></button>
