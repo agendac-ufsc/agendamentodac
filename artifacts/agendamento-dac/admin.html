@@ -936,6 +936,7 @@ let termoPendenteIndex = null;
 let exclusaoSelecionados = [];
 let documentosInscricaoIndex = null;
 let documentosInscricaoId = null;
+let limparBuscaDepoisDosCriterios = false;
 
 // O fluxo manual/legado permanece no código para emergência, mas seu ícone
 // fica oculto enquanto o envio automático estiver ativo.
@@ -1032,6 +1033,7 @@ function initApp() {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('appShell').style.display = 'block';
     limparBuscaInscricoesAoAbrir();
+    limparBuscaDepoisDosCriterios = true;
 
     const badge = document.getElementById('roleBadge');
     badge.textContent = userRole === 'admin' ? 'Administrador' : `Avaliador: ${viewerEmail}`;
@@ -2750,6 +2752,16 @@ async function loadCriteria() {
         const r = await fetch('/api/criteria');
         criterios = await r.json();
         renderCriteria();
+        if (limparBuscaDepoisDosCriterios) {
+            limparBuscaDepoisDosCriterios = false;
+            const limparBusca = () => {
+                const mudou = limparBuscaInscricoesAoAbrir();
+                if (mudou && allUnificados.length) renderTabela();
+            };
+            // Cobre tanto a restauração síncrona quanto a feita após inserir os critérios.
+            limparBusca();
+            setTimeout(limparBusca, 0);
+        }
     } catch(e) {}
 }
 
