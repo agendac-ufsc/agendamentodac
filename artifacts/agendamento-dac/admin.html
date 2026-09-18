@@ -1292,16 +1292,35 @@ function renderTabela() {
             ? `<div class="termo-aceite"><i class="fas fa-check-circle"></i> termo concluído${termoEditLink}</div>`
             : '';
         const termoClick = `abrirEditorTermo(${originalIndex})`;
+        const divulgacaoInstitucional = p.divulgacaoInstitucional || {};
+        const divulgacaoEnviada = divulgacaoInstitucional.enviado === true;
+        const divulgacaoBloqueada = !termoAssinado;
+        const divulgacaoColor = divulgacaoBloqueada
+            ? '#cbd5e1'
+            : (divulgacaoEnviada ? '#16a34a' : '#0f766e');
+        const divulgacaoTitle = divulgacaoBloqueada
+            ? 'Aguardando termo de autorização completo'
+            : (divulgacaoEnviada
+                ? 'Divulgação institucional enviada — abrir para reenviar'
+                : 'Enviar divulgação institucional ao proponente');
+        const divulgacaoClick = divulgacaoBloqueada
+            ? ''
+            : `abrirDivulgacao(${originalIndex})`;
         const documentosInscricao = Array.isArray(p.documentos) ? p.documentos : [];
         const documentosBtn = p.id
             ? `<button class="btn-action" title="Documentos (${documentosInscricao.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:#16a34a"><i class="fas fa-folder-open"></i>${documentosInscricao.length ? ` <small>${documentosInscricao.length}</small>` : ''}</button>`
             : '';
         const registroAtividades = p.registroAtividades || {};
         const registroAtividadesCompleto = registroAtividades.concluido === true;
-        const registroAtividadesColor = registroAtividadesCompleto ? '#16a34a' : '#764ba2';
-        const registroAtividadesTitle = registroAtividadesCompleto
-            ? 'Visualizar registro de atividades preenchido'
-            : 'Abrir registro de atividades e enviar ao proponente';
+        const registroAtividadesBloqueado = !divulgacaoEnviada;
+        const registroAtividadesColor = registroAtividadesBloqueado
+            ? '#cbd5e1'
+            : (registroAtividadesCompleto ? '#16a34a' : '#764ba2');
+        const registroAtividadesTitle = registroAtividadesBloqueado
+            ? 'Aguardando envio da divulgação institucional'
+            : (registroAtividadesCompleto
+                ? 'Visualizar registro de atividades preenchido'
+                : 'Abrir registro de atividades e enviar ao proponente');
         const registroAtividadesIcon = registroAtividadesCompleto ? 'fa-clipboard-check' : 'fa-clipboard-list';
 
         let stClass = 'st-pendente', stText = 'Pendente';
@@ -1313,8 +1332,8 @@ function renderTabela() {
             <button class="btn-action" title="Ver Contato" onclick="showContact(${originalIndex})" style="color:#667eea"><i class="fas fa-address-card"></i></button>
             <button class="btn-action" title="Gerar PDF" onclick="generatePDF(${originalIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
-            <button class="btn-action" title="Enviar divulgação institucional ao proponente (automático 10 dias antes do primeiro evento)" aria-label="Enviar divulgação institucional" onclick="abrirDivulgacao(${originalIndex})" style="color:#0f766e"><i class="fas fa-bullhorn"></i></button>
-            <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" onclick="abrirRegistroAtividades(${originalIndex})" style="color:${registroAtividadesColor}"><i class="fas ${registroAtividadesIcon}"></i></button>
+            <button class="btn-action" title="${divulgacaoTitle}" aria-label="${divulgacaoTitle}" ${divulgacaoBloqueada ? 'disabled' : ''} ${divulgacaoClick ? `onclick="${divulgacaoClick}"` : ''} style="color:${divulgacaoColor};${divulgacaoBloqueada ? 'opacity:.45;cursor:not-allowed' : ''}"><i class="fas fa-bullhorn"></i></button>
+            <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" ${registroAtividadesBloqueado ? 'disabled' : ''} ${registroAtividadesBloqueado ? '' : `onclick="abrirRegistroAtividades(${originalIndex})"`} style="color:${registroAtividadesColor};${registroAtividadesBloqueado ? 'opacity:.45;cursor:not-allowed' : ''}"><i class="fas ${registroAtividadesIcon}"></i></button>
              ${ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO ? `<button class="btn-action" title="Enviar link do Registro de atividades ao proponente" aria-label="Enviar link do Registro de atividades ao proponente" onclick="enviarLinkRegistroAtividades(${originalIndex}, this)" style="color:#764ba2"><i class="fas fa-paper-plane"></i></button>` : ''}
             ${documentosBtn}
             <button class="btn-action" title="Excluir" onclick="deleteInscricao('${p.id || ''}')" style="color:#d9534f"><i class="far fa-trash-alt"></i></button>
