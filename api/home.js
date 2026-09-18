@@ -38,7 +38,10 @@ function parseConfig(value) {
 }
 
 module.exports = async function home(req, res) {
-  let modoInscricao = 'duas-etapas';
+  // O modo unificado é obrigatório por padrão. O modo legado só é permitido
+  // quando o backend tiver persistido a chave explícita de emergência.
+  const MODO_2_ETAPAS_CHAVE_EMERGENCIA = 'DAC-EMERGENCIA-MODO-2-ETAPAS';
+  let modoInscricao = 'unificado';
 
   try {
     const redis = getRedisCredentials();
@@ -49,8 +52,9 @@ module.exports = async function home(req, res) {
       if (!response.ok) throw new Error(`Redis respondeu HTTP ${response.status}`);
       const payload = await response.json();
       const config = parseConfig(payload.result);
-      if (config.modoInscricao === 'unificado') {
-        modoInscricao = 'unificado';
+      if (config.modoInscricao === 'duas-etapas'
+          && String(config.modoInscricaoEmergencia || '').trim() === MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
+        modoInscricao = 'duas-etapas';
       }
     }
   } catch (error) {
