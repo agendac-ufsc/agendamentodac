@@ -235,7 +235,7 @@
         <div class="filters-bar">
             <div class="search-wrap">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
+                <input type="search" id="searchInput" name="inscricoesSearch" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
             </div>
             <select id="filterLocal" class="filter-sel" onchange="renderTabela()">
                 <option value="">Todos os Locais</option>
@@ -1018,9 +1018,20 @@ function logout() {
 // ══════════════════════════════════════════════════
 // INIT APP
 // ══════════════════════════════════════════════════
+function limparBuscaInscricoesAoAbrir() {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) return false;
+    const tinhaValor = Boolean(searchInput.value);
+    searchInput.value = '';
+    searchInput.defaultValue = '';
+    searchInput.removeAttribute('value');
+    return tinhaValor;
+}
+
 function initApp() {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('appShell').style.display = 'block';
+    limparBuscaInscricoesAoAbrir();
 
     const badge = document.getElementById('roleBadge');
     badge.textContent = userRole === 'admin' ? 'Administrador' : `Avaliador: ${viewerEmail}`;
@@ -3254,6 +3265,15 @@ async function excluirDocumento(inscricaoId, documentoId) {
 }
 
 // ══════════════════════════════════════════════════
+// O navegador pode restaurar campos depois da inicialização e depois de inserir
+// os critérios dinamicamente. Limpar no pageshow cobre esse segundo momento.
+window.addEventListener('pageshow', () => {
+    if (document.getElementById('appShell')?.style.display === 'block') {
+        const mudou = limparBuscaInscricoesAoAbrir();
+        if (mudou && allUnificados.length) renderTabela();
+    }
+});
+
 // AUTO-LOGIN (sessão salva)
 // ══════════════════════════════════════════════════
 (function checkSavedSession() {
