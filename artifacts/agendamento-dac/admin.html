@@ -235,7 +235,7 @@
         <div class="filters-bar">
             <div class="search-wrap">
                 <i class="fas fa-search"></i>
-                <input type="text" id="searchInput" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
+                <input type="text" id="searchInput" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Buscar por evento, proponente, e-mail ou telefone..." oninput="renderTabela()">
             </div>
             <select id="filterLocal" class="filter-sel" onchange="renderTabela()">
                 <option value="">Todos os Locais</option>
@@ -1028,6 +1028,12 @@ function initApp() {
 
     buildTopActions();
     buildTabs();
+    // Impede que o navegador reaproveite um texto de formulário como filtro após o refresh.
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+        searchInput.value = '';
+        searchInput.defaultValue = '';
+    }
     loadData();
     if (userRole === 'admin') iniciarAtualizacaoAutomaticaTermos();
     loadCriteria();
