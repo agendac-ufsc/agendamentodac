@@ -2183,10 +2183,6 @@ function deleteAllInscricoes() {
     exclusaoSelecionados = [...document.querySelectorAll('.insc-check:checked')]
         .map(c => allUnificados[parseInt(c.dataset.index)]?.primeiraEtapa)
         .filter(p => p?.id && p.id !== 'undefined' && p.id !== 'null');
-    if (exclusaoSelecionados.length > 0) {
-        excluirInscricoesSelecionadasDireto();
-        return;
-    }
     const titulo = document.getElementById('tituloExcluirTudo');
     const texto = document.getElementById('textoExcluirTudo');
     if (exclusaoSelecionados.length > 0) {
@@ -2260,7 +2256,7 @@ function onExcluirTudoInputChange() {
     const input = document.getElementById('excluirTudoConfirmInput');
     const btn = document.getElementById('btnConfirmExcluirTudo');
     if (!input || !btn) return;
-    const ok = input.value === 'dac.ufsc.br';
+    const ok = input.value.trim().length > 0;
     btn.disabled = !ok;
     btn.style.opacity = ok ? '1' : '0.5';
     btn.style.cursor = ok ? 'pointer' : 'not-allowed';
@@ -2268,7 +2264,8 @@ function onExcluirTudoInputChange() {
 
 async function confirmDeleteAllInscricoes() {
     const input = document.getElementById('excluirTudoConfirmInput');
-    if (!input || input.value !== 'dac.ufsc.br') return;
+    const password = input?.value?.trim() || '';
+    if (!password) return;
     const btn = document.getElementById('btnConfirmExcluirTudo');
     if (btn) {
         btn.disabled = true;
@@ -2277,18 +2274,27 @@ async function confirmDeleteAllInscricoes() {
     try {
         if (exclusaoSelecionados.length > 0) {
             const quantidadeExcluida = exclusaoSelecionados.length;
-            const falhas = [];
-            for (const id of exclusaoSelecionados) {
-                const r = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}`, { method: 'DELETE' });
-                const body = await r.json().catch(() => ({}));
-                if (!r.ok || body.success === false) falhas.push(id);
+            const r = await fetch('/api/agendamentos-selecionados', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ inscricoes: exclusaoSelecionados, password })
+            });
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok || body.success === false) {
+                throw new Error(body.error || 'Senha administrativa incorreta.');
             }
-            if (falhas.length > 0) throw new Error(`${falhas.length} inscrição(ões) não puderam ser excluídas.`);
             closeExcluirTudoModal();
-            alert(`${quantidadeExcluida} inscrição(ão) selecionada(s) excluída(s) com sucesso.`);
+            alert(quantidadeExcluida + ' inscrição(ão) selecionada(s) excluída(s) com sucesso.');
         } else {
-            const r = await fetch('/api/admin/excluir-tudo', { method: 'DELETE' });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
+            const r = await fetch('/api/admin/excluir-tudo', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password })
+            });
+            const body = await r.json().catch(() => ({}));
+            if (!r.ok || body.success === false) {
+                throw new Error(body.error || 'Senha administrativa incorreta.');
+            }
             closeExcluirTudoModal();
             alert('Limpeza iniciada. Atualize em alguns segundos.');
         }
