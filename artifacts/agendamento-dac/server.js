@@ -1645,6 +1645,45 @@ async function processarConfirmacaoNovoRegistro({
 const DIVULGACAO_MIDIA_ENVIADA_PREFIX = 'divulgacao_midia_enviada:';
 const DIVULGACAO_ANTECEDENCIA_MS = 10 * 24 * 60 * 60 * 1000;
 
+function termoAutorizacaoCompleto(agendamento) {
+    return agendamento?.termoAssinado === true || agendamento?.termoAssinado === 'true';
+}
+
+function obterChaveDivulgacaoInstitucional(agendamento, primeiroEvento) {
+    if (!agendamento?.id || !primeiroEvento?.inicioDate) return '';
+    return DIVULGACAO_MIDIA_ENVIADA_PREFIX
+        + agendamento.id
+        + ':'
+        + primeiroEvento.inicioDate.toISOString();
+}
+
+async function divulgacaoInstitucionalEnviada(agendamento, primeiroEvento) {
+    const chave = obterChaveDivulgacaoInstitucional(agendamento, primeiroEvento);
+    if (!redis || !chave) return false;
+    return Boolean(await redis.get(chave));
+}
+
+async function registrarDivulgacaoInstitucionalEnviada(agendamento, primeiroEvento, dados) {
+    const chave = obterChaveDivulgacaoInstitucional(agendamento, primeiroEvento);
+    if (redis && chave) {
+        await redis.set(chave, dados);
+    }
+
+    // O painel usa este resumo para pintar o megafone e liberar visualmente
+    // o próximo passo. O marcador Redis continua sendo a fonte da trava do
+    // cron, inclusive para inscrições legadas.
+    if (!agendamento?.isLegada && agendamento?.id) {
+        await updateAgendamento(agendamento.id, {
+            divulgacaoInstitucional: {
+                enviado: true,
+                origem: dados.origem,
+                enviadoEm: dados.enviadoEm,
+                primeiroEvento: dados.primeiroEvento
+            }
+        });
+    }
+}
+
 function obterMensagemDivulgacao(configs) {
     return String(configs?.mensagemDivulgacao || MENSAGEM_DIVULGACAO || MENSAGEM_DIVULGACAO_PADRAO).trim();
 }
@@ -1731,6 +1770,10 @@ async function verificarEnviosAutomaticosDivulgacao() {
         const mensagem = obterMensagemDivulgacao(configs);
         const agendamentos = (await getAgendamentos()).filter(agendamento => !ehRascunhoUnificado(agendamento));
         for (const agendamento of agendamentos) {
+            if (!termoAutorizacaoCompleto(agendamento)) {
+                console.log(`ℹ️ [Divulgação] Aguardando termo verde para ${agendamento.id || agendamento.email}.`);
+                continue;
+            }
             const email = String(agendamento.email || '').trim().toLowerCase();
             if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
             let primeiroEvento = obterInicioDoPrimeiroEvento(agendamento);
@@ -1741,11 +1784,10 @@ async function verificarEnviosAutomaticosDivulgacao() {
             if (!primeiroEvento) continue;
             const disparoEm = new Date(primeiroEvento.inicioDate.getTime() - DIVULGACAO_ANTECEDENCIA_MS);
             if (agora < disparoEm) continue;
-            const chave = DIVULGACAO_MIDIA_ENVIADA_PREFIX + agendamento.id + ':' + primeiroEvento.inicioDate.toISOString();
-            if (await redis.get(chave)) continue;
+            if (await divulgacaoInstitucionalEnviada(agendamento, primeiroEvento)) continue;
             const resultado = await enviarDivulgacaoInstitucional(agendamento, mensagem, 'automático');
             if (!resultado) continue;
-            await redis.set(chave, {
+            await registrarDivulgacaoInstitucionalEnviada(agendamento, primeiroEvento, {
                 status: 'sent', origem: 'automatica', email,
                 enviadoEm: agora.toISOString(),
                 primeiroEvento: primeiroEvento.inicioDate.toISOString(), mensagem
@@ -1781,17 +1823,28 @@ async function verificarEnviosAutomaticosFormulario() {
             )
             .filter(agendamento => !ehRascunhoUnificado(agendamento));
         for (const agendamento of agendamentos) {
+            if (!termoAutorizacaoCompleto(agendamento)) {
+                console.log(`ℹ️ [Atividades] Aguardando termo verde para ${agendamento.id || agendamento.email}.`);
+                continue;
+            }
             const email = String(agendamento.email || '').trim().toLowerCase();
             if (!agendamento.id || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) continue;
+            let primeiroEvento = obterInicioDoPrimeiroEvento(agendamento);
             let ultimoEvento = obterFimDoUltimoEvento(agendamento);
-            if (!ultimoEvento && agendamento.isLegada) {
+            if ((!primeiroEvento || !ultimoEvento) && agendamento.isLegada) {
                 const eventosLegados = await buscarDatasCalendarioLegada(agendamento.evento);
-                ultimoEvento = obterFimDoUltimoEvento({ ...agendamento, calendarDates: eventosLegados });
+                const agendamentoComEventos = { ...agendamento, calendarDates: eventosLegados };
+                primeiroEvento = primeiroEvento || obterInicioDoPrimeiroEvento(agendamentoComEventos);
+                ultimoEvento = ultimoEvento || obterFimDoUltimoEvento(agendamentoComEventos);
                 if (ultimoEvento) {
                     console.log(`ℹ️ [Atividades] Evento legado localizado no calendário para ${agendamento.email}.`);
                 }
             }
-            if (!ultimoEvento) continue;
+            if (!primeiroEvento || !ultimoEvento) continue;
+            if (!await divulgacaoInstitucionalEnviada(agendamento, primeiroEvento)) {
+                console.log(`ℹ️ [Atividades] Aguardando divulgação institucional enviada para ${agendamento.id}.`);
+                continue;
+            }
             const primeiraTentativaEm = new Date(ultimoEvento.fimDate.getTime() + ATIVIDADES_ATRASO_INICIAL_MS);
             if (agora < primeiraTentativaEm) continue;
 
@@ -4405,6 +4458,11 @@ app.post('/api/admin/enviar-divulgacao', async (req, res) => {
     try {
         const agendamento = (await getAgendamentos()).find(item => String(item.id) === String(id));
         if (!agendamento) return res.status(404).json({ error: 'Inscrição não encontrada.' });
+        if (!termoAutorizacaoCompleto(agendamento)) {
+            return res.status(409).json({
+                error: 'A divulgação institucional só pode ser enviada depois que o termo de autorização estiver completo.'
+            });
+        }
         const email = String(agendamento.email || '').trim().toLowerCase();
         if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
             return res.status(400).json({ error: 'A inscrição não possui um e-mail válido para envio.' });
@@ -4415,8 +4473,7 @@ app.post('/api/admin/enviar-divulgacao', async (req, res) => {
         const resultado = await enviarDivulgacaoInstitucional(agendamento, mensagemFinal, 'manual');
         if (!resultado) return res.status(502).json({ error: 'Não foi possível enviar o e-mail de divulgação.' });
         if (redis && primeiroEvento) {
-            const chave = DIVULGACAO_MIDIA_ENVIADA_PREFIX + agendamento.id + ':' + primeiroEvento.inicioDate.toISOString();
-            await redis.set(chave, {
+            await registrarDivulgacaoInstitucionalEnviada(agendamento, primeiroEvento, {
                 status: 'sent', origem: 'manual', email,
                 enviadoEm: new Date().toISOString(),
                 primeiroEvento: primeiroEvento.inicioDate.toISOString(), mensagem: mensagemFinal
