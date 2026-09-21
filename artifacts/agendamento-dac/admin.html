@@ -765,14 +765,24 @@
 <!-- ═══════════════ MODAL VISUALIZAR TERMO CONCLUÍDO (admin only) ═══ -->
 <div class="modal" id="modalEditarTermo">
     <div class="modal-box" style="max-width:720px;border-top:4px solid #16a34a">
-        <h3 id="adminTermoTitulo" style="display:flex;align-items:center;gap:8px">
-            <i class="fas fa-file-signature" style="color:#16a34a"></i>
-            Visualizar termo concluído
-        </h3>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid #eee;margin-bottom:16px">
+    <h3 id="adminTermoTitulo" style="display:flex;align-items:center;gap:8px;margin:0;padding:0;border:0">
+        <i class="fas fa-file-signature" style="color:#16a34a"></i>
+        Visualizar termo concluído
+    </h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button id="btnReenviarTermoEdicao" class="btn-save-modal" style="background:#d97706" onclick="reenviarTermoParaProponente()">
+                    <i class="fas fa-paper-plane"></i> Reenviar para o proponente
+                </button>
+        <button id="btnEditarTermoAdmin" class="btn-save-modal" style="background:#764ba2" onclick="ativarEdicaoTermoAdmin()">
+                    <i class="fas fa-edit"></i> Editar
+                </button>
+    </div>
+</div>
         <div id="adminTermoNota" class="termo-edit-note">
             <strong><i class="fas fa-check-circle"></i> Termo concluído e enviado.</strong><br>
             Os dados abaixo estão congelados para consulta. As cláusulas não são exibidas nesta versão.
-            Para corrigir alguma informação, clique em <strong>Editar</strong> no rodapé.
+            Para corrigir alguma informação, clique em <strong>Editar</strong> no topo.
         </div>
         <div class="termo-edit-grid">
             <div class="form-field full">
@@ -859,12 +869,8 @@
                 <button id="btnGerarPDFTermo" class="btn-save-modal" style="background:#dc2626" onclick="gerarPDFTermoAdmin()">
                     <i class="far fa-file-pdf"></i> Gerar PDF
                 </button>
-                <button id="btnReenviarTermoEdicao" class="btn-save-modal" style="background:#d97706" onclick="reenviarTermoParaProponente()">
-                    <i class="fas fa-paper-plane"></i> Reenviar para o proponente
-                </button>
-                <button id="btnEditarTermoAdmin" class="btn-save-modal" style="background:#764ba2" onclick="ativarEdicaoTermoAdmin()">
-                    <i class="fas fa-edit"></i> Editar
-                </button>
+                
+                
                 <button id="btnSalvarTermoAdmin" class="btn-save-modal" style="background:#16a34a;display:none" onclick="salvarEdicaoTermoAdmin()">
                     <i class="fas fa-save"></i> Salvar alterações
                 </button>
@@ -876,10 +882,17 @@
 <!-- ═══════════════ MODAL TERMO INCOMPLETO (admin only) ═══ -->
 <div class="modal" id="modalTermoPendente">
     <div class="modal-box" style="max-width:620px;border-top:4px solid #f59e0b">
-        <h3 style="display:flex;align-items:center;gap:8px">
-            <i class="fas fa-file-signature" style="color:#d97706"></i>
-            Termo incompleto
-        </h3>
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;padding-bottom:14px;border-bottom:1px solid #eee;margin-bottom:16px">
+    <h3 style="display:flex;align-items:center;gap:8px;margin:0;padding:0;border:0">
+        <i class="fas fa-file-signature" style="color:#d97706"></i>
+        Termo incompleto
+    </h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button id="btnEnviarLinkTermoPendente" class="btn-save-modal" style="background:#d97706" onclick="enviarLinkTermoPendente()">
+                    <i class="fas fa-paper-plane"></i> Enviar para o proponente
+                </button>
+    </div>
+</div>
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:15px 16px;color:#92400e;font-size:13px;line-height:1.6">
             <strong>Este termo ainda não foi concluído pelo proponente.</strong><br>
             Envie o link abaixo para que ele preencha os dados restantes, leia e aprove as cláusulas e encaminhe o PDF assinado. Esse procedimento registra e oficializa o evento junto ao DAC/UFSC.
@@ -896,9 +909,7 @@
                 <button class="btn-save-modal" style="background:#667eea" onclick="abrirTermoPendenteEmNovaAba()">
                     <i class="fas fa-external-link-alt"></i> Abrir termo
                 </button>
-                <button id="btnEnviarLinkTermoPendente" class="btn-save-modal" style="background:#d97706" onclick="enviarLinkTermoPendente()">
-                    <i class="fas fa-paper-plane"></i> Enviar link para o e-mail
-                </button>
+                
             </div>
         </div>
     </div>
