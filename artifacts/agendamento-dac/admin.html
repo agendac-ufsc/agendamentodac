@@ -1417,6 +1417,8 @@ function abrirTermoPendenteEmNovaAba() {
     if (!termoWindow) alert('Permita pop-ups deste site para abrir o termo.');
 }
 
+let registroAtividadesAdminUrl = '';
+
 function abrirRegistroAtividades(idx) {
     if (userRole !== 'admin') return;
     const p = allUnificados[idx]?.primeiraEtapa;
@@ -1424,11 +1426,23 @@ function abrirRegistroAtividades(idx) {
         alert('Esta inscrição não possui identificador para abrir o registro de atividades.');
         return;
     }
-    const registroWindow = window.open(
-        `/registro-atividades?id=${encodeURIComponent(p.id)}&admin=1`,
-        '_blank'
-    );
+    registroAtividadesAdminUrl = '/registro-atividades?id=' + encodeURIComponent(p.id) + '&admin=1';
+    const iframe = document.getElementById('iframeRegistroAtividadesAdmin');
+    if (!iframe) return;
+    iframe.src = registroAtividadesAdminUrl;
+    openModal('modalRegistroAtividadesAdmin');
+}
+
+function abrirRegistroAtividadesEmNovaAba() {
+    if (!registroAtividadesAdminUrl) return;
+    const registroWindow = window.open(registroAtividadesAdminUrl, '_blank');
     if (!registroWindow) alert('Permita pop-ups deste site para abrir o registro de atividades.');
+}
+
+function fecharRegistroAtividadesModal() {
+    const iframe = document.getElementById('iframeRegistroAtividadesAdmin');
+    if (iframe) iframe.src = 'about:blank';
+    closeModal('modalRegistroAtividadesAdmin');
 }
 
 async function enviarLinkRegistroAtividades(idx, btn) {
@@ -3344,5 +3358,18 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+<!-- Modal administrativo do Registro de atividades -->
+<div class="modal" id="modalRegistroAtividadesAdmin">
+    <div class="modal-box" style="width:96vw;max-width:1200px;height:90vh;padding:0;overflow:hidden;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 18px;border-bottom:1px solid #e5e7eb;background:#fff;flex-shrink:0">
+            <h3 style="margin:0;padding:0;border:0;font-size:17px;color:#374151"><i class="fas fa-clipboard-list" style="color:#764ba2;margin-right:7px"></i>Registro de atividades</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+                <button type="button" class="btn-secondary" onclick="abrirRegistroAtividadesEmNovaAba()" title="Abrir usando o modo atual em uma nova aba"><i class="fas fa-external-link-alt"></i> Abrir em nova aba</button>
+                <button type="button" class="btn-close-modal" onclick="fecharRegistroAtividadesModal()"><i class="fas fa-times"></i> Fechar</button>
+            </div>
+        </div>
+        <iframe id="iframeRegistroAtividadesAdmin" title="Registro de atividades do proponente" src="about:blank" style="width:100%;flex:1;min-height:0;border:0;background:#f8fafc"></iframe>
+    </div>
+</div>
 </body>
 </html>
