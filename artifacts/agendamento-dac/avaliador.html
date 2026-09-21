@@ -45,10 +45,37 @@
         .filter-sel{padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff;outline:none;cursor:pointer}
         .filter-sel:focus{border-color:#2563eb}
 
-        .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:18px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+        .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden;transition:border-color .2s,box-shadow .2s}
+        .av-card.open{border-color:#93c5fd;box-shadow:0 4px 14px rgba(37,99,235,.09)}
+        .av-card-main{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px}
+        .av-info{min-width:0}
         .av-info h4{font-size:14px;font-weight:700;margin-bottom:4px}
         .av-info p{font-size:12px;color:#666}
         .av-score{font-size:18px;font-weight:800;color:#2563eb}
+        .av-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
+        .av-drawer{border-top:1px solid #dbeafe;background:#fbfdff;padding:22px 24px 24px;animation:drawerOpen .18s ease-out}
+        @keyframes drawerOpen{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
+        .drawer-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
+        .drawer-heading h3{font-size:16px;color:#1e3a8a;margin:0}
+        .drawer-heading p{font-size:12px;color:#64748b;margin-top:4px}
+        .drawer-loading{text-align:center;color:#2563eb;padding:24px;font-size:13px}
+        .drawer-grid{display:grid;grid-template-columns:160px 1fr;gap:8px 14px;font-size:13px}
+        .drawer-grid .lbl{font-weight:600;color:#555}
+        .drawer-grid .val{color:#222;word-break:break-word}
+        .drawer-grid .val a{color:#2563eb;text-decoration:none;word-break:break-all}
+        .drawer-grid .val a:hover{text-decoration:underline}
+        .drawer-section{margin-bottom:22px}
+        .drawer-section:last-child{margin-bottom:0}
+        .drawer-section h4{font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .drawer-event-list{margin:0;padding-left:18px;font-size:13px;color:#222}
+        .drawer-event-list li{margin-bottom:4px}
+        .drawer-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
+        .drawer-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
+        .drawer-link-pill:hover{background:#dbeafe}
+        .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;padding-top:20px}
+        .drawer-evaluation h4{font-size:15px;color:#1e3a8a;margin-bottom:6px}
+        .drawer-evaluation-note{font-size:12px;color:#64748b;margin-bottom:16px}
+        .drawer-save{text-align:right;margin-top:18px}
         .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
         .av-status.done{background:#d1fae5;color:#065f46}
         .local-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
@@ -96,6 +123,7 @@
         .det-status-cancelado{background:#fee2e2;color:#991b1b}
         .det-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
         .det-link-pill:hover{background:#dbeafe}
+        @media(max-width:640px){.av-card-main{align-items:flex-start;flex-direction:column}.av-actions{width:100%;justify-content:flex-start}.av-drawer{padding:18px 16px}.drawer-grid{grid-template-columns:1fr;gap:3px 0}.drawer-grid .lbl{margin-top:8px}}
     </style>
 </head>
 <body>
@@ -164,30 +192,6 @@
     </div>
 </div>
 
-<!-- Modal Detalhes -->
-<div class="modal" id="modalDetalhes">
-    <div class="modal-box wide">
-        <h3 id="modalDetalhesTitle"><i class="fas fa-file-alt"></i> Detalhes da Inscrição</h3>
-        <div id="modalDetalhesBody"></div>
-        <div class="modal-footer">
-            <button class="btn-close-modal" onclick="closeModal('modalDetalhes')">Fechar</button>
-            <button class="btn-save-modal" id="btnAvaliarFromDetails" onclick="avaliarFromDetails()"><i class="fas fa-star"></i> Avaliar</button>
-        </div>
-    </div>
-</div>
-
-<!-- Modal Avaliação -->
-<div class="modal" id="modalAvaliacao">
-    <div class="modal-box">
-        <h3 id="modalAvaliacaoTitle"><i class="fas fa-star"></i> Avaliar Inscrição</h3>
-        <div id="modalAvaliacaoBody"></div>
-        <div class="modal-footer">
-            <button class="btn-close-modal" onclick="closeModal('modalAvaliacao')">Cancelar</button>
-            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
-        </div>
-    </div>
-</div>
-
 <script>
 let viewerEmail = '';
 let viewerNome = '';
@@ -197,6 +201,7 @@ let avaliacoesNecessarias = 3;
 let currentAvaliacaoIndex = null;
 let currentAvaliacaoScores = {};
 let scoresCache = {}; // {inscricaoId: [avaliacoes]}
+let openAvaliacaoIndex = null;
 
 // Restaurar sessão
 (function restore(){
@@ -346,25 +351,26 @@ function renderAvaliacaoList() {
         const statusBadge = myAv
             ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
             : `<span class="av-status">Pendente</span>`;
+        const aberta = openAvaliacaoIndex === idx;
         html += `
-        <div class="av-card">
-            <div class="av-info">
-                <h4>${escapeHtml(p.evento||'SEM EVENTO').toUpperCase()}</h4>
-                <p>${escapeHtml(p.nome||'')} &middot;
-                    <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}">${escapeHtml(p.localNome||'Teatro')}</span>
-                    ${statusBadge}
-                    <span style="color:#888;margin-left:6px">(${avs.length}/${avaliacoesNecessarias} avaliações)</span>
-                </p>
+        <div class="av-card${aberta ? ' open' : ''}">
+            <div class="av-card-main">
+                <div class="av-info">
+                    <h4>${escapeHtml(p.evento||'SEM EVENTO').toUpperCase()}</h4>
+                    <p>${escapeHtml(p.nome||'')} &middot;
+                        <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}">${escapeHtml(p.localNome||'Teatro')}</span>
+                        ${statusBadge}
+                        <span style="color:#888;margin-left:6px">(${avs.length}/${avaliacoesNecessarias} avaliações)</span>
+                    </p>
+                </div>
+                <div class="av-actions">
+                    ${minhaMedia !== null ? `<span class="av-score">${minhaMedia}/10</span>` : ''}
+                    <button class="btn-top btn-refresh" onclick="openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}">
+                        <i class="fas fa-star"></i> ${myAv ? 'Editar' : 'Avaliar'}
+                    </button>
+                </div>
             </div>
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-                ${minhaMedia !== null ? `<span class="av-score">${minhaMedia}/10</span>` : ''}
-                <button class="btn-details" onclick="openDetalhes(${idx})">
-                    <i class="fas fa-file-alt"></i> Ver detalhes
-                </button>
-                <button class="btn-top btn-refresh" onclick="openAvaliacao(${idx})">
-                    <i class="fas fa-star"></i> ${myAv ? 'Editar' : 'Avaliar'}
-                </button>
-            </div>
+            ${aberta ? `<div class="av-drawer" id="avaliacao-drawer-${idx}">${renderDrawerContent(item, myAv?.scoresJson || {})}</div>` : ''}
         </div>`;
     });
     container.innerHTML = html;
@@ -390,8 +396,7 @@ function defaultCriterios() {
     ];
 }
 
-// === MODAL DE DETALHES ===
-
+// === GAVETA DA INSCRIÇÃO E AVALIAÇÃO ===
 function looksLikeUrl(s) {
     if (typeof s !== 'string') return false;
     return /^https?:\/\//i.test(s.trim());
@@ -400,7 +405,6 @@ function looksLikeUrl(s) {
 function renderValueAsHtml(v) {
     if (v === null || v === undefined || v === '') return '<span style="color:#aaa">—</span>';
     const str = String(v);
-    // Pode ter múltiplas URLs separadas por vírgula, espaço ou quebra de linha (típico do Forms)
     const parts = str.split(/[\s,;\n]+/).filter(Boolean);
     const allUrls = parts.length > 0 && parts.every(p => looksLikeUrl(p));
     if (allUrls) {
@@ -408,10 +412,9 @@ function renderValueAsHtml(v) {
             const isDrive = /drive\.google\.com|docs\.google\.com/i.test(u);
             const icon = isDrive ? 'fa-google-drive' : 'fa-up-right-from-square';
             const label = isDrive ? 'Abrir no Drive' : 'Abrir link';
-            return `<a class="det-link-pill" href="${escapeAttr(u)}" target="_blank" rel="noopener"><i class="fab ${isDrive ? 'fa-google-drive' : ''}"></i><i class="fas ${isDrive ? '' : icon}"></i> ${label}</a>`;
+            return `<a class="drawer-link-pill" href="${escapeAttr(u)}" target="_blank" rel="noopener"><i class="fab ${isDrive ? 'fa-google-drive' : ''}"></i><i class="fas ${isDrive ? '' : icon}"></i> ${label}</a>`;
         }).join(' ');
     }
-    // Substituir URLs inline dentro de texto
     return escapeHtml(str).replace(/(https?:\/\/[^\s,;<>"']+)/gi, (m) =>
         `<a href="${escapeAttr(m)}" target="_blank" rel="noopener">${escapeHtml(m)}</a>`);
 }
@@ -420,120 +423,155 @@ function escapeAttr(s) {
     return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
-function statusBadgeHtml(status) {
-    if (!status) return '';
-    const s = String(status).toLowerCase();
-    let cls = 'det-status-pendente';
-    if (s.includes('completo')) cls = 'det-status-completo';
-    else if (s.includes('cancelado')) cls = 'det-status-cancelado';
-    return `<span class="det-status-badge ${cls}">${escapeHtml(status)}</span>`;
+function formatarValorDrawer(valor) {
+    if (Array.isArray(valor)) return valor.filter(v => String(v ?? '').trim()).join(', ');
+    if (valor && typeof valor === 'object') {
+        return Object.entries(valor)
+            .map(([chave, item]) => `${chave}: ${formatarValorDrawer(item)}`)
+            .join(' | ');
+    }
+    return String(valor ?? '').trim();
 }
 
-function formatEventoData(ev) {
-    if (!ev) return '';
-    const data = ev.data || ev.dataInicio || '';
-    const hi = ev.horaInicio || ev.inicio || '';
-    const hf = ev.horaFim || ev.fim || '';
-    const tipo = ev.tipo || ev.titulo || '';
-    let txt = data;
-    if (hi || hf) txt += ` · ${hi || ''}${hi && hf ? ' às ' : ''}${hf || ''}`;
-    if (tipo) txt += ` (${tipo})`;
-    return txt.trim();
+function obterDadosComplementaresDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        const labels = {
+            tipoProponente: 'Tipo de proponente',
+            nomePessoaFisica: 'Nome da pessoa física',
+            cpfPessoaFisica: 'CPF',
+            cepPessoaFisica: 'CEP residencial',
+            representantePessoaJuridica: 'Representante da pessoa jurídica',
+            razaoSocialPessoaJuridica: 'Razão social',
+            cnpjPessoaJuridica: 'CNPJ',
+            enderecoPessoaJuridica: 'Endereço da pessoa jurídica',
+            categoriaProposta: 'Categoria da proposta',
+            vinculoUfsc: 'Vínculo com a UFSC',
+            descricaoVinculoUfsc: 'Descrição do vínculo com a UFSC',
+            areas: 'Área/segmento',
+            finalidade: 'Finalidade',
+            sinopse: 'Sinopse/descrição da proposta',
+            relevancia: 'Relevância cultural e impacto social',
+            acessibilidade: 'Acessibilidade comunicacional',
+            recursosAcessibilidade: 'Recursos de acessibilidade',
+            descricaoOutroRecursoAcessibilidade: 'Descrição de outro recurso de acessibilidade',
+            gratuidade: 'Gratuidade do evento',
+            projetoDac: 'Projeto do DAC',
+            arquivos: 'Arquivos enviados'
+        };
+        const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'concluidaEm']);
+        return Object.entries(dadosUnificados)
+            .filter(([chave, valor]) => !ignoradas.has(chave) && formatarValorDrawer(valor))
+            .map(([chave, valor]) => [
+                labels[chave] || chave.replace(/([A-Z])/g, ' $1').replace(/^./, letra => letra.toUpperCase()),
+                formatarValorDrawer(valor)
+            ]);
+    }
+
+    const s = item?.segundaEtapa;
+    if (s && Array.isArray(s.headers) && Array.isArray(s.valores)) {
+        return s.headers.map((header, index) => [
+            String(header || 'Campo'),
+            formatarValorDrawer(s.valores[index]) || '—'
+        ]);
+    }
+    return [];
 }
 
-let currentDetalhesIdx = null;
+function formatarEtapaDrawer(etapa, fallbackTipo) {
+    if (!etapa) return '';
+    const data = etapa.data || '';
+    const horario = etapa.horario || '';
+    return `${data ? data.split('-').reverse().join('/') : '—'}${horario ? `, ${horario}` : ''} (${fallbackTipo})`;
+}
 
-function openDetalhes(idx) {
-    currentDetalhesIdx = idx;
-    const item = allUnificados[idx];
-    if (!item) return;
-    const p = item.primeiraEtapa || {};
-    const seg = item.segundaEtapa;
-
-    document.getElementById('modalDetalhesTitle').innerHTML =
-        `<i class="fas fa-file-alt"></i> ${escapeHtml(p.evento || 'Inscrição')} ${statusBadgeHtml(item.status)}`;
-
-    // === SEÇÃO 1: dados da primeira etapa ===
-    const camposEtapa1 = [
-        ['Proponente', p.nome],
-        ['E-mail', p.email],
-        ['Telefone', p.telefone],
-        ['Local', p.localNome],
-        ['Evento', p.evento],
-    ];
-    const camposExtras = ['cpf','cnpj','instituicao','responsavel','representante','endereco','observacoes','descricao'];
-    camposExtras.forEach(k => {
-        if (p[k]) camposEtapa1.push([k.charAt(0).toUpperCase()+k.slice(1), p[k]]);
-    });
-
-    let html = `<div class="det-section">
-        <h4><i class="fas fa-user"></i> Etapa 1 — Dados da Inscrição</h4>
-        <div class="det-grid">
-            ${camposEtapa1.map(([l,v]) =>
-                `<div class="lbl">${escapeHtml(l)}:</div><div class="val">${renderValueAsHtml(v)}</div>`
-            ).join('')}
-        </div>
-    </div>`;
-
-    // === SEÇÃO 2: datas dos eventos agendados ===
-    const etapas = p.etapas || {};
+function renderDrawerContent(item, existingScores = {}) {
+    const p = item?.primeiraEtapa || {};
+    const dadosComplementares = obterDadosComplementaresDrawer(item);
+    const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
-    Object.keys(etapas).forEach(k => {
-        const arr = Array.isArray(etapas[k]) ? etapas[k] : [etapas[k]];
-        arr.forEach(ev => { if (ev) eventos.push({ ...ev, tipo: ev.tipo || k }); });
-    });
-    if (eventos.length > 0) {
-        html += `<div class="det-section">
-            <h4><i class="fas fa-calendar-days"></i> Datas e Horários Agendados</h4>
-            <ul class="det-event-list">
-                ${eventos.map(e => `<li>${escapeHtml(formatEventoData(e) || JSON.stringify(e))}</li>`).join('')}
-            </ul>
-        </div>`;
-    }
-
-    // === SEÇÃO 3: respostas da segunda etapa (Forms) ===
-    if (seg && seg.headers && seg.valores) {
-        const linhas = [];
-        seg.headers.forEach((h, i) => {
-            const val = seg.valores[i];
-            if (val !== undefined && val !== null && String(val).trim() !== '') {
-                linhas.push([h, val]);
-            }
+    Object.keys(p.etapas || {}).forEach(key => {
+        const itens = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+        itens.forEach(etapa => {
+            if (etapa) eventos.push({ etapa, tipo: nomesEtapas[key] || key });
         });
-        html += `<div class="det-section">
-            <h4><i class="fas fa-clipboard-list"></i> Etapa 2 — Respostas do Formulário (Google Forms)</h4>
-            ${linhas.length > 0 ? `<div class="det-grid">
-                ${linhas.map(([l,v]) =>
-                    `<div class="lbl">${escapeHtml(l)}:</div><div class="val">${renderValueAsHtml(v)}</div>`
-                ).join('')}
-            </div>` : `<div class="det-empty">Formulário enviado mas sem campos preenchidos.</div>`}
-        </div>`;
-    } else {
-        html += `<div class="det-section">
-            <h4><i class="fas fa-clipboard-list"></i> Etapa 2 — Respostas do Formulário (Google Forms)</h4>
-            <div class="det-empty">Este proponente ainda não enviou o formulário da segunda etapa.</div>
-        </div>`;
-    }
+    });
 
-    document.getElementById('modalDetalhesBody').innerHTML = html;
-    openModal('modalDetalhes');
+    let html = `
+        <div class="drawer-heading">
+            <div>
+                <h3><i class="fas fa-file-alt"></i> Inscrição completa</h3>
+                <p>Todos os dados usados na ficha de inscrição do proponente.</p>
+            </div>
+        </div>
+        <div class="drawer-section">
+            <h4><i class="fas fa-user"></i> Dados do proponente</h4>
+            <div class="drawer-grid">
+                ${[
+                    ['Proponente', p.nome],
+                    ['E-mail', p.email],
+                    ['Telefone', p.telefone],
+                    ['Local', p.localNome || 'Teatro Carmen Fossari'],
+                    ['Evento', p.evento],
+                    ['Inscrição', p.timestamp]
+                ].map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
+            </div>
+        </div>
+        <div class="drawer-section">
+            <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
+            ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
+        </div>
+        <div class="drawer-section">
+            <h4><i class="fas fa-clipboard-list"></i> Dados complementares (formulário)</h4>
+            ${dadosComplementares.length ? `<div class="drawer-grid">${dadosComplementares.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}</div>` : '<div class="drawer-empty">Nenhum dado complementar preenchido.</div>'}
+        </div>
+        <div class="drawer-evaluation">
+            <h4><i class="fas fa-star"></i> Avaliação</h4>
+            <p class="drawer-evaluation-note">Dê uma nota de 1 a 10 para cada critério.</p>
+            ${renderCriteriaRows(existingScores)}
+            <div class="drawer-save">
+                <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
+            </div>
+        </div>`;
+    return html;
 }
 
-function avaliarFromDetails() {
-    if (currentDetalhesIdx === null) return;
-    const idx = currentDetalhesIdx;
-    closeModal('modalDetalhes');
-    openAvaliacao(idx);
+function renderCriteriaRows(existingScores = {}) {
+    const crit = criterios.length ? criterios : defaultCriterios();
+    return crit.map(c => {
+        const nota = parseInt(existingScores[c.id] || 0);
+        let stars = '';
+        for (let s = 1; s <= 10; s++) {
+            stars += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
+        }
+        return `<div class="criteria-row">
+            <div class="criteria-label">${escapeHtml(c.nome)}<div class="criteria-weight">Peso: ${c.peso||1}</div></div>
+            <div>
+                <div class="stars" id="stars-${c.id}">${stars}</div>
+                <div style="text-align:center;font-size:12px;color:#2563eb;margin-top:4px" id="starLabel-${c.id}">${nota>0?nota+'/10':'—'}</div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 async function openAvaliacao(idx) {
+    if (openAvaliacaoIndex === idx) {
+        openAvaliacaoIndex = null;
+        currentAvaliacaoIndex = null;
+        renderAvaliacaoList();
+        return;
+    }
+    openAvaliacaoIndex = idx;
     currentAvaliacaoIndex = idx;
     currentAvaliacaoScores = {};
-    const p = allUnificados[idx].primeiraEtapa;
-    const id = p.id || p.email;
-    document.getElementById('modalAvaliacaoTitle').innerHTML = `<i class="fas fa-star"></i> Avaliação: ${escapeHtml(p.evento||'—')}`;
+    renderAvaliacaoList();
+    const drawer = document.getElementById(`avaliacao-drawer-${idx}`);
+    if (drawer) drawer.innerHTML = '<div class="drawer-loading"><i class="fas fa-spinner fa-spin"></i> Carregando inscrição completa...</div>';
 
-    // Buscar minha avaliação atual
+    const p = allUnificados[idx]?.primeiraEtapa;
+    if (!p) return;
+    const id = p.id || p.email;
     let existingScores = {};
     try {
         const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
@@ -542,30 +580,9 @@ async function openAvaliacao(idx) {
         const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
         if (myAv) existingScores = myAv.scoresJson || {};
     } catch(e) {}
-
-    const crit = criterios.length ? criterios : defaultCriterios();
+    if (openAvaliacaoIndex !== idx) return;
     currentAvaliacaoScores = { ...existingScores };
-
-    let html = `<p style="font-size:13px;color:#666;margin-bottom:8px"><strong>Proponente:</strong> ${escapeHtml(p.nome||'—')}</p>`;
-    html += `<p style="font-size:13px;color:#666;margin-bottom:16px"><strong>Local:</strong> ${escapeHtml(p.localNome||'—')}</p>`;
-    html += `<p style="font-size:12px;color:#888;margin-bottom:20px">Dê uma nota de 1 a 10 para cada critério.</p>`;
-
-    crit.forEach(c => {
-        const nota = parseInt(existingScores[c.id] || 0);
-        html += `<div class="criteria-row">
-            <div class="criteria-label">${escapeHtml(c.nome)}<div class="criteria-weight">Peso: ${c.peso||1}</div></div>
-            <div>
-                <div class="stars" id="stars-${c.id}">`;
-        for (let s = 1; s <= 10; s++) {
-            html += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
-        }
-        html += `</div><div style="text-align:center;font-size:12px;color:#2563eb;margin-top:4px" id="starLabel-${c.id}">${nota>0?nota+'/10':'—'}</div>
-            </div>
-        </div>`;
-    });
-
-    document.getElementById('modalAvaliacaoBody').innerHTML = html;
-    openModal('modalAvaliacao');
+    renderAvaliacaoList();
 }
 
 function setStar(criterioId, valor) {
@@ -593,7 +610,8 @@ async function salvarAvaliacao() {
         });
         const d = await r.json();
         if (d.success) {
-            closeModal('modalAvaliacao');
+            openAvaliacaoIndex = null;
+            currentAvaliacaoIndex = null;
             // Atualizar cache local
             try {
                 const rr = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
