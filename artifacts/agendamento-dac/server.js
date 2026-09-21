@@ -1044,7 +1044,7 @@ const ATIVIDADES_PRAZO_DIAS_CORRIDOS = 6;
 // Fluxo manual/legado do avião roxo. Mantido para emergência, mas desligado
 // para impedir que o proponente receba um segundo e-mail além do envio automático.
 // Palavra-chave de reativação: REATIVAR_AVIAO_ROXO_ATIVIDADES
-const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = false;
+const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = true;
 
 function executarComPrazo(operacao, prazoMs, descricao) {
     return new Promise((resolve, reject) => {
