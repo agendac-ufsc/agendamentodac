@@ -18,7 +18,7 @@ const { Redis } = require('@upstash/redis');
 const multer = require('multer');
 const AdmZip = require('adm-zip');
 const { put: putBlob, get: getBlob, del: deleteBlob } = require('@vercel/blob');
-const { randomUUID } = require('crypto');
+const { randomUUID, randomInt } = require('crypto');
 const { Readable } = require('stream');
 
 const app = express();
@@ -1023,6 +1023,12 @@ const sendEmail = async (to, subject, htmlContent) => {
     }
 };
 
+const AVALIADOR_SENHA_ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+function gerarSenhaAvaliador() {
+    let senha = '';
+    for (let i = 0; i < 6; i++) senha += AVALIADOR_SENHA_ALFABETO[randomInt(AVALIADOR_SENHA_ALFABETO.length)];
+    return senha;
+}
 const escapeHtml = (value) => String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -4046,10 +4052,12 @@ app.post('/api/auth/viewer', async (req, res) => {
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
         const avaliadores = parseRedisValue(raw) || [];
-        const av = avaliadores.find(a => a.email.toLowerCase() === email.trim().toLowerCase());
+        const emailNormalizado = String(email).trim().toLowerCase();
+        const av = avaliadores.find(a => String(a.email || '').trim().toLowerCase() === emailNormalizado);
         if (!av) return res.status(403).json({ success: false, message: 'E-mail não encontrado na lista de avaliadores.' });
-        const senhaCorreta = (process.env.EVALUATOR_PASSWORD || 'dac.ufsc.2026').replace(/^["']|["']$/g, '');
-        if (password === senhaCorreta) {
+        const senhaCorreta = String(av.senha || '');
+        if (!senhaCorreta) return res.status(403).json({ success: false, message: 'Este avaliador ainda não possui senha individual. Solicite ao administrador que remova e cadastre o e-mail novamente.' });
+        if (String(password) === senhaCorreta) {
             res.json({ success: true, email: av.email, nome: av.nome || av.email });
         } else {
             res.status(403).json({ success: false, message: 'Senha incorreta.' });
@@ -4058,7 +4066,6 @@ app.post('/api/auth/viewer', async (req, res) => {
         res.status(500).json({ error: 'Erro interno.' });
     }
 });
-
 // ============================================================
 // T003 — SISTEMA DE AVALIAÇÃO: AVALIADORES
 // ============================================================
@@ -4066,25 +4073,59 @@ app.post('/api/auth/viewer', async (req, res) => {
 app.get('/api/evaluators', async (req, res) => {
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
-        res.json(parseRedisValue(raw) || []);
+        const lista = parseRedisValue(raw) || [];
+        res.json(lista.map(({ id, email, nome }) => ({ id, email, nome })));
     } catch (e) {
         res.status(500).json({ error: 'Erro ao buscar avaliadores.' });
     }
 });
 
 app.post('/api/evaluators', async (req, res) => {
-    const { evaluators } = req.body;
-    if (!Array.isArray(evaluators)) return res.status(400).json({ error: 'Lista de avaliadores inválida.' });
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const nome = String(req.body?.nome || '').trim();
+    if (!email) return res.status(400).json({ error: 'E-mail obrigatório.' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'E-mail inválido.' });
+    if (!redis) return res.status(503).json({ error: 'Armazenamento de avaliadores indisponível.' });
     try {
-        const lista = evaluators.map(e => ({
-            id: e.id || `av_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-            email: (e.email || '').trim().toLowerCase(),
-            nome: (e.nome || e.email || '').trim()
-        })).filter(e => e.email);
-        if (redis) await redis.set('avaliadores', lista);
-        res.json({ success: true, count: lista.length });
+        const raw = await redis.get('avaliadores');
+        const lista = parseRedisValue(raw) || [];
+        if (lista.some(a => String(a.email || '').trim().toLowerCase() === email)) {
+            return res.status(409).json({ error: 'Este e-mail já está cadastrado como avaliador. Remova-o antes de cadastrar novamente.' });
+        }
+        const senha = gerarSenhaAvaliador();
+        const nomeFinal = nome || email;
+        const novo = { id: `av_${Date.now()}_${randomInt(100000, 1000000)}`, email, nome: nomeFinal, senha };
+        const listaAtualizada = [...lista, novo];
+        await redis.set('avaliadores', listaAtualizada);
+        const origem = obterOrigemPublicaTermo(req);
+        const painelUrl = origem ? `${origem}/avaliador` : '';
+        const html = `
+        <div style='font-family:Arial,sans-serif;max-width:620px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333'>
+            <div style='background:linear-gradient(135deg,#667eea,#764ba2);padding:24px 28px'>
+                <h2 style='margin:0;color:#fff;font-size:20px'>Acesso ao Painel de Avaliadores</h2>
+                <p style='margin:6px 0 0;color:rgba(255,255,255,.86);font-size:13px'>DAC — UFSC</p>
+            </div>
+            <div style='padding:26px 28px;font-size:14px;line-height:1.6'>
+                <p>Olá, <strong>${escapeHtml(nomeFinal)}</strong>.</p>
+                <p>Seu acesso individual ao Painel de Avaliadores foi criado.</p>
+                <div style='background:#f5f3ff;border:1px solid #ddd6fe;border-radius:9px;padding:16px 18px;margin:20px 0'>
+                    <p style='margin:0 0 8px'><strong>E-mail:</strong> ${escapeHtml(email)}</p>
+                    <p style='margin:0'><strong>Senha individual:</strong> <span style='font-family:monospace;font-size:20px;letter-spacing:2px;color:#5b347f'>${escapeHtml(senha)}</span></p>
+                </div>
+                ${painelUrl ? `<p>Acesse o painel pelo link: <a href='${painelUrl}'>${painelUrl}</a></p>` : '<p>Acesse o Painel de Avaliadores do DAC para entrar.</p>'}
+                <p>Guarde esta senha com segurança. Ela é exclusiva deste e-mail e não deve ser compartilhada.</p>
+                <p style='font-size:12px;color:#777'>Se você perder a senha, solicite ao administrador que remova seu cadastro e faça um novo cadastro para gerar outra.</p>
+            </div>
+        </div>`;
+        const enviado = await sendEmail(email, 'Acesso ao Painel de Avaliadores — DAC/UFSC', html);
+        if (!enviado) {
+            await redis.set('avaliadores', lista);
+            return res.status(502).json({ error: 'Não foi possível enviar o e-mail com a senha. O avaliador não foi cadastrado.' });
+        }
+        res.json({ success: true, count: listaAtualizada.length, emailSent: true, evaluator: { id: novo.id, email: novo.email, nome: novo.nome } });
     } catch (e) {
-        res.status(500).json({ error: 'Erro ao salvar avaliadores.' });
+        console.error('❌ Erro ao cadastrar avaliador:', e.message);
+        res.status(500).json({ error: 'Erro ao cadastrar avaliador.' });
     }
 });
 
