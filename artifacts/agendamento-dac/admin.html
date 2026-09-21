@@ -390,7 +390,7 @@
                 <button class="btn-top btn-purple" onclick="openAddAvaliadorModal()"><i class="fas fa-plus"></i> Adicionar</button>
             </div>
             <p style="font-size:13px;color:#888;margin-bottom:16px">
-                A senha padrão de todos os avaliadores é: <strong style="font-family:monospace;background:#f0f0f0;padding:2px 8px;border-radius:4px">dac.ufsc.2026</strong>
+                Cada avaliador recebe uma senha individual aleatória por e-mail. Se perder a senha, remova o cadastro e adicione o mesmo e-mail novamente para gerar outra.
             </p>
             <div id="avaliadoresList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
         </div>
@@ -754,7 +754,7 @@
             <label>E-mail</label>
             <input type="email" id="newAvEmail" class="form-input" placeholder="avaliador@exemplo.com">
         </div>
-        <p style="font-size:12px;color:#888;margin-top:8px">A senha padrão será <strong>dac.ufsc.2026</strong></p>
+        <p style="font-size:12px;color:#888;margin-top:8px">Uma senha individual de 6 caracteres será gerada e enviada para este e-mail.</p>
         <div class="modal-footer">
             <button class="btn-close-modal" onclick="closeModal('modalAddAvaliador')">Cancelar</button>
             <button class="btn-save-modal" onclick="addAvaliador()"><i class="fas fa-save"></i> Adicionar</button>
@@ -2791,12 +2791,21 @@ async function addAvaliador() {
     const nome = document.getElementById('newAvNome').value.trim();
     const email = document.getElementById('newAvEmail').value.trim();
     if (!email) { alert('E-mail obrigatório.'); return; }
-    avaliadores.push({ id: `av_${Date.now()}`, email, nome });
-    await fetch('/api/evaluators', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ evaluators: avaliadores }) });
+    const response = await fetch('/api/evaluators', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, nome })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+        alert(data.error || 'Não foi possível cadastrar o avaliador.');
+        return;
+    }
     document.getElementById('newAvNome').value = '';
     document.getElementById('newAvEmail').value = '';
     closeModal('modalAddAvaliador');
-    renderAvaliadores();
+    await loadAvaliadores();
+    alert('Avaliador cadastrado. A senha individual foi enviada para ' + email + '.');
 }
 
 async function removeAvaliador(id) {
