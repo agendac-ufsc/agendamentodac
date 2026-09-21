@@ -460,7 +460,7 @@ function obterDadosComplementaresDrawer(item) {
             projetoDac: 'Projeto do DAC',
             arquivos: 'Arquivos enviados'
         };
-        const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'concluidaEm']);
+        const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'arquivos', 'concluidaEm']);
         return Object.entries(dadosUnificados)
             .filter(([chave, valor]) => !ignoradas.has(chave) && formatarValorDrawer(valor))
             .map(([chave, valor]) => [
@@ -486,6 +486,62 @@ function formatarEtapaDrawer(etapa, fallbackTipo) {
     return `${data ? data.split('-').reverse().join('/') : '—'}${horario ? `, ${horario}` : ''} (${fallbackTipo})`;
 }
 
+function obterRotuloDocumentoDrawer(documento) {
+    const rotulos = {
+        testeCurriculoPessoaFisica: 'Pessoa Física — Currículo',
+        testeDocumentoPessoaFisica: 'Pessoa Física — Documento oficial',
+        testePortfolioPessoaJuridica: 'Pessoa Jurídica — Portfólio',
+        testeContratoPessoaJuridica: 'Pessoa Jurídica — Contrato',
+        testeDocumentoRepresentantePessoaJuridica: 'Pessoa Jurídica — Documento do representante',
+        testeDocumentoCnpjPessoaJuridica: 'Pessoa Jurídica — Documento do CNPJ',
+        testeComprovanteVinculoUfsc: 'Pessoa Jurídica — Comprovante de vínculo com a UFSC',
+        testeFichaTecnicaProposta: 'Proposta — Ficha técnica',
+        testeLinksVideoProposta: 'Proposta — Links de vídeo/fotos',
+        testeOutrosLinksProposta: 'Proposta — Outros documentos',
+        formsCurriculo: 'Google Forms — Currículo',
+        formsDocumentoOficial: 'Google Forms — Documento oficial',
+        formsPortfolio: 'Google Forms — Portfólio',
+        formsContrato: 'Google Forms — Contrato',
+        formsDocumentoRepresentante: 'Google Forms — Documento do representante',
+        formsDocumentoCnpj: 'Google Forms — Documento do CNPJ',
+        formsComprovanteVinculo: 'Google Forms — Comprovante de vínculo',
+        formsFichaTecnica: 'Google Forms — Ficha técnica',
+        formsLinksVideo: 'Google Forms — Links de vídeo/fotos',
+        formsDocumento: 'Google Forms — Outros documentos'
+    };
+    return documento?.categoria || documento?.colunaForms || rotulos[documento?.campo] || documento?.campo || 'Arquivo enviado';
+}
+
+function formatarTamanhoDocumentoDrawer(bytes) {
+    const tamanho = Number(bytes) || 0;
+    if (!tamanho) return '';
+    if (tamanho < 1024) return `${tamanho} B`;
+    if (tamanho < 1024 * 1024) return `${(tamanho / 1024).toFixed(1)} KB`;
+    return `${(tamanho / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function renderDocumentosDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const documentos = Array.isArray(p.documentos) ? p.documentos.filter(Boolean) : [];
+    if (!documentos.length) return '<div class="drawer-empty">Nenhum arquivo enviado para esta inscrição.</div>';
+    return `<div style="display:grid;gap:10px">${documentos.map(documento => {
+        const url = p.id && documento.id
+            ? `/api/admin/documentos/${encodeURIComponent(p.id)}/${encodeURIComponent(documento.id)}`
+            : '';
+        const detalhes = [documento.mimeType, formatarTamanhoDocumentoDrawer(documento.tamanho)].filter(Boolean).join(' · ');
+        const visualizar = url
+            ? `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#2563eb;font-size:12px;font-weight:700;text-decoration:none"><i class="fas fa-eye"></i> Visualizar</a>`
+            : '<span style="color:#aaa;font-size:12px">Visualização indisponível</span>';
+        return `<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #dbeafe;border-radius:8px;background:#fff;padding:10px 12px">
+            <div style="min-width:0">
+                <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:3px">${escapeHtml(obterRotuloDocumentoDrawer(documento))}</div>
+                <div style="font-size:13px;color:#1f2937;word-break:break-word">${escapeHtml(documento.nome || 'Arquivo sem nome')}</div>
+                ${detalhes ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px">${escapeHtml(detalhes)}</div>` : ''}
+            </div>
+            ${visualizar}
+        </div>`;
+    }).join('')}</div>`;
+}
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
     const dadosComplementares = obterDadosComplementaresDrawer(item);
@@ -525,6 +581,10 @@ function renderDrawerContent(item, existingScores = {}) {
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-list"></i> Dados complementares (formulário)</h4>
             ${dadosComplementares.length ? `<div class="drawer-grid">${dadosComplementares.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}</div>` : '<div class="drawer-empty">Nenhum dado complementar preenchido.</div>'}
+        </div>
+        <div class="drawer-section">
+            <h4><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
+            ${renderDocumentosDrawer(item)}
         </div>
         <div class="drawer-evaluation">
             <h4><i class="fas fa-star"></i> Avaliação</h4>
@@ -572,6 +632,11 @@ async function openAvaliacao(idx) {
     const p = allUnificados[idx]?.primeiraEtapa;
     if (!p) return;
     const id = p.id || p.email;
+    try {
+        const documentosResponse = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}/documentos?_=${Date.now()}`);
+        const documentosData = await documentosResponse.json().catch(() => ({}));
+        if (documentosResponse.ok && Array.isArray(documentosData.documentos)) p.documentos = documentosData.documentos;
+    } catch (e) {}
     let existingScores = {};
     try {
         const r = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
