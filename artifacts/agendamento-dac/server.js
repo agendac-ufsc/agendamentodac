@@ -1047,9 +1047,8 @@ const ATIVIDADES_LEGADAS_TIMEOUT_MS = 12000;
 // Se o envio ocorrer no dia 17, seis dias corridos resultam no prazo do dia 23.
 const ATIVIDADES_PRAZO_DIAS_CORRIDOS = 6;
 
-// Fluxo manual/legado do avião roxo. Mantido para emergência, mas desligado
-// para impedir que o proponente receba um segundo e-mail além do envio automático.
-// Palavra-chave de reativação: REATIVAR_AVIAO_ROXO_ATIVIDADES
+// Envio manual adicional solicitado pelo administrador; o cron automático permanece ativo.
+// A rota exige senha administrativa configurada e valida antes de enviar qualquer e-mail.
 const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = true;
 
 function executarComPrazo(operacao, prazoMs, descricao) {
@@ -2684,6 +2683,14 @@ app.post('/api/admin/enviar-registro-atividades', async (req, res) => {
     }
 
     const { id, baseUrl } = req.body || {};
+    const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
+    const senhaAdmin = limparConfiguracaoBrevo(process.env.ADMIN_PASSWORD);
+    if (!senhaAdmin) {
+        return res.status(503).json({ error: 'Envio manual indisponível: ADMIN_PASSWORD não está configurada.' });
+    }
+    if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
+        return res.status(403).json({ error: 'Senha administrativa incorreta.' });
+    }
     const idNormalizado = String(id || '').trim();
     const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
     const senderEmail = obterRemetenteBrevo();
