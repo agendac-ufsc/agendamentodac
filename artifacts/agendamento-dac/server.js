@@ -4129,8 +4129,8 @@ app.post('/api/evaluators', async (req, res) => {
     }
 });
 
-app.delete('/api/evaluators/:id', async (req, res) => {
-    const { id } = req.params;
+const removerAvaliador = async (req, res, idRecebido) => {
+    const id = String(idRecebido || '').trim();
     if (!id || id === 'undefined' || id === 'null') {
         return res.status(400).json({ success: false, error: 'Identificador do avaliador é obrigatório.' });
     }
@@ -4149,6 +4149,17 @@ app.delete('/api/evaluators/:id', async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: 'Erro ao remover avaliador.' });
     }
+};
+
+// O endpoint sem segmento dinâmico é necessário na Vercel: a configuração
+// atual encaminha /api/evaluators, mas devolve NOT_FOUND antes do Express para
+// /api/evaluators/:id. O endpoint dinâmico permanece para uso local.
+app.delete('/api/evaluators', async (req, res) => {
+    await removerAvaliador(req, res, req.query?.id || req.body?.id);
+});
+
+app.delete('/api/evaluators/:id', async (req, res) => {
+    await removerAvaliador(req, res, req.params.id);
 });
 
 // ============================================================
