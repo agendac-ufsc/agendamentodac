@@ -74,6 +74,7 @@
         tr:last-child td{border-bottom:none}
         tr:hover td{background:#fcfaff}
         /* Larguras fixas das colunas para caber em 100% de zoom */
+        #inscricoesTable{min-width:980px}
         #inscricoesTable .check-col{width:36px}
         #inscricoesTable th:nth-child(2),#inscricoesTable td:nth-child(2){width:36px}
         #inscricoesTable th:nth-child(3),#inscricoesTable td:nth-child(3){width:22%}
@@ -81,11 +82,13 @@
         #inscricoesTable th:nth-child(5),#inscricoesTable td:nth-child(5){width:auto;overflow:hidden}
         #inscricoesTable td:nth-child(5) span{white-space:normal!important}
         #inscricoesTable th:nth-child(6),#inscricoesTable td:nth-child(6){width:88px}
-        #inscricoesTable th:nth-child(7){width:104px;text-align:center}
-        #inscricoesTable td:nth-child(7){width:104px;padding:6px 4px;overflow:hidden}
-        #inscricoesTable th:nth-child(8){width:132px;text-align:center}
-        #inscricoesTable td:nth-child(8){width:132px;padding:6px 4px;overflow:hidden}
-        #inscricoesTable .acoes-list{display:flex;align-items:center;justify-content:center;gap:0;flex-wrap:nowrap;direction:ltr;min-width:0}
+        #inscricoesTable th:nth-child(7),#inscricoesTable td:nth-child(7){width:112px;text-align:center}
+        #inscricoesTable td:nth-child(7){padding:6px 8px;overflow:hidden}
+        #inscricoesTable th:nth-child(8),#inscricoesTable td:nth-child(8){width:160px;min-width:160px;text-align:center}
+        #inscricoesTable th:nth-child(8){padding:10px 10px}
+        #inscricoesTable td:nth-child(8){padding:6px 10px;overflow:hidden}
+        #inscricoesTable .acoes-cell{text-align:center}
+        #inscricoesTable .acoes-list{display:flex;align-items:center;justify-content:center;gap:2px;flex-wrap:nowrap;direction:ltr;min-width:0}
         #inscricoesTable .acoes-list .btn-action{flex:0 0 21px;width:21px;padding:3px 0;font-size:14px;line-height:1;white-space:nowrap}
         #inscricoesTable .acoes-list .btn-action small{font-size:9px;margin-left:-2px}
         .col-evento{font-weight:700;color:#333}
