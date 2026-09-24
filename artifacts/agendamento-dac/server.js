@@ -2125,7 +2125,7 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
                     const label = itens.length > 1 ? `${nomesEtapas[tipo] || tipo} ${index + 1}` : (nomesEtapas[tipo] || tipo);
                     const eventoCalendario = await createCalendarEvent(
                         `${label}: ${dados.evento}`,
-                        `Inscrição validada pelo sistema unificado.\nProponente: ${dados.nome}\nE-mail: ${email}\nLocal: ${agendamento.localNome || agendamento.local || 'Teatro Carmen Fossari'}`,
+                        '<strong>EM ANÁLISE</strong>',
                         item.data,
                         item.horario,
                         calendarId,
