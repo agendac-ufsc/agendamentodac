@@ -955,10 +955,9 @@ let documentosInscricaoIndex = null;
 let documentosInscricaoId = null;
 let limparBuscaDepoisDosCriterios = false;
 
-// O fluxo manual/legado permanece no código para emergência, mas seu ícone
-// fica oculto enquanto o envio automático estiver ativo.
-// Palavra-chave de reativação: REATIVAR_AVIAO_ROXO_ATIVIDADES
-const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = false;
+// Envio manual adicional, disponível ao administrador além do cron automático.
+// A confirmação exige senha; a rota também valida a senha no backend.
+const ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO = true;
 const inscricoesSelecionadas = new Set();
 
 // ══════════════════════════════════════════════════
@@ -1471,7 +1470,15 @@ async function enviarLinkRegistroAtividades(idx, btn) {
         alert('Esta inscrição não possui e-mail para receber o link.');
         return;
     }
-    if (!(await showConfirmDialog(`Enviar o link do Registro de atividades para ${p.email}?`))) return;
+    const confirmacao = await showConfirmDialog(
+        'Enviar o link do Registro de atividades para ' + p.email + '?',
+        {
+            requirePassword: true,
+            title: 'Confirmar envio manual',
+            confirmLabel: 'Enviar agora'
+        }
+    );
+    if (!confirmacao?.confirmed) return;
 
     const original = btn?.innerHTML || '<i class="fas fa-paper-plane"></i>';
     if (btn) {
@@ -1482,7 +1489,7 @@ async function enviarLinkRegistroAtividades(idx, btn) {
         const response = await fetch('/api/admin/enviar-registro-atividades', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: p.id, baseUrl: window.location.origin })
+            body: JSON.stringify({ id: p.id, baseUrl: window.location.origin, password: confirmacao.password })
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok || !data.success) {
