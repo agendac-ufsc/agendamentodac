@@ -2,6 +2,14 @@
 
 Este documento é um manual de preparação para outro agente continuar o trabalho. Ele não é um histórico do projeto nem uma lista de tarefas concluídas. O agente deve descobrir o estado atual consultando o GitHub e a Vercel no momento da configuração.
 
+## Instrução para o agente que receber este arquivo
+
+Se este arquivo foi anexado pelo usuário, leia-o antes de fazer perguntas e trate-o como instrução operacional para preparar a workspace. Execute a configuração descrita aqui e comece pelo estado atual do repositório; não peça ao usuário para colar o código, repetir o histórico ou confirmar etapas que o próprio documento já define.
+
+Se uma capacidade necessária não estiver conectada — especialmente o GitHub — solicite a integração pela conexão segura da interface do Replit. Nunca peça token, senha, chave SSH ou secret no chat. Depois que o usuário autorizar a conexão, continue a configuração automaticamente usando o repositório e o `main` atual.
+
+O anexo não concede acesso por si só: a autorização da conta do usuário continua sendo necessária quando a workspace ainda não tiver a integração. Essa autorização deve ser solicitada por um cartão de conexão do Replit, não por credenciais copiadas na conversa.
+
 ## 1. Fontes de verdade
 
 Use sempre estas fontes, nesta ordem:
