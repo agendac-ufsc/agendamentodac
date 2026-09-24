@@ -774,6 +774,22 @@ const atualizarDescricaoEventosInscricao = async (agendamento, descricao) => {
     }
 };
 
+const atualizarCalendarioComSinopseInscricao = async (agendamento) => {
+    if (agendamento?.inscricaoTeste !== true) return null;
+
+    const sinopse = String(agendamento.segundaEtapaTeste?.sinopse || '').trim();
+    if (!sinopse) {
+        console.warn(`⚠️ [Calendar] Inscrição unificada ${agendamento.id} sem sinopse salva; descrição não alterada.`);
+        return false;
+    }
+
+    const resultado = await atualizarDescricaoEventosInscricao(
+        agendamento,
+        `Sinopse/descrição da proposta:\n${sinopse}`
+    );
+    return resultado.total > 0 && resultado.updated === resultado.total;
+};
+
 // Endpoint de diagnóstico — mostra estado do Redis e configuração em memória
 app.get('/api/debug', async (req, res) => {
     const env = {
@@ -4451,7 +4467,19 @@ app.post('/api/admin/atualizar-termo', async (req, res) => {
             termoDados: dadosLimpos
         });
         if (!success) return res.status(500).json({ error: 'Não foi possível salvar o termo.' });
-        return res.json({ success: true, termoAssinado: marcarConcluido === true });
+
+        let calendarDescriptionUpdated = null;
+        if (marcarConcluido === true && agendamento.inscricaoTeste === true) {
+            const agendamentoAtualizado = (await getAgendamentos())
+                .find(item => String(item.id) === String(id));
+            calendarDescriptionUpdated = await atualizarCalendarioComSinopseInscricao(agendamentoAtualizado);
+        }
+
+        return res.json({
+            success: true,
+            termoAssinado: marcarConcluido === true,
+            calendarDescriptionUpdated
+        });
     } catch (e) {
         console.error('❌ [/api/admin/atualizar-termo] erro:', e.message);
         return res.status(500).json({ error: 'Erro interno ao salvar o termo.' });
@@ -4956,18 +4984,7 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
                 const agendamento = (await getAgendamentos())
                     .find(item => String(item.id) === String(id));
                 if (agendamento?.inscricaoTeste === true) {
-                    const sinopse = String(agendamento.segundaEtapaTeste?.sinopse || '').trim();
-                    if (sinopse) {
-                        const resultado = await atualizarDescricaoEventosInscricao(
-                            agendamento,
-                            `Sinopse/descrição da proposta:\n${sinopse}`
-                        );
-                        calendarDescriptionUpdated = resultado.total > 0
-                            && resultado.updated === resultado.total;
-                    } else {
-                        calendarDescriptionUpdated = false;
-                        console.warn(`⚠️ [Calendar] Inscrição unificada ${id} sem sinopse salva; descrição não alterada.`);
-                    }
+                    calendarDescriptionUpdated = await atualizarCalendarioComSinopseInscricao(agendamento);
                 }
             }
         }
