@@ -4131,12 +4131,21 @@ app.post('/api/evaluators', async (req, res) => {
 
 app.delete('/api/evaluators/:id', async (req, res) => {
     const { id } = req.params;
+    if (!id || id === 'undefined' || id === 'null') {
+        return res.status(400).json({ success: false, error: 'Identificador do avaliador é obrigatório.' });
+    }
+    if (!redis) {
+        return res.status(503).json({ success: false, error: 'Armazenamento de avaliadores indisponível.' });
+    }
     try {
-        const raw = redis ? await redis.get('avaliadores') : null;
+        const raw = await redis.get('avaliadores');
         const lista = parseRedisValue(raw) || [];
         const filtrada = lista.filter(a => a.id !== id);
-        if (redis) await redis.set('avaliadores', filtrada);
-        res.json({ success: true });
+        if (filtrada.length === lista.length) {
+            return res.status(404).json({ success: false, error: 'Avaliador não encontrado. Atualize a lista e tente novamente.' });
+        }
+        await redis.set('avaliadores', filtrada);
+        res.json({ success: true, deletedId: id, count: filtrada.length });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao remover avaliador.' });
     }
