@@ -2781,7 +2781,7 @@ function renderAvaliadores() {
     el.innerHTML = avaliadores.map(a => `
         <div class="av-list-item">
             <div><div class="av-email">${a.email}</div><div class="av-nome">${a.nome||'—'}</div></div>
-            <button class="btn-top btn-danger" style="padding:6px 12px" onclick="removeAvaliador('${a.id}')"><i class="fas fa-trash"></i></button>
+            <button class="btn-top btn-danger" style="padding:6px 12px" onclick="removeAvaliador('${a.id}', this)" title="Remover avaliador"><i class="fas fa-trash"></i></button>
         </div>`).join('');
 }
 
@@ -2808,10 +2808,57 @@ async function addAvaliador() {
     alert('Avaliador cadastrado. A senha individual foi enviada para ' + email + '.');
 }
 
-async function removeAvaliador(id) {
-    if (!(await showConfirmDialog('Remover este avaliador?'))) return;
-    await fetch(`/api/evaluators/${id}`, { method: 'DELETE' });
-    await loadAvaliadores();
+async function removeAvaliador(id, button) {
+    if (!id || id === 'undefined' || id === 'null') {
+        await showConfirmDialog('Este avaliador não possui um identificador válido.', {
+            title: 'Não foi possível remover',
+            confirmLabel: 'OK',
+            hideCancel: true,
+            danger: true
+        });
+        return;
+    }
+    if (!(await showConfirmDialog('Remover este avaliador? Esta ação não pode ser desfeita.', {
+        title: 'Confirmar remoção',
+        confirmLabel: '<i class="fas fa-trash"></i> Remover',
+        danger: true
+    }))) return;
+
+    const originalLabel = button?.innerHTML || '<i class="fas fa-trash"></i>';
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    }
+
+    try {
+        const response = await fetch(`/api/evaluators/${encodeURIComponent(id)}`, {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `Falha ao remover o avaliador (HTTP ${response.status}).`);
+        }
+        await loadAvaliadores();
+        await showConfirmDialog('Avaliador removido com sucesso.', {
+            title: 'Remoção concluída',
+            confirmLabel: 'OK',
+            hideCancel: true,
+            success: true
+        });
+    } catch (error) {
+        await showConfirmDialog(error.message || 'Não foi possível remover o avaliador.', {
+            title: 'Não foi possível remover',
+            confirmLabel: 'OK',
+            hideCancel: true,
+            danger: true
+        });
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = originalLabel;
+        }
+    }
 }
 
 // ══════════════════════════════════════════════════
