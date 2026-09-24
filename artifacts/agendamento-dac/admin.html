@@ -2831,7 +2831,10 @@ async function removeAvaliador(id, button) {
     }
 
     try {
-        const response = await fetch(`/api/evaluators/${encodeURIComponent(id)}`, {
+        // A Vercel pode não encaminhar caminhos dinâmicos desta função
+        // ("/api/evaluators/:id"). O endpoint exato com query string chega
+        // corretamente ao Express em produção.
+        const response = await fetch(`/api/evaluators?id=${encodeURIComponent(id)}`, {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' }
         });
