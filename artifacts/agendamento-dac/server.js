@@ -4392,6 +4392,238 @@ app.get('/api/assessments/:inscriptionId', async (req, res) => {
 // T004a — EDIÇÃO DE ETAPAS (via painel admin)
 // ============================================================
 
+const NOMES_ETAPAS_CALENDARIO = {
+    ensaio: 'Ensaio',
+    montagem: 'Montagem',
+    evento: 'Evento',
+    desmontagem: 'Desmontagem'
+};
+
+const normalizarTextoCalendario = (valor) => String(valor || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const etapasParaCalendario = (etapas) => Object.entries(etapas || {}).flatMap(([tipo, valor]) => {
+    const itens = Array.isArray(valor) ? valor : [valor];
+    return itens.map((item, index) => {
+        if (!item || !item.data) return null;
+        const total = itens.length;
+        const nome = NOMES_ETAPAS_CALENDARIO[tipo] || tipo;
+        return {
+            tipo,
+            index,
+            data: item.data,
+            horario: item.horario || '',
+            titulo: `${total > 1 ? `${nome} ${index + 1}` : nome}`,
+        };
+    }).filter(Boolean);
+});
+
+const etapaDoTituloCalendario = (summary) => {
+    const prefixo = String(summary || '').split(':')[0].trim();
+    const prefixoNormalizado = normalizarTextoCalendario(prefixo);
+    for (const [tipo, nome] of Object.entries(NOMES_ETAPAS_CALENDARIO)) {
+        const nomeNormalizado = normalizarTextoCalendario(nome);
+        if (prefixoNormalizado === nomeNormalizado) return { tipo, index: 0 };
+        const numerada = prefixoNormalizado.match(new RegExp(`^${nomeNormalizado}\\s+(\\d+)$`));
+        if (numerada) return { tipo, index: Number(numerada[1]) - 1 };
+    }
+    return null;
+};
+
+async function listarEventosCalendario(calendarId, privateExtendedProperty) {
+    if (!googleAuthClient) await initGoogleAuth();
+    if (!googleAuthClient) throw new Error('Autenticação do Google Calendar indisponível.');
+
+    const eventos = [];
+    let pageToken;
+    do {
+        const resposta = await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId,
+            maxResults: 2500,
+            singleEvents: true,
+            ...(privateExtendedProperty ? { privateExtendedProperty } : {}),
+            ...(pageToken ? { pageToken } : {})
+        });
+        eventos.push(...(resposta.data.items || []));
+        pageToken = resposta.data.nextPageToken;
+    } while (pageToken);
+    return eventos.filter(evento => evento && evento.id);
+}
+
+async function sincronizarEtapasNoGoogleCalendar(agendamentoAnterior, etapasNovas) {
+    const resultado = {
+        status: 'updated',
+        updated: 0,
+        created: 0,
+        deleted: 0,
+        matched: 0,
+        errors: []
+    };
+    const id = String(agendamentoAnterior?.id || '').trim();
+    if (!id) {
+        return { ...resultado, status: 'error', errors: ['Inscrição sem identificador.'] };
+    }
+
+    const calendarId = agendamentoAnterior.calendarId
+        || CALENDAR_IDS[(agendamentoAnterior.local || 'teatro').toLowerCase()]
+        || CALENDAR_IDS.teatro;
+    const etapasAntigas = etapasParaCalendario(agendamentoAnterior.etapas);
+    const etapasAtualizadas = etapasParaCalendario(etapasNovas);
+    const isLegada = agendamentoAnterior.isLegada === true || id.startsWith('forms_');
+
+    try {
+        // Inscrições unificadas já recebem este identificador privado ao criar
+        // cada evento. Isso evita depender do título ou da descrição do evento.
+        let eventos = await listarEventosCalendario(calendarId, [
+            'dac_source=sistema',
+            `dac_inscricao_id=${id}`
+        ]);
+
+        // Eventos antigos não têm o identificador privado. Para eles, usar
+        // somente títulos que correspondam à inscrição é mais seguro que criar
+        // eventos duplicados no Calendar.
+        if (eventos.length === 0) {
+            const todosEventos = await listarEventosCalendario(calendarId);
+            const titulosAntigos = new Set([
+                ...etapasAntigas.map(etapa => `${etapa.titulo}: ${agendamentoAnterior.evento}`),
+                ...(agendamentoAnterior.calendarDates || []).map(item => item.resumo).filter(Boolean)
+            ]);
+            const nomeEvento = normalizarTextoCalendario(agendamentoAnterior.evento);
+            const email = normalizarTextoCalendario(agendamentoAnterior.email);
+            eventos = todosEventos.filter(evento => {
+                const titulo = String(evento.summary || '');
+                const tituloNormalizado = normalizarTextoCalendario(titulo);
+                const tituloConhecido = titulosAntigos.has(titulo);
+                const temNomeEvento = nomeEvento && tituloNormalizado.includes(nomeEvento);
+                const temEmail = email && normalizarTextoCalendario(evento.description).includes(email);
+                return (tituloConhecido && (temNomeEvento || temEmail)) || (temNomeEvento && temEmail);
+            });
+        }
+
+        // Uma inscrição unificada sem eventos pode ser reparada ao salvar.
+        // Para inscrições legadas, não criamos eventos sem uma correspondência
+        // segura, pois isso poderia duplicar eventos históricos.
+        if (eventos.length === 0 && isLegada) {
+            return {
+                ...resultado,
+                status: etapasAtualizadas.length === 0 ? 'updated' : 'no-events',
+                errors: etapasAtualizadas.length > 0
+                    ? ['Nenhum evento correspondente foi encontrado no Google Calendar.']
+                    : []
+            };
+        }
+
+        const usados = new Set();
+        const pares = [];
+        const buscarEvento = (etapa, preferirTitulo = false) => eventos.find((evento, indice) => {
+            if (usados.has(indice)) return false;
+            const tituloEsperado = `${etapa.titulo}: ${agendamentoAnterior.evento}`;
+            if (preferirTitulo && evento.summary !== tituloEsperado) return false;
+            if (!preferirTitulo) {
+                const etapaDoEvento = etapaDoTituloCalendario(evento.summary);
+                if (!etapaDoEvento || etapaDoEvento.tipo !== etapa.tipo || etapaDoEvento.index !== etapa.index) return false;
+            }
+            usados.add(indice);
+            return true;
+        });
+
+        // Primeiro preserva eventos que ainda representam o mesmo tipo/posição.
+        for (const etapa of etapasAtualizadas) {
+            const evento = buscarEvento(etapa) || buscarEvento(etapa, true);
+            if (evento) pares.push({ etapa, evento });
+        }
+
+        // Se o administrador trocou o tipo da etapa, reutiliza os eventos
+        // restantes pela ordem, em vez de criar um duplicado.
+        const etapasSemEvento = etapasAtualizadas.filter(etapa =>
+            !pares.some(par => par.etapa === etapa)
+        );
+        const eventosRestantes = eventos.filter((_, indice) => !usados.has(indice));
+        etapasSemEvento.forEach((etapa, indice) => {
+            const evento = eventosRestantes[indice];
+            if (!evento) return;
+            const eventoIndex = eventos.indexOf(evento);
+            usados.add(eventoIndex);
+            pares.push({ etapa, evento });
+        });
+
+        for (const par of pares) {
+            const { etapa, evento } = par;
+            resultado.matched++;
+            if (!etapa.horario) {
+                resultado.errors.push(`A etapa "${etapa.titulo}" não possui horário completo.`);
+                continue;
+            }
+            const [startTime, endTime] = String(etapa.horario).split(' às ');
+            if (!startTime || !endTime) {
+                resultado.errors.push(`Horário inválido na etapa "${etapa.titulo}".`);
+                continue;
+            }
+            try {
+                await calendar.events.patch({
+                    auth: googleAuthClient,
+                    calendarId,
+                    eventId: evento.id,
+                    resource: {
+                        summary: `${etapa.titulo}: ${agendamentoAnterior.evento}`,
+                        start: {
+                            dateTime: `${etapa.data}T${startTime}:00-03:00`,
+                            timeZone: 'America/Sao_Paulo'
+                        },
+                        end: {
+                            dateTime: `${etapa.data}T${endTime}:00-03:00`,
+                            timeZone: 'America/Sao_Paulo'
+                        }
+                    }
+                });
+                resultado.updated++;
+            } catch (erro) {
+                resultado.errors.push(`Falha ao atualizar "${etapa.titulo}": ${erro.message}`);
+            }
+        }
+
+        for (const etapa of etapasAtualizadas) {
+            if (pares.some(par => par.etapa === etapa)) continue;
+            if (!etapa.horario) {
+                resultado.errors.push(`A etapa "${etapa.titulo}" não possui horário completo.`);
+                continue;
+            }
+            const eventoCriado = await createCalendarEvent(
+                `${etapa.titulo}: ${agendamentoAnterior.evento}`,
+                '<strong>EM ANÁLISE</strong>',
+                etapa.data,
+                etapa.horario,
+                calendarId,
+                id
+            );
+            if (eventoCriado) resultado.created++;
+            else resultado.errors.push(`Falha ao criar "${etapa.titulo}" no Google Calendar.`);
+        }
+
+        for (const [indice, evento] of eventos.entries()) {
+            if (usados.has(indice)) continue;
+            try {
+                await calendar.events.delete({ auth: googleAuthClient, calendarId, eventId: evento.id });
+                resultado.deleted++;
+            } catch (erro) {
+                resultado.errors.push(`Falha ao excluir o evento "${evento.summary || evento.id}": ${erro.message}`);
+            }
+        }
+
+        if (resultado.errors.length > 0) resultado.status = 'partial';
+        if (eventos.length === 0 && etapasAtualizadas.length === 0) resultado.status = 'updated';
+        return resultado;
+    } catch (erro) {
+        console.error('❌ [Calendar] Erro geral ao sincronizar etapas:', erro.message);
+        return { ...resultado, status: 'error', errors: [erro.message] };
+    }
+}
+
 // ---- Helpers para etapas de inscrições legadas (Forms-only) ----
 async function getLegadasEtapas() {
     try {
@@ -4492,118 +4724,27 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
         return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
     }
 
-    // Inscrições legadas (Forms-only) têm IDs "forms_..." — salvar em chave separada
-    if (String(id).startsWith('forms_')) {
-        if (campos.etapas !== undefined) {
-            await setLegadaEtapas(id, campos.etapas);
-        }
-        return res.json({ success: true });
-    }
-
-    // Buscar agendamento atual antes de atualizar (para ter email, evento, calendarId)
+    // Buscar o agendamento atual antes de atualizar (para ter email, evento,
+    // calendarId e os identificadores privados dos eventos do Calendar).
     const agendamentos = await getAgendamentos();
     const ag = agendamentos.find(a => a.id === id);
-    if (!ag) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+    const isLegada = String(id).startsWith('forms_');
+    if (!ag && !isLegada) return res.status(404).json({ error: 'Agendamento não encontrado.' });
 
-    // Salvar no Redis e responder imediatamente
-    const success = await updateAgendamento(id, campos);
+    // Inscrições legadas (Forms-only) têm IDs "forms_..." e as etapas ficam
+    // numa chave separada, mas agora também passam pela sincronização segura
+    // quando o evento correspondente é localizado.
+    const success = isLegada
+        ? (campos.etapas !== undefined ? await setLegadaEtapas(id, campos.etapas) !== false : true)
+        : await updateAgendamento(id, campos);
     if (!success) return res.status(500).json({ error: 'Erro ao salvar no banco de dados.' });
 
-    // Responde ao cliente imediatamente — Calendar é atualizado em segundo plano
-    res.json({ success: true });
-
-    // Atualizar Google Calendar de forma assíncrona (sem bloquear a resposta)
-    if (campos.etapas) {
-        (async () => {
-            try {
-                if (!googleAuthClient) await initGoogleAuth();
-                const calId = ag.calendarId || CALENDAR_IDS[(ag.local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
-                const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
-
-                const listResp = await calendar.events.list({
-                    auth: googleAuthClient,
-                    calendarId: calId,
-                    maxResults: 2500,
-                    singleEvents: true
-                });
-                const allEvents = listResp.data.items || [];
-
-                // ── Helper: título esperado de um evento ──────────────────────
-                const makeTitle = (key, idx, total) => {
-                    const label = total > 1 ? `${nomesEtapas[key] || key} ${idx + 1}` : (nomesEtapas[key] || key);
-                    return `${label}: ${ag.evento}`;
-                };
-
-                // ── Coletar títulos que PERMANECEM (novas etapas) ─────────────
-                const titulosRestantes = new Set();
-                for (const key in campos.etapas) {
-                    const itens = Array.isArray(campos.etapas[key]) ? campos.etapas[key] : [campos.etapas[key]];
-                    itens.forEach((it, i) => { if (it && it.data) titulosRestantes.add(makeTitle(key, i, itens.length)); });
-                }
-
-                // ── Excluir do Calendar eventos que foram REMOVIDOS ───────────
-                const etapasAntigas = ag.etapas || {};
-                for (const key in etapasAntigas) {
-                    const itens = Array.isArray(etapasAntigas[key]) ? etapasAntigas[key] : [etapasAntigas[key]];
-                    for (let i = 0; i < itens.length; i++) {
-                        const titulo = makeTitle(key, i, itens.length);
-                        if (titulosRestantes.has(titulo)) continue; // ainda existe — não excluir
-                        const match = allEvents.find(e =>
-                            e.summary === titulo &&
-                            e.description && e.description.includes(ag.email)
-                        );
-                        if (match) {
-                            try {
-                                await calendar.events.delete({ auth: googleAuthClient, calendarId: calId, eventId: match.id });
-                                console.log(`🗑️ [Calendar] Evento excluído: "${titulo}"`);
-                            } catch (e) {
-                                console.error(`❌ [Calendar] Erro ao excluir "${titulo}":`, e.message);
-                            }
-                        } else {
-                            console.warn(`⚠️ [Calendar] Evento a excluir não encontrado: "${titulo}"`);
-                        }
-                    }
-                }
-
-                // ── Atualizar data/hora dos eventos que PERMANECEM ────────────
-                for (const key in campos.etapas) {
-                    const itens = Array.isArray(campos.etapas[key]) ? campos.etapas[key] : [campos.etapas[key]];
-                    for (let i = 0; i < itens.length; i++) {
-                        const it = itens[i];
-                        if (!it || !it.data || !it.horario) continue;
-                        const titulo = makeTitle(key, i, itens.length);
-                        const match = allEvents.find(e =>
-                            e.summary === titulo &&
-                            e.description && e.description.includes(ag.email)
-                        );
-                        if (!match) {
-                            console.warn(`⚠️ [Calendar] Evento não encontrado para atualizar: "${titulo}"`);
-                            continue;
-                        }
-                        const [startTime, endTime] = it.horario.split(' às ');
-                        const startDT = `${it.data}T${startTime}:00-03:00`;
-                        const endDT   = `${it.data}T${endTime}:00-03:00`;
-                        try {
-                            await calendar.events.patch({
-                                auth: googleAuthClient,
-                                calendarId: calId,
-                                eventId: match.id,
-                                resource: {
-                                    start: { dateTime: startDT, timeZone: 'America/Sao_Paulo' },
-                                    end:   { dateTime: endDT,   timeZone: 'America/Sao_Paulo' }
-                                }
-                            });
-                            console.log(`✅ [Calendar] Evento atualizado: "${titulo}" → ${it.data} ${it.horario}`);
-                        } catch (e) {
-                            console.error(`❌ [Calendar] Erro ao atualizar "${titulo}":`, e.message);
-                        }
-                    }
-                }
-            } catch (e) {
-                console.error('❌ [Calendar] Erro geral ao atualizar eventos:', e.message);
-            }
-        })();
+    let calendarSync = null;
+    if (campos.etapas !== undefined && ag) {
+        calendarSync = await sincronizarEtapasNoGoogleCalendar(ag, campos.etapas);
     }
+
+    return res.json({ success: true, calendarSync });
 });
 
 // Envio manual e registro da mensagem de divulgação institucional.
