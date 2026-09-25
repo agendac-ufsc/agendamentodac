@@ -16,6 +16,10 @@
       "dest": "/api/documentos-teste/upload.js"
     },
     {
+      "src": "^/api/agendamento/[^/]+$",
+      "dest": "/api/[...path].js"
+    },
+    {
       "src": "^/api/admin/inscricoes/[^/]+$",
       "dest": "/api/admin-documents.js"
     },
