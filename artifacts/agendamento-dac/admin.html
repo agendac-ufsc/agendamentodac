@@ -629,7 +629,7 @@
 <div class="modal" id="modalEditarEtapas">
     <div class="modal-box" style="max-width:580px">
         <h3><i class="fas fa-pencil-alt"></i> Editar Datas e Horários</h3>
-        <p style="font-size:12px;color:#888;margin:-8px 0 16px">Altere as datas e horários abaixo. As mudanças são salvas no sistema mas <strong>não atualizam automaticamente o Google Calendar</strong>.</p>
+        <p style="font-size:12px;color:#888;margin:-8px 0 16px">Altere as datas e horários abaixo. Ao salvar, o sistema também atualiza os eventos correspondentes no Google Calendar.</p>
         <div id="editarEtapasBody" style="display:flex;flex-direction:column;gap:14px"></div>
         <div id="editarEtapasStatus" style="font-size:13px;margin-top:12px;min-height:18px"></div>
         <div class="modal-footer">
@@ -2032,8 +2032,20 @@ async function salvarEtapas() {
         }
         const data = await r.json();
         if (data.success) {
-            status.textContent = '✅ Salvo com sucesso!';
-            status.style.color = '#16a34a';
+            const sync = data.calendarSync;
+            if (!sync || sync.status === 'updated') {
+                status.textContent = '✅ Salvo e sincronizado com o Google Calendar!';
+                status.style.color = '#16a34a';
+            } else if (sync.status === 'no-events') {
+                status.textContent = '⚠️ Salvo no sistema, mas nenhum evento correspondente foi encontrado no Google Calendar.';
+                status.style.color = '#b45309';
+            } else if (sync.status === 'partial') {
+                status.textContent = `⚠️ Salvo, mas a sincronização do Calendar ficou parcial (${sync.updated || 0} atualizado(s), ${sync.created || 0} criado(s), ${sync.deleted || 0} removido(s)).`;
+                status.style.color = '#b45309';
+            } else {
+                status.textContent = '⚠️ Salvo no sistema, mas não foi possível sincronizar o Google Calendar.';
+                status.style.color = '#b45309';
+            }
             btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
             allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
             renderTabela();
