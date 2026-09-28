@@ -562,15 +562,12 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         <div class="drawer-section">
-            <h4><i class="fas fa-user"></i> Dados do proponente</h4>
+            <h4><i class="fas fa-clipboard-check"></i> Dados da inscrição</h4>
             <div class="drawer-grid">
                 ${[
                     ['Proponente', p.nome],
-                    ['E-mail', p.email],
-                    ['Telefone', p.telefone],
                     ['Local', p.localNome || 'Teatro Carmen Fossari'],
-                    ['Evento', p.evento],
-                    ['Inscrição', p.timestamp]
+                    ['Evento', p.evento]
                 ].map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
             </div>
         </div>
