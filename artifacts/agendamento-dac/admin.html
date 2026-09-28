@@ -1747,12 +1747,21 @@ async function salvarEdicaoTermoAdmin(marcarConcluido = termoEditorCompleto) {
         p.telefone = termoDados.telefone || p.telefone;
         p.evento = termoDados.nomeEvento || p.evento;
         p.localNome = termoDados.espacoIgreja ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
-        status.style.color = '#15803d';
         termoEditorCompleto = marcarConcluido === true;
         termoAdminAlteracoesSalvas = !termoEditorCompleto;
-        status.textContent = termoEditorCompleto
+        const calendarioAtualizado = typeof data.calendarDescriptionUpdated === 'boolean'
+            ? data.calendarDescriptionUpdated
+            : null;
+        status.style.color = calendarioAtualizado === false ? '#b45309' : '#15803d';
+        const mensagemTermo = termoEditorCompleto
             ? 'Alterações salvas. O termo continua marcado como concluído. Os dados estão congelados novamente.'
             : 'Alterações salvas no painel. O termo continua aguardando a conclusão do proponente.';
+        const mensagemCalendario = calendarioAtualizado === true
+            ? ' A sinopse foi atualizada no Google Calendar.'
+            : calendarioAtualizado === false
+                ? ' Atenção: o termo foi salvo, mas a sinopse não foi atualizada no Google Calendar.'
+                : '';
+        status.textContent = mensagemTermo + mensagemCalendario;
         p.termoAssinado = termoEditorCompleto;
         const pdfBtn = document.getElementById('btnGerarPDFTermo');
         if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
@@ -2034,22 +2043,30 @@ async function salvarEtapas() {
         if (data.success) {
             const sync = data.calendarSync;
             if (!sync || sync.status === 'updated') {
-                status.textContent = '✅ Salvo e sincronizado com o Google Calendar!';
+                status.textContent = `✅ ${sync?.updated || sync?.created || sync?.deleted
+                    ? `Salvo e sincronizado com o Google Calendar (${sync.updated || 0} atualizado(s), ${sync.created || 0} criado(s), ${sync.deleted || 0} removido(s)).`
+                    : 'Salvo e sincronizado com o Google Calendar!'}`;
                 status.style.color = '#16a34a';
+                btn.innerHTML = '<i class="fas fa-check"></i> Sincronizado';
+                allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
+                renderTabela();
+                setTimeout(() => closeModal('modalEditarEtapas'), 1800);
             } else if (sync.status === 'no-events') {
-                status.textContent = '⚠️ Salvo no sistema, mas nenhum evento correspondente foi encontrado no Google Calendar.';
+                status.textContent = `⚠️ Salvo no sistema, mas nenhum evento correspondente foi encontrado no Google Calendar. ${sync.errors?.join(' ') || ''}`;
                 status.style.color = '#b45309';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Tentar sincronizar novamente';
             } else if (sync.status === 'partial') {
                 status.textContent = `⚠️ Salvo, mas a sincronização do Calendar ficou parcial (${sync.updated || 0} atualizado(s), ${sync.created || 0} criado(s), ${sync.deleted || 0} removido(s)).`;
                 status.style.color = '#b45309';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Tentar sincronizar novamente';
             } else {
-                status.textContent = '⚠️ Salvo no sistema, mas não foi possível sincronizar o Google Calendar.';
+                status.textContent = `⚠️ Salvo no sistema, mas não foi possível sincronizar o Google Calendar. ${sync?.errors?.join(' ') || ''}`;
                 status.style.color = '#b45309';
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-sync-alt"></i> Tentar sincronizar novamente';
             }
-            btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
-            allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
-            renderTabela();
-            setTimeout(() => closeModal('modalEditarEtapas'), 1800);
         } else {
             throw new Error(data.error || 'Falha ao salvar.');
         }
