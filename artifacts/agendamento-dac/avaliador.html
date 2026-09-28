@@ -67,6 +67,8 @@
         .drawer-section{margin-bottom:22px}
         .drawer-section:last-child{margin-bottom:0}
         .drawer-section h4{font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+        .drawer-criterion{background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:9px;padding:14px 16px;margin-bottom:22px;box-shadow:0 4px 12px rgba(37,99,235,.16)}
+        .drawer-criterion-title{color:#fff;font-size:14px;font-weight:700;line-height:1.45;letter-spacing:.01em}
         .drawer-event-list{margin:0;padding-left:18px;font-size:13px;color:#222}
         .drawer-event-list li{margin-bottom:4px}
         .drawer-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
@@ -433,6 +435,33 @@ function formatarValorDrawer(valor) {
     return String(valor ?? '').trim();
 }
 
+function normalizarCampoDestaqueDrawer(valor) {
+    return String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function ehCampoDestaqueDrawer(valor) {
+    return ['areasegmento', 'area', 'segmento', 'finalidade'].includes(normalizarCampoDestaqueDrawer(valor));
+}
+
+function obterDadosDestaqueDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    const resultado = [];
+    const adicionar = (label, valor) => resultado.push([label, formatarValorDrawer(valor) || '—']);
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        adicionar('Área/segmento', dadosUnificados.areas ?? dadosUnificados.areaSegmento ?? dadosUnificados.area ?? dadosUnificados.segmento);
+        adicionar('Finalidade', dadosUnificados.finalidade);
+        return resultado;
+    }
+    const s = item?.segundaEtapa;
+    const headers = Array.isArray(s?.headers) ? s.headers : [];
+    const valores = Array.isArray(s?.valores) ? s.valores : [];
+    const localizar = (alvos) => { const indice = headers.findIndex(header => alvos.includes(normalizarCampoDestaqueDrawer(header))); return indice >= 0 ? valores[indice] : ''; };
+    adicionar('Área/segmento', localizar(['areasegmento', 'area', 'segmento']));
+    adicionar('Finalidade', localizar(['finalidade']));
+    return resultado;
+}
+
 function obterDadosComplementaresDrawer(item) {
     const p = item?.primeiraEtapa || {};
     const dadosUnificados = p.segundaEtapaTeste;
@@ -462,7 +491,7 @@ function obterDadosComplementaresDrawer(item) {
         };
         const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'arquivos', 'concluidaEm']);
         return Object.entries(dadosUnificados)
-            .filter(([chave, valor]) => !ignoradas.has(chave) && formatarValorDrawer(valor))
+            .filter(([chave, valor]) => !ignoradas.has(chave) && !ehCampoDestaqueDrawer(chave) && formatarValorDrawer(valor))
             .map(([chave, valor]) => [
                 labels[chave] || chave.replace(/([A-Z])/g, ' $1').replace(/^./, letra => letra.toUpperCase()),
                 formatarValorDrawer(valor)
@@ -471,10 +500,12 @@ function obterDadosComplementaresDrawer(item) {
 
     const s = item?.segundaEtapa;
     if (s && Array.isArray(s.headers) && Array.isArray(s.valores)) {
-        return s.headers.map((header, index) => [
-            String(header || 'Campo'),
-            formatarValorDrawer(s.valores[index]) || '—'
-        ]);
+        return s.headers
+            .map((header, index) => [
+                String(header || 'Campo'),
+                formatarValorDrawer(s.valores[index]) || '—'
+            ])
+            .filter(([header]) => !ehCampoDestaqueDrawer(header));
     }
     return [];
 }
@@ -545,6 +576,7 @@ function renderDocumentosDrawer(item) {
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
     const dadosComplementares = obterDadosComplementaresDrawer(item);
+    const dadosDestaque = obterDadosDestaqueDrawer(item);
     const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
     Object.keys(p.etapas || {}).forEach(key => {
@@ -569,6 +601,12 @@ function renderDrawerContent(item, existingScores = {}) {
                     ['Local', p.localNome || 'Teatro Carmen Fossari'],
                     ['Evento', p.evento]
                 ].map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
+            </div>
+        </div>
+        <div class="drawer-criterion">
+            <div class="drawer-criterion-title">8.1.1 Caráter artístico-cultural da proposta conforme descrito no item 5.5 deste edital.</div>
+            <div class="drawer-grid" style="margin-top:14px">
+                ${dadosDestaque.map(([label, value]) => `<div class="lbl" style="color:rgba(255,255,255,.85)">${escapeHtml(label)}:</div><div class="val" style="color:#fff">${renderValueAsHtml(value)}</div>`).join('')} 
             </div>
         </div>
         <div class="drawer-section">
