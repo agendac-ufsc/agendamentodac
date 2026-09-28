@@ -4242,6 +4242,12 @@ const CRITERIOS_DEFAULT = [
     { id: 'C', nome: 'Acessibilidade', peso: 1 },
     { id: 'D', nome: 'Viabilidade Técnica', peso: 1 }
 ];
+const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
+function ehRubricaDeNiveis(criterios) {
+    if (!Array.isArray(criterios) || criterios.length !== 3) return false;
+    const pesos = criterios.map(c => Number(c?.peso));
+    return pesos.every(Number.isFinite) && [0, 1, 2].every(valor => pesos.includes(valor));
+}
 
 app.get('/api/criteria', async (req, res) => {
     try {
@@ -4299,7 +4305,14 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
         const cfgRaw = redis ? await redis.get('agendamentos_config') : null;
         const cfg = parseRedisValue(cfgRaw) || {};
         const necessarias = parseInt(cfg.avaliacoesNecessarias || 3);
-        const pesoTotal = criterios.reduce((s, c) => s + (parseFloat(c.peso) || 1), 0) || 1;
+        const rubricaNiveis = ehRubricaDeNiveis(criterios);
+        const criteriosRelatorio = rubricaNiveis
+            ? [{ id: RUBRICA_NIVEL_ID, nome: 'Pontuação da avaliação', peso: 1 }]
+            : criterios;
+        const pesoTotal = criteriosRelatorio.reduce((s, c) => {
+            const peso = Number(c.peso);
+            return s + (Number.isFinite(peso) ? peso : 1);
+        }, 0) || 1;
 
         const linhas = [];
         for (const p of inscricoes) {
@@ -4309,15 +4322,23 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
             const avaliacoes = parseRedisValue(avRaw) || [];
 
             const detalhesPorCriterio = {};
-            criterios.forEach(c => { detalhesPorCriterio[c.id] = { nome: c.nome, peso: parseFloat(c.peso) || 1, soma: 0, n: 0 }; });
+            criteriosRelatorio.forEach(c => {
+                const peso = Number(c.peso);
+                detalhesPorCriterio[c.id] = {
+                    nome: c.nome,
+                    peso: Number.isFinite(peso) ? peso : 1,
+                    soma: 0,
+                    n: 0
+                };
+            });
 
             let totalPontos = 0;
             avaliacoes.forEach(av => {
                 const sc = av.scoresJson || {};
-                criterios.forEach(c => {
-                    const nota = parseFloat(sc[c.id] || 0);
-                    totalPontos += nota * (parseFloat(c.peso) || 1);
-                    if (nota > 0) {
+                criteriosRelatorio.forEach(c => {
+                    const nota = parseFloat(sc[c.id] ?? 0);
+                    totalPontos += nota * c.peso;
+                    if (rubricaNiveis ? Object.prototype.hasOwnProperty.call(sc, c.id) : nota > 0) {
                         detalhesPorCriterio[c.id].soma += nota;
                         detalhesPorCriterio[c.id].n += 1;
                     }
@@ -4365,7 +4386,10 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
         });
 
         res.json({
-            criterios: criterios.map(c => ({ id: c.id, nome: c.nome, peso: parseFloat(c.peso) || 1 })),
+            criterios: criteriosRelatorio.map(c => {
+                const peso = Number(c.peso);
+                return { id: c.id, nome: c.nome, peso: Number.isFinite(peso) ? peso : 1 };
+            }),
             necessarias,
             total: linhas.length,
             avaliadas: linhas.filter(l => l.qtdAvaliacoes > 0).length,
@@ -4719,7 +4743,7 @@ app.post('/api/admin/atualizar-termo', async (req, res) => {
 });
 
 app.post('/api/admin/atualizar-etapas', async (req, res) => {
-    const { id, ...campos } = req.body || {};
+    const { id, ...campos } = req.body;
     if (!id || Object.keys(campos).length === 0) {
         return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
     }
@@ -4730,7 +4754,6 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
     const ag = agendamentos.find(a => a.id === id);
     const isLegada = String(id).startsWith('forms_');
     if (!ag && !isLegada) return res.status(404).json({ error: 'Agendamento não encontrado.' });
-    const agLegada = isLegada ? await buscarDadosInscricaoForms(String(id)) : null;
 
     // Inscrições legadas (Forms-only) têm IDs "forms_..." e as etapas ficam
     // numa chave separada, mas agora também passam pela sincronização segura
@@ -4741,29 +4764,8 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
     if (!success) return res.status(500).json({ error: 'Erro ao salvar no banco de dados.' });
 
     let calendarSync = null;
-    if (campos.etapas !== undefined) {
-        const agendamentoParaSincronizar = ag || (agLegada && {
-            ...agLegada,
-            id: String(id),
-            isLegada: true,
-            calendarId: agLegada.calendarId
-                || CALENDAR_IDS[(agLegada.local || 'teatro').toLowerCase()]
-                || CALENDAR_IDS.teatro
-        });
-        if (agendamentoParaSincronizar) {
-            calendarSync = await sincronizarEtapasNoGoogleCalendar(
-                agendamentoParaSincronizar,
-                campos.etapas
-            );
-        } else {
-            calendarSync = {
-                status: 'no-events',
-                updated: 0,
-                created: 0,
-                deleted: 0,
-                errors: ['Não foi possível localizar os dados antigos desta inscrição no Google Forms.']
-            };
-        }
+    if (campos.etapas !== undefined && ag) {
+        calendarSync = await sincronizarEtapasNoGoogleCalendar(ag, campos.etapas);
     }
 
     return res.json({ success: true, calendarSync });
