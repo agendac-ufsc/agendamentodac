@@ -605,13 +605,11 @@ function renderDrawerContent(item, existingScores = {}) {
         </div>
         <div class="drawer-criterion">
             <div class="drawer-criterion-title">8.1.1 Caráter artístico-cultural da proposta conforme descrito no item 5.5 deste edital.</div>
-            <div class="drawer-grid" style="margin-top:14px">
-                ${dadosDestaque.map(([label, value]) => `<div class="lbl" style="color:rgba(255,255,255,.85)">${escapeHtml(label)}:</div><div class="val" style="color:#fff">${renderValueAsHtml(value)}</div>`).join('')} 
-            </div>
         </div>
         <div class="drawer-section">
-            <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
-            ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
+            <div class="drawer-grid">
+                ${dadosDestaque.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
+            </div>
         </div>
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-list"></i> Dados complementares (formulário)</h4>
