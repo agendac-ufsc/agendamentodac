@@ -4719,7 +4719,7 @@ app.post('/api/admin/atualizar-termo', async (req, res) => {
 });
 
 app.post('/api/admin/atualizar-etapas', async (req, res) => {
-    const { id, ...campos } = req.body;
+    const { id, ...campos } = req.body || {};
     if (!id || Object.keys(campos).length === 0) {
         return res.status(400).json({ error: 'ID e campos para atualizar são obrigatórios.' });
     }
@@ -4730,6 +4730,7 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
     const ag = agendamentos.find(a => a.id === id);
     const isLegada = String(id).startsWith('forms_');
     if (!ag && !isLegada) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+    const agLegada = isLegada ? await buscarDadosInscricaoForms(String(id)) : null;
 
     // Inscrições legadas (Forms-only) têm IDs "forms_..." e as etapas ficam
     // numa chave separada, mas agora também passam pela sincronização segura
@@ -4740,8 +4741,29 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
     if (!success) return res.status(500).json({ error: 'Erro ao salvar no banco de dados.' });
 
     let calendarSync = null;
-    if (campos.etapas !== undefined && ag) {
-        calendarSync = await sincronizarEtapasNoGoogleCalendar(ag, campos.etapas);
+    if (campos.etapas !== undefined) {
+        const agendamentoParaSincronizar = ag || (agLegada && {
+            ...agLegada,
+            id: String(id),
+            isLegada: true,
+            calendarId: agLegada.calendarId
+                || CALENDAR_IDS[(agLegada.local || 'teatro').toLowerCase()]
+                || CALENDAR_IDS.teatro
+        });
+        if (agendamentoParaSincronizar) {
+            calendarSync = await sincronizarEtapasNoGoogleCalendar(
+                agendamentoParaSincronizar,
+                campos.etapas
+            );
+        } else {
+            calendarSync = {
+                status: 'no-events',
+                updated: 0,
+                created: 0,
+                deleted: 0,
+                errors: ['Não foi possível localizar os dados antigos desta inscrição no Google Forms.']
+            };
+        }
     }
 
     return res.json({ success: true, calendarSync });
