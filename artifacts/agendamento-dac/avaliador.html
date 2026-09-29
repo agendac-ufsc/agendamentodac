@@ -92,16 +92,23 @@
         .criteria-label{flex:1;font-size:14px;font-weight:600;color:#333}
         .criteria-weight{font-size:11px;color:#888;margin-top:2px}
         .rubric-picker{width:100%;position:relative}
+        .rubric-control-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:stretch}
         .rubric-trigger{width:100%;min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;text-align:left;cursor:pointer;font:inherit;transition:.18s}
         .rubric-trigger:hover,.rubric-trigger:focus-visible{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12);outline:none}
         .rubric-trigger .rubric-trigger-copy{display:grid;gap:4px;min-width:0}
         .rubric-trigger .rubric-trigger-title{font-size:14px;font-weight:800;overflow-wrap:anywhere}
         .rubric-trigger .rubric-trigger-hint{font-size:11px;color:#64748b;font-weight:500}
         .rubric-trigger .rubric-trigger-score{flex-shrink:0;font-size:18px;font-weight:800;color:#1d4ed8}
-        .rubric-trigger.rubric-empty{border-style:dashed;color:#64748b}
+        .rubric-trigger.rubric-prompt{background:#e0f2fe;border-color:#93c5fd;color:#1e40af}
+        .rubric-trigger.rubric-prompt .rubric-trigger-hint{color:#475569}
         .rubric-trigger.rubric-red{background:#fff1f2;border-color:#fda4af;color:#9f1239}
         .rubric-trigger.rubric-yellow{background:#fffbeb;border-color:#fcd34d;color:#92400e}
         .rubric-trigger.rubric-green{background:#f0fdf4;border-color:#86efac;color:#166534}
+        .rubric-actions{display:flex;align-items:stretch;gap:8px}
+        .btn-rubric-save,.btn-rubric-edit{border:1px solid #2563eb;border-radius:8px;padding:0 16px;background:#2563eb;color:#fff;font:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;transition:.18s}
+        .btn-rubric-save:hover,.btn-rubric-edit:hover{background:#1d4ed8;border-color:#1d4ed8}
+        .btn-rubric-edit{background:#fff;color:#2563eb}
+        .btn-rubric-edit:hover{color:#fff}
         .rubric-options{display:grid;gap:8px;margin-top:8px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc}
         .rubric-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1.5px solid transparent;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-size:13px;font-weight:700;transition:.16s}
         .rubric-option:hover,.rubric-option:focus-visible{filter:brightness(.97);transform:translateY(-1px);outline:none}
@@ -144,7 +151,7 @@
         .det-status-cancelado{background:#fee2e2;color:#991b1b}
         .det-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
         .det-link-pill:hover{background:#dbeafe}
-        @media(max-width:640px){.av-card-main{align-items:flex-start;flex-direction:column}.av-actions{width:100%;justify-content:flex-start}.av-drawer{padding:18px 16px}.drawer-grid{grid-template-columns:1fr;gap:3px 0}.drawer-grid .lbl{margin-top:8px}}
+        @media(max-width:640px){.av-card-main{align-items:flex-start;flex-direction:column}.av-actions{width:100%;justify-content:flex-start}.av-drawer{padding:18px 16px}.drawer-grid{grid-template-columns:1fr;gap:3px 0}.drawer-grid .lbl{margin-top:8px}.rubric-control-row{grid-template-columns:1fr}.rubric-actions{justify-content:flex-end}.btn-rubric-save,.btn-rubric-edit{min-height:42px}}
     </style>
 </head>
 <body>
@@ -221,6 +228,8 @@ let criterios = [];
 let avaliacoesNecessarias = 3;
 let currentAvaliacaoIndex = null;
 let currentAvaliacaoScores = {};
+let rubricaOpcoesAbertas = false;
+let rubricaEditando = false;
 let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let openAvaliacaoIndex = null;
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
@@ -650,9 +659,9 @@ function renderDrawerContent(item, existingScores = {}) {
             <h4><i class="fas fa-star"></i> Avaliação</h4>
             <p class="drawer-evaluation-note">${ehRubricaDeNiveis() ? 'Escolha o nível que melhor representa a proposta. Cada nível possui a pontuação definida no painel administrativo.' : 'Dê uma nota de 1 a 10 para cada critério.'}</p>
             ${renderCriteriaRows(existingScores)}
-            <div class="drawer-save">
+            ${!ehRubricaDeNiveis() ? `<div class="drawer-save">
                 <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
-            </div>
+            </div>` : ''}
         </div>
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
@@ -674,20 +683,37 @@ function renderCriteriaRows(existingScores = {}) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
         const opcoes = [...crit].sort((a, b) => Number(a.peso) - Number(b.peso));
-        const notaSelecionada = Number(existingScores?.[RUBRICA_NIVEL_ID]);
-        const selecionada = opcoes.find(c => Number(c.peso) === notaSelecionada);
-        const classeSelecionada = selecionada ? classeRubrica(selecionada.peso) : 'rubric-empty';
+        const valorSalvo = Number(existingScores?.[RUBRICA_NIVEL_ID]);
+        const temValorSalvo = Number.isFinite(valorSalvo) && opcoes.some(c => Number(c.peso) === valorSalvo);
+        const valorAtual = Number(currentAvaliacaoScores?.[RUBRICA_NIVEL_ID]);
+        const temValorAtual = Number.isFinite(valorAtual) && opcoes.some(c => Number(c.peso) === valorAtual);
+        const notaSelecionada = temValorAtual ? valorAtual : (temValorSalvo ? valorSalvo : null);
+        const selecionada = notaSelecionada === null ? null : opcoes.find(c => Number(c.peso) === notaSelecionada);
+        const temAlteracao = rubricaEditando && temValorAtual && (!temValorSalvo || valorAtual !== valorSalvo);
+        const classeSelecionada = selecionada ? classeRubrica(selecionada.peso) : 'rubric-prompt';
+        const titulo = selecionada?.nome || 'Clique aqui para avaliar';
+        const dica = selecionada
+            ? (temAlteracao ? 'Escolha o nível e clique em Salvar' : (temValorSalvo ? 'Avaliação salva' : 'Clique para alterar o nível'))
+            : 'Clique para abrir as três opções';
+        const acao = temAlteracao
+            ? '<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar</button>'
+            : (temValorSalvo && !rubricaEditando
+                ? '<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica()"><i class="fas fa-pen"></i> Editar</button>'
+                : '');
         return `<div class="criteria-row" style="display:block">
             <div class="criteria-label" style="margin-bottom:10px">Avaliação do critério</div>
             <div class="rubric-picker">
-                <button type="button" class="rubric-trigger ${classeSelecionada}" onclick="toggleRubricaOpcoes()" aria-expanded="false" id="rubricTrigger">
-                    <span class="rubric-trigger-copy">
-                        <span class="rubric-trigger-title">${escapeHtml(selecionada?.nome || 'Clique para escolher uma avaliação')}</span>
-                        <span class="rubric-trigger-hint">${selecionada ? 'Clique para alterar o nível' : 'Selecione uma das três opções'}</span>
-                    </span>
-                    <span class="rubric-trigger-score">${selecionada ? `${escapeHtml(selecionada.peso)} pts` : '<i class="fas fa-chevron-down"></i>'}</span>
-                </button>
-                <div class="rubric-options" id="rubricOptions" hidden>
+                <div class="rubric-control-row">
+                    <button type="button" class="rubric-trigger ${classeSelecionada}" onclick="handleRubricaTrigger()" aria-expanded="${rubricaOpcoesAbertas ? 'true' : 'false'}" data-saved="${temValorSalvo ? 'true' : 'false'}" data-saved-value="${temValorSalvo ? valorSalvo : ''}" id="rubricTrigger">
+                        <span class="rubric-trigger-copy">
+                            <span class="rubric-trigger-title">${escapeHtml(titulo)}</span>
+                            <span class="rubric-trigger-hint">${escapeHtml(dica)}</span>
+                        </span>
+                        <span class="rubric-trigger-score">${selecionada ? `${escapeHtml(selecionada.peso)} pts` : '<i class="fas fa-chevron-down"></i>'}</span>
+                    </button>
+                    <div class="rubric-actions">${acao}</div>
+                </div>
+                <div class="rubric-options" id="rubricOptions" ${rubricaOpcoesAbertas ? '' : 'hidden'}>
                     ${opcoes.map(opcao => {
                         const selecionadaAgora = Number(opcao.peso) === notaSelecionada;
                         return `<button type="button" class="rubric-option ${classeRubrica(opcao.peso)}${selecionadaAgora ? ' selected' : ''}" onclick="setRubricaNivel('${escapeAttr(opcao.id)}', ${Number(opcao.peso)}, '${escapeAttr(opcao.nome)}')">
@@ -726,44 +752,60 @@ function escapeAttr(s) {
     return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-function toggleRubricaOpcoes() {
-    const options = document.getElementById('rubricOptions');
+function handleRubricaTrigger() {
     const trigger = document.getElementById('rubricTrigger');
-    if (!options || !trigger) return;
-    options.hidden = !options.hidden;
-    trigger.setAttribute('aria-expanded', String(!options.hidden));
+    if (!trigger) return;
+    if (trigger.dataset.saved === 'true' && !rubricaEditando) {
+        iniciarEdicaoRubrica();
+        return;
+    }
+    toggleRubricaOpcoes();
+}
+
+function toggleRubricaOpcoes() {
+    const trigger = document.getElementById('rubricTrigger');
+    const abrindo = !rubricaOpcoesAbertas;
+    if (!abrindo && trigger?.dataset.savedValue !== '') {
+        const valorAtual = Number(currentAvaliacaoScores?.[RUBRICA_NIVEL_ID]);
+        const valorSalvo = Number(trigger.dataset.savedValue);
+        if (Number.isFinite(valorAtual) && valorAtual === valorSalvo) rubricaEditando = false;
+    }
+    rubricaOpcoesAbertas = abrindo;
+    renderAvaliacaoList();
+}
+
+function iniciarEdicaoRubrica() {
+    rubricaEditando = true;
+    rubricaOpcoesAbertas = true;
+    renderAvaliacaoList();
 }
 
 function setRubricaNivel(criterioId, valor, nome) {
     currentAvaliacaoScores[RUBRICA_NIVEL_ID] = Number(valor);
     currentAvaliacaoScores[`${RUBRICA_NIVEL_ID}_label`] = nome;
     const trigger = document.getElementById('rubricTrigger');
-    const options = document.getElementById('rubricOptions');
-    if (!trigger || !options) return;
-    trigger.className = `rubric-trigger ${classeRubrica(valor)}`;
-    trigger.innerHTML = `
-        <span class="rubric-trigger-copy">
-            <span class="rubric-trigger-title">${escapeHtml(nome)}</span>
-            <span class="rubric-trigger-hint">Clique para alterar o nível</span>
-        </span>
-        <span class="rubric-trigger-score">${escapeHtml(valor)} pts</span>`;
-    options.hidden = false;
-    trigger.setAttribute('aria-expanded', 'true');
-    options.querySelectorAll('.rubric-option').forEach(option => option.classList.remove('selected'));
-    const selected = options.querySelector(`.rubric-option[onclick*="'${escapeAttr(criterioId)}'"]`);
-    if (selected) selected.classList.add('selected');
+    const valorSalvo = trigger?.dataset.savedValue ?? '';
+    const mesmaAvaliaçãoSalva = valorSalvo !== '' && Number(valorSalvo) === Number(valor);
+    rubricaEditando = !mesmaAvaliaçãoSalva;
+    rubricaOpcoesAbertas = !mesmaAvaliaçãoSalva;
+    renderAvaliacaoList();
 }
 
 async function openAvaliacao(idx) {
     if (openAvaliacaoIndex === idx) {
         openAvaliacaoIndex = null;
         currentAvaliacaoIndex = null;
+        currentAvaliacaoScores = {};
+        rubricaOpcoesAbertas = false;
+        rubricaEditando = false;
         renderAvaliacaoList();
         return;
     }
     openAvaliacaoIndex = idx;
     currentAvaliacaoIndex = idx;
     currentAvaliacaoScores = {};
+    rubricaOpcoesAbertas = false;
+    rubricaEditando = false;
     renderAvaliacaoList();
     const drawer = document.getElementById(`avaliacao-drawer-${idx}`);
     if (drawer) drawer.innerHTML = '<div class="drawer-loading"><i class="fas fa-spinner fa-spin"></i> Carregando inscrição completa...</div>';
@@ -822,13 +864,18 @@ async function salvarAvaliacao() {
         });
         const d = await r.json();
         if (d.success) {
-            openAvaliacaoIndex = null;
-            currentAvaliacaoIndex = null;
             // Atualizar cache local
             try {
                 const rr = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
                 scoresCache[id] = await rr.json();
             } catch(e) {}
+            if (ehRubricaDeNiveis(crit)) {
+                rubricaEditando = false;
+                rubricaOpcoesAbertas = false;
+            } else {
+                openAvaliacaoIndex = null;
+                currentAvaliacaoIndex = null;
+            }
             renderAvaliacaoList();
             alert('Avaliação salva com sucesso!');
         } else {
