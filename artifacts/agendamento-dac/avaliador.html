@@ -74,7 +74,7 @@
         .drawer-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
         .drawer-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
         .drawer-link-pill:hover{background:#dbeafe}
-        .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;padding-top:20px}
+        .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;margin-bottom:34px;padding-top:20px}
         .drawer-evaluation h4{font-size:15px;color:#1e3a8a;margin-bottom:6px}
         .drawer-evaluation-note{font-size:12px;color:#64748b;margin-bottom:16px}
         .drawer-save{text-align:right;margin-top:18px}
@@ -121,7 +121,17 @@
 
         .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:2000}
         .modal.open{display:flex}
+        #modalAvaliadorDialog{z-index:4000}
         .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
+        .modal-confirm-box{width:90%;max-width:470px;border-top:4px solid #2563eb;padding:26px 28px}
+        .modal-confirm-box.modal-confirm-danger{border-top-color:#dc2626}
+        .modal-confirm-box.modal-confirm-success{border-top-color:#0f766e}
+        .modal-confirm-success .modal-confirm-icon{background:#ccfbf1;color:#0f766e}
+        .modal-confirm-success .btn-save-modal{background:#0f766e}
+        .modal-confirm-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#dbeafe;color:#2563eb;font-size:20px;margin-bottom:12px}
+        .modal-confirm-danger .modal-confirm-icon{background:#fee2e2;color:#dc2626}
+        .modal-confirm-box h3{border:0;margin:0 0 10px;padding:0;color:#374151}
+        .modal-confirm-message{white-space:pre-line;font-size:14px;line-height:1.6;color:#4b5563;margin:0}
         .modal-box h3{font-size:18px;margin-bottom:16px;color:#444;border-bottom:1px solid #eee;padding-bottom:12px}
         .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
         .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
@@ -218,6 +228,21 @@
         </div>
         <div class="results-count" id="resultsCount"></div>
         <div id="avaliacaoList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+    </div>
+</div>
+
+<!-- MODAL DE CONFIRMAÇÃO PADRONIZADO -->
+<div class="modal" id="modalAvaliadorDialog" onclick="cancelarDialogAvaliador()">
+    <div class="modal-box modal-confirm-box" id="modalAvaliadorDialogBox" role="dialog" aria-modal="true"
+        aria-labelledby="modalAvaliadorDialogTitulo" aria-describedby="modalAvaliadorDialogMensagem"
+        onclick="event.stopPropagation()">
+        <div class="modal-confirm-icon" id="modalAvaliadorDialogIcon"><i class="fas fa-question"></i></div>
+        <h3 id="modalAvaliadorDialogTitulo">Confirmar ação</h3>
+        <p id="modalAvaliadorDialogMensagem" class="modal-confirm-message"></p>
+        <div class="modal-footer">
+            <button class="btn-close-modal" id="btnCancelarDialogAvaliador" type="button" onclick="cancelarDialogAvaliador()">Cancelar</button>
+            <button class="btn-save-modal" id="btnConfirmarDialogAvaliador" type="button" onclick="confirmarDialogAvaliador()">Confirmar</button>
+        </div>
     </div>
 </div>
 
@@ -844,11 +869,24 @@ async function salvarAvaliacao() {
     if (currentAvaliacaoIndex === null) return;
     const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
     const id = p.id || p.email;
-    if (!viewerEmail) { alert('Sessão expirada. Faça login novamente.'); return; }
+    if (!viewerEmail) {
+        await showAvaliadorDialog('Sessão expirada. Faça login novamente.', {
+            title: 'Sessão expirada',
+            confirmLabel: 'OK',
+            hideCancel: true,
+            danger: true
+        });
+        return;
+    }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
         if (currentAvaliacaoScores[RUBRICA_NIVEL_ID] === undefined || currentAvaliacaoScores[RUBRICA_NIVEL_ID] === null) {
-            alert('Escolha um dos três níveis de avaliação antes de salvar.');
+            await showAvaliadorDialog('Escolha um dos três níveis de avaliação antes de salvar.', {
+                title: 'Avaliação incompleta',
+                confirmLabel: 'OK',
+                hideCancel: true,
+                danger: true
+            });
             return;
         }
     }
@@ -856,7 +894,11 @@ async function salvarAvaliacao() {
         ? []
         : crit.filter(c => currentAvaliacaoScores[c.id] === undefined || currentAvaliacaoScores[c.id] === null);
     if (faltando.length > 0) {
-        if (!confirm(`Você ainda não deu nota a ${faltando.length} critério(s). Salvar mesmo assim?`)) return;
+        const confirmar = await showAvaliadorDialog(
+            `Você ainda não deu nota a ${faltando.length} critério(s). Salvar mesmo assim?`,
+            { title: 'Confirmar salvamento', confirmLabel: 'Salvar avaliação' }
+        );
+        if (!confirmar) return;
     }
     try {
         const r = await fetch('/api/save-assessment', {
@@ -878,17 +920,78 @@ async function salvarAvaliacao() {
                 currentAvaliacaoIndex = null;
             }
             renderAvaliacaoList();
-            alert('Avaliação salva com sucesso!');
+            await showAvaliadorDialog('Avaliação salva com sucesso!', {
+                title: 'Avaliação salva',
+                confirmLabel: 'OK',
+                hideCancel: true,
+                success: true
+            });
         } else {
-            alert('Erro ao salvar: ' + (d.error||''));
+            await showAvaliadorDialog('Erro ao salvar: ' + (d.error || ''), {
+                title: 'Não foi possível salvar',
+                confirmLabel: 'OK',
+                hideCancel: true,
+                danger: true
+            });
         }
     } catch(e) {
-        alert('Erro de conexão: ' + e.message);
+        await showAvaliadorDialog('Erro de conexão: ' + e.message, {
+            title: 'Erro de conexão',
+            confirmLabel: 'OK',
+            hideCancel: true,
+            danger: true
+        });
     }
 }
 
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+let avaliadorDialogResolver = null;
+
+function finalizarDialogAvaliador(value) {
+    closeModal('modalAvaliadorDialog');
+    const resolver = avaliadorDialogResolver;
+    avaliadorDialogResolver = null;
+    if (resolver) resolver(value);
+}
+
+function cancelarDialogAvaliador() {
+    finalizarDialogAvaliador(false);
+}
+
+function confirmarDialogAvaliador() {
+    finalizarDialogAvaliador(true);
+}
+
+function showAvaliadorDialog(message, options = {}) {
+    return new Promise(resolve => {
+        const modal = document.getElementById('modalAvaliadorDialog');
+        const box = document.getElementById('modalAvaliadorDialogBox');
+        const icon = document.getElementById('modalAvaliadorDialogIcon');
+        const title = document.getElementById('modalAvaliadorDialogTitulo');
+        const messageEl = document.getElementById('modalAvaliadorDialogMensagem');
+        const confirmButton = document.getElementById('btnConfirmarDialogAvaliador');
+        const cancelButton = document.getElementById('btnCancelarDialogAvaliador');
+        avaliadorDialogResolver = resolve;
+        box.classList.toggle('modal-confirm-danger', Boolean(options.danger));
+        box.classList.toggle('modal-confirm-success', Boolean(options.success));
+        icon.innerHTML = options.danger
+            ? '<i class="fas fa-exclamation-triangle"></i>'
+            : options.success
+                ? '<i class="fas fa-check-circle"></i>'
+                : '<i class="fas fa-question"></i>';
+        title.textContent = options.title || 'Confirmar ação';
+        messageEl.textContent = message;
+        confirmButton.innerHTML = options.confirmLabel || 'Confirmar';
+        cancelButton.style.display = options.hideCancel ? 'none' : '';
+        openModal('modalAvaliadorDialog');
+        setTimeout(() => (options.hideCancel ? confirmButton : cancelButton).focus(), 0);
+    });
+}
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && avaliadorDialogResolver) cancelarDialogAvaliador();
+});
 
 function escapeHtml(s) {
     return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
