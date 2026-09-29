@@ -254,11 +254,11 @@ let criterios = [];
 let avaliacoesNecessarias = 3;
 let currentAvaliacaoIndex = null;
 let currentAvaliacaoScores = {};
-let rubricaOpcoesAbertas = false;
-let rubricaEditando = false;
 let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let openAvaliacaoIndex = null;
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
+const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
+const rubricaEstados = {};
 
 // Restaurar sessão
 (function restore(){
@@ -437,8 +437,12 @@ function renderAvaliacaoList() {
 function calcMedia(scores) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const nota = Number(scores?.[RUBRICA_NIVEL_ID]);
-        return Number.isFinite(nota) ? nota : null;
+        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812]
+            .map(chave => Number(scores?.[chave]))
+            .filter(Number.isFinite);
+        if (!notas.length) return null;
+        if (notas.length === 1) return notas[0];
+        return (notas.reduce((total, nota) => total + nota, 0) / notas.length).toFixed(1);
     }
     let total = 0, peso = 0;
     crit.forEach(c => {
@@ -507,7 +511,8 @@ function normalizarCampoDestaqueDrawer(valor) {
 }
 
 function ehCampoDestaqueDrawer(valor) {
-    return ['areasegmento', 'area', 'segmento', 'finalidade'].includes(normalizarCampoDestaqueDrawer(valor));
+    const campo = normalizarCampoDestaqueDrawer(valor);
+    return ['areasegmento', 'area', 'segmento', 'finalidade'].includes(campo) || campo.includes('sinopse');
 }
 
 function obterDadosDestaqueDrawer(item) {
@@ -530,6 +535,27 @@ function obterDadosDestaqueDrawer(item) {
     adicionar('Área/segmento', localizar(['areasegmento', 'area', 'segmento']));
     adicionar('Finalidade', localizar(['finalidade']));
     return resultado;
+}
+
+function obterDadosViabilidadeDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    let sinopse = '';
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        sinopse = dadosUnificados.sinopse;
+    } else {
+        const s = item?.segundaEtapa;
+        const headers = Array.isArray(s?.headers) ? s.headers : [];
+        const valores = Array.isArray(s?.valores) ? s.valores : [];
+        const indice = headers.findIndex(header => normalizarCampoDestaqueDrawer(header).includes('sinopse'));
+        sinopse = indice >= 0 ? valores[indice] : '';
+    }
+    const local = p.localNome
+        || (String(p.local || '').toLowerCase().includes('igrej') ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
+    return [
+        ['Local', formatarValorDrawer(local) || '—'],
+        ['Sinopse/descrição da proposta', formatarValorDrawer(sinopse) || '—']
+    ];
 }
 
 function obterDadosComplementaresDrawer(item) {
@@ -647,6 +673,7 @@ function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
     const dadosComplementares = obterDadosComplementaresDrawer(item);
     const dadosDestaque = obterDadosDestaqueDrawer(item);
+    const dadosViabilidade = obterDadosViabilidadeDrawer(item);
     const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
     Object.keys(p.etapas || {}).forEach(key => {
@@ -668,7 +695,6 @@ function renderDrawerContent(item, existingScores = {}) {
             <div class="drawer-grid">
                 ${[
                     ['Proponente', p.nome],
-                    ['Local', p.localNome || 'Teatro Carmen Fossari'],
                     ['Evento', p.evento]
                 ].map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
             </div>
@@ -681,14 +707,16 @@ function renderDrawerContent(item, existingScores = {}) {
                 ${dadosDestaque.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
             </div>
         </div>
-        <div class="drawer-evaluation">
-            <h4><i class="fas fa-star"></i> Avaliação</h4>
-            <p class="drawer-evaluation-note">${ehRubricaDeNiveis() ? 'Escolha o nível que melhor representa a proposta. Cada nível possui a pontuação definida no painel administrativo.' : 'Dê uma nota de 1 a 10 para cada critério.'}</p>
-            ${renderCriteriaRows(existingScores)}
-            ${!ehRubricaDeNiveis() ? `<div class="drawer-save">
-                <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
-            </div>` : ''}
+        ${renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID)}
+        <div class="drawer-criterion">
+            <div class="drawer-criterion-title">8.1.2 Viabilidade técnica e adequação da proposta ao espaço público requerido.</div>
         </div>
+        <div class="drawer-section">
+            <div class="drawer-grid">
+                ${dadosViabilidade.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
+            </div>
+        </div>
+        ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_812) : ''}
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
             ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
@@ -705,32 +733,45 @@ function renderDrawerContent(item, existingScores = {}) {
     return html;
 }
 
-function renderCriteriaRows(existingScores = {}) {
+function renderEvaluationBlock(existingScores, criterionKey) {
+    return `<div class="drawer-evaluation">
+        <h4><i class="fas fa-star"></i> Avaliação</h4>
+        <p class="drawer-evaluation-note">${ehRubricaDeNiveis() ? 'Escolha o nível que melhor representa este item. Cada nível possui a pontuação definida no painel administrativo.' : 'Dê uma nota de 1 a 10 para cada critério.'}</p>
+        ${renderCriteriaRows(existingScores, criterionKey)}
+        ${!ehRubricaDeNiveis() && criterionKey === RUBRICA_NIVEL_ID ? `<div class="drawer-save">
+            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
+        </div>` : ''}
+    </div>`;
+}
+
+function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
         const opcoes = [...crit].sort((a, b) => Number(a.peso) - Number(b.peso));
-        const valorSalvo = Number(existingScores?.[RUBRICA_NIVEL_ID]);
+        const estado = obterEstadoRubrica(criterionKey);
+        const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+        const valorSalvo = Number(existingScores?.[criterionKey]);
         const temValorSalvo = Number.isFinite(valorSalvo) && opcoes.some(c => Number(c.peso) === valorSalvo);
-        const valorAtual = Number(currentAvaliacaoScores?.[RUBRICA_NIVEL_ID]);
+        const valorAtual = Number(currentAvaliacaoScores?.[criterionKey]);
         const temValorAtual = Number.isFinite(valorAtual) && opcoes.some(c => Number(c.peso) === valorAtual);
         const notaSelecionada = temValorAtual ? valorAtual : (temValorSalvo ? valorSalvo : null);
         const selecionada = notaSelecionada === null ? null : opcoes.find(c => Number(c.peso) === notaSelecionada);
-        const temAlteracao = rubricaEditando && temValorAtual && (!temValorSalvo || valorAtual !== valorSalvo);
+        const temAlteracao = estado.editando && temValorAtual && (!temValorSalvo || valorAtual !== valorSalvo);
         const classeSelecionada = selecionada ? classeRubrica(selecionada.peso) : 'rubric-prompt';
         const titulo = selecionada?.nome || 'Clique aqui para avaliar';
         const dica = selecionada
             ? (temAlteracao ? 'Escolha o nível e clique em Salvar' : (temValorSalvo ? 'Avaliação salva' : 'Clique para alterar o nível'))
             : 'Clique para abrir as três opções';
         const acao = temAlteracao
-            ? '<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar</button>'
-            : (temValorSalvo && !rubricaEditando
-                ? '<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica()"><i class="fas fa-pen"></i> Editar</button>'
+            ? `<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar</button>`
+            : (temValorSalvo && !estado.editando
+                ? `<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica('${escapeAttr(criterionKey)}')"><i class="fas fa-pen"></i> Editar</button>`
                 : '');
         return `<div class="criteria-row" style="display:block">
             <div class="criteria-label" style="margin-bottom:10px">Avaliação do critério</div>
             <div class="rubric-picker">
                 <div class="rubric-control-row">
-                    <button type="button" class="rubric-trigger ${classeSelecionada}" onclick="handleRubricaTrigger()" aria-expanded="${rubricaOpcoesAbertas ? 'true' : 'false'}" aria-controls="rubricOptions" data-saved="${temValorSalvo ? 'true' : 'false'}" data-saved-value="${temValorSalvo ? valorSalvo : ''}" id="rubricTrigger">
+                    <button type="button" class="rubric-trigger ${classeSelecionada}" onclick="handleRubricaTrigger('${escapeAttr(criterionKey)}')" aria-expanded="${estado.opcoesAbertas ? 'true' : 'false'}" aria-controls="rubricOptions-${sufixo}" data-saved="${temValorSalvo ? 'true' : 'false'}" data-saved-value="${temValorSalvo ? valorSalvo : ''}" id="rubricTrigger-${sufixo}">
                         <span class="rubric-trigger-copy">
                             <span class="rubric-trigger-title">${escapeHtml(titulo)}</span>
                             <span class="rubric-trigger-hint">${escapeHtml(dica)}</span>
@@ -739,10 +780,10 @@ function renderCriteriaRows(existingScores = {}) {
                     </button>
                     <div class="rubric-actions">${acao}</div>
                 </div>
-                <div class="rubric-options" id="rubricOptions" ${rubricaOpcoesAbertas ? '' : 'hidden'}>
+                <div class="rubric-options" id="rubricOptions-${sufixo}" ${estado.opcoesAbertas ? '' : 'hidden'}>
                     ${opcoes.map(opcao => {
                         const selecionadaAgora = Number(opcao.peso) === notaSelecionada;
-                        return `<button type="button" class="rubric-option ${classeRubrica(opcao.peso)}${selecionadaAgora ? ' selected' : ''}" onclick="setRubricaNivel('${escapeAttr(opcao.id)}', ${Number(opcao.peso)}, '${escapeAttr(opcao.nome)}')">
+                        return `<button type="button" class="rubric-option ${classeRubrica(opcao.peso)}${selecionadaAgora ? ' selected' : ''}" onclick="setRubricaNivel('${escapeAttr(criterionKey)}', '${escapeAttr(opcao.id)}', ${Number(opcao.peso)}, '${escapeAttr(opcao.nome)}')">
                             <span>${escapeHtml(opcao.nome)}</span>
                             <span class="rubric-option-score">${escapeHtml(opcao.peso)} pts</span>
                         </button>`;
@@ -778,42 +819,63 @@ function escapeAttr(s) {
     return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
-function handleRubricaTrigger() {
-    const trigger = document.getElementById('rubricTrigger');
+function obterEstadoRubrica(criterionKey) {
+    if (!rubricaEstados[criterionKey]) {
+        rubricaEstados[criterionKey] = { opcoesAbertas: false, editando: false };
+    }
+    return rubricaEstados[criterionKey];
+}
+
+function resetarEstadosRubrica() {
+    Object.keys(rubricaEstados).forEach(key => {
+        rubricaEstados[key].opcoesAbertas = false;
+        rubricaEstados[key].editando = false;
+    });
+}
+
+function handleRubricaTrigger(criterionKey = RUBRICA_NIVEL_ID) {
+    const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+    const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
+    const estado = obterEstadoRubrica(criterionKey);
     if (!trigger) return;
-    if (trigger.dataset.saved === 'true' && !rubricaEditando) {
-        iniciarEdicaoRubrica();
+    if (trigger.dataset.saved === 'true' && !estado.editando) {
+        iniciarEdicaoRubrica(criterionKey);
         return;
     }
-    toggleRubricaOpcoes();
+    toggleRubricaOpcoes(criterionKey);
 }
 
-function toggleRubricaOpcoes() {
-    const trigger = document.getElementById('rubricTrigger');
-    const abrindo = !rubricaOpcoesAbertas;
+function toggleRubricaOpcoes(criterionKey = RUBRICA_NIVEL_ID) {
+    const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+    const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
+    const estado = obterEstadoRubrica(criterionKey);
+    const abrindo = !estado.opcoesAbertas;
     if (!abrindo && trigger?.dataset.savedValue !== '') {
-        const valorAtual = Number(currentAvaliacaoScores?.[RUBRICA_NIVEL_ID]);
+        const valorAtual = Number(currentAvaliacaoScores?.[criterionKey]);
         const valorSalvo = Number(trigger.dataset.savedValue);
-        if (Number.isFinite(valorAtual) && valorAtual === valorSalvo) rubricaEditando = false;
+        if (Number.isFinite(valorAtual) && valorAtual === valorSalvo) estado.editando = false;
     }
-    rubricaOpcoesAbertas = abrindo;
+    estado.opcoesAbertas = abrindo;
     renderAvaliacaoList();
 }
 
-function iniciarEdicaoRubrica() {
-    rubricaEditando = true;
-    rubricaOpcoesAbertas = true;
+function iniciarEdicaoRubrica(criterionKey = RUBRICA_NIVEL_ID) {
+    const estado = obterEstadoRubrica(criterionKey);
+    estado.editando = true;
+    estado.opcoesAbertas = true;
     renderAvaliacaoList();
 }
 
-function setRubricaNivel(criterioId, valor, nome) {
-    currentAvaliacaoScores[RUBRICA_NIVEL_ID] = Number(valor);
-    currentAvaliacaoScores[`${RUBRICA_NIVEL_ID}_label`] = nome;
-    const trigger = document.getElementById('rubricTrigger');
+function setRubricaNivel(criterionKey, criterioId, valor, nome) {
+    currentAvaliacaoScores[criterionKey] = Number(valor);
+    currentAvaliacaoScores[`${criterionKey}_label`] = nome;
+    const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+    const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
+    const estado = obterEstadoRubrica(criterionKey);
     const valorSalvo = trigger?.dataset.savedValue ?? '';
     const mesmaAvaliaçãoSalva = valorSalvo !== '' && Number(valorSalvo) === Number(valor);
-    rubricaEditando = !mesmaAvaliaçãoSalva;
-    rubricaOpcoesAbertas = !mesmaAvaliaçãoSalva;
+    estado.editando = !mesmaAvaliaçãoSalva;
+    estado.opcoesAbertas = !mesmaAvaliaçãoSalva;
     renderAvaliacaoList();
 }
 
@@ -822,16 +884,14 @@ async function openAvaliacao(idx) {
         openAvaliacaoIndex = null;
         currentAvaliacaoIndex = null;
         currentAvaliacaoScores = {};
-        rubricaOpcoesAbertas = false;
-        rubricaEditando = false;
+        resetarEstadosRubrica();
         renderAvaliacaoList();
         return;
     }
     openAvaliacaoIndex = idx;
     currentAvaliacaoIndex = idx;
     currentAvaliacaoScores = {};
-    rubricaOpcoesAbertas = false;
-    rubricaEditando = false;
+    resetarEstadosRubrica();
     renderAvaliacaoList();
     const drawer = document.getElementById(`avaliacao-drawer-${idx}`);
     if (drawer) drawer.innerHTML = '<div class="drawer-loading"><i class="fas fa-spinner fa-spin"></i> Carregando inscrição completa...</div>';
@@ -880,8 +940,10 @@ async function salvarAvaliacao() {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        if (currentAvaliacaoScores[RUBRICA_NIVEL_ID] === undefined || currentAvaliacaoScores[RUBRICA_NIVEL_ID] === null) {
-            await showAvaliadorDialog('Escolha um dos três níveis de avaliação antes de salvar.', {
+        const niveisAusentes = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812]
+            .filter(chave => currentAvaliacaoScores[chave] === undefined || currentAvaliacaoScores[chave] === null);
+        if (niveisAusentes.length) {
+            await showAvaliadorDialog('Escolha um dos três níveis de avaliação para cada item antes de salvar.', {
                 title: 'Avaliação incompleta',
                 confirmLabel: 'OK',
                 hideCancel: true,
@@ -913,8 +975,7 @@ async function salvarAvaliacao() {
                 scoresCache[id] = await rr.json();
             } catch(e) {}
             if (ehRubricaDeNiveis(crit)) {
-                rubricaEditando = false;
-                rubricaOpcoesAbertas = false;
+                resetarEstadosRubrica();
             } else {
                 openAvaliacaoIndex = null;
                 currentAvaliacaoIndex = null;
