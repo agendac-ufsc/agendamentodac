@@ -256,6 +256,15 @@ let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let openAvaliacaoIndex = null;
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
 const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
+const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
+const DOCUMENTOS_ITEM_813 = [
+    'testeCurriculoPessoaFisica',
+    'formsCurriculo',
+    'testeLinksVideoProposta',
+    'formsLinksVideo',
+    'testeOutrosLinksProposta',
+    'formsDocumento'
+];
 const rubricaEstados = {};
 
 // Restaurar sessão
@@ -435,7 +444,7 @@ function renderAvaliacaoList() {
 function calcMedia(scores) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812]
+        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813]
             .map(chave => Number(scores?.[chave]))
             .filter(Number.isFinite);
         if (!notas.length) return null;
@@ -510,7 +519,7 @@ function normalizarCampoDestaqueDrawer(valor) {
 
 function ehCampoDestaqueDrawer(valor) {
     const campo = normalizarCampoDestaqueDrawer(valor);
-    return ['areasegmento', 'area', 'segmento', 'finalidade'].includes(campo) || campo.includes('sinopse');
+    return ['areasegmento', 'areas', 'area', 'segmento', 'finalidade'].includes(campo) || campo.includes('sinopse');
 }
 
 function obterDadosDestaqueDrawer(item) {
@@ -613,7 +622,7 @@ function formatarEtapaDrawer(etapa, fallbackTipo) {
 
 function obterRotuloDocumentoDrawer(documento) {
     const rotulos = {
-        testeCurriculoPessoaFisica: 'Pessoa Física — Currículo',
+        testeCurriculoPessoaFisica: 'Currículo',
         testeDocumentoPessoaFisica: 'Pessoa Física — Documento oficial',
         testePortfolioPessoaJuridica: 'Pessoa Jurídica — Portfólio',
         testeContratoPessoaJuridica: 'Pessoa Jurídica — Contrato',
@@ -621,9 +630,9 @@ function obterRotuloDocumentoDrawer(documento) {
         testeDocumentoCnpjPessoaJuridica: 'Pessoa Jurídica — Documento do CNPJ',
         testeComprovanteVinculoUfsc: 'Pessoa Jurídica — Comprovante de vínculo com a UFSC',
         testeFichaTecnicaProposta: 'Proposta — Ficha técnica',
-        testeLinksVideoProposta: 'Proposta — Links de vídeo/fotos',
-        testeOutrosLinksProposta: 'Proposta — Outros documentos',
-        formsCurriculo: 'Google Forms — Currículo',
+        testeLinksVideoProposta: 'Link de acesso a vídeo ou fotos da proposta (em caso de já realizada previamente)',
+        testeOutrosLinksProposta: 'Links com outras informações (site, blog, fotos e etc.) que possam ser úteis para qualificar a proposta',
+        formsCurriculo: 'Currículo',
         formsDocumentoOficial: 'Google Forms — Documento oficial',
         formsPortfolio: 'Google Forms — Portfólio',
         formsContrato: 'Google Forms — Contrato',
@@ -631,8 +640,8 @@ function obterRotuloDocumentoDrawer(documento) {
         formsDocumentoCnpj: 'Google Forms — Documento do CNPJ',
         formsComprovanteVinculo: 'Google Forms — Comprovante de vínculo',
         formsFichaTecnica: 'Google Forms — Ficha técnica',
-        formsLinksVideo: 'Google Forms — Links de vídeo/fotos',
-        formsDocumento: 'Google Forms — Outros documentos'
+        formsLinksVideo: 'Link de acesso a vídeo ou fotos da proposta (em caso de já realizada previamente)',
+        formsDocumento: 'Links com outras informações (site, blog, fotos e etc.) que possam ser úteis para qualificar a proposta'
     };
     return documento?.categoria || documento?.colunaForms || rotulos[documento?.campo] || documento?.campo || 'Arquivo enviado';
 }
@@ -645,10 +654,16 @@ function formatarTamanhoDocumentoDrawer(bytes) {
     return `${(tamanho / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function renderDocumentosDrawer(item) {
+function renderDocumentosDrawer(item, campos = null, mensagemVazia = 'Nenhum arquivo enviado para esta inscrição.') {
     const p = item?.primeiraEtapa || {};
-    const documentos = Array.isArray(p.documentos) ? p.documentos.filter(Boolean) : [];
-    if (!documentos.length) return '<div class="drawer-empty">Nenhum arquivo enviado para esta inscrição.</div>';
+    const documentos = Array.isArray(p.documentos)
+        ? p.documentos.filter(documento => {
+            if (!documento) return false;
+            if (!campos) return true;
+            return campos.includes(documento.campo) || campos.includes(documento.colunaForms);
+        })
+        : [];
+    if (!documentos.length) return mensagemVazia ? `<div class="drawer-empty">${escapeHtml(mensagemVazia)}</div>` : '';
     return `<div style="display:grid;gap:10px">${documentos.map(documento => {
         const url = p.id && documento.id
             ? `/api/admin/documentos/${encodeURIComponent(p.id)}/${encodeURIComponent(documento.id)}`
@@ -667,11 +682,23 @@ function renderDocumentosDrawer(item) {
         </div>`;
     }).join('')}</div>`;
 }
+
+function renderDocumentosRestantesDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const documentos = Array.isArray(p.documentos)
+        ? p.documentos.filter(documento =>
+            documento && !DOCUMENTOS_ITEM_813.includes(documento.campo) && !DOCUMENTOS_ITEM_813.includes(documento.colunaForms)
+        )
+        : [];
+    return renderDocumentosDrawer({ ...item, primeiraEtapa: { ...p, documentos } });
+}
+
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
     const dadosComplementares = obterDadosComplementaresDrawer(item);
     const dadosDestaque = obterDadosDestaqueDrawer(item);
     const dadosViabilidade = obterDadosViabilidadeDrawer(item);
+    const documentosItem813 = renderDocumentosDrawer(item, DOCUMENTOS_ITEM_813, '');
     const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
     Object.keys(p.etapas || {}).forEach(key => {
@@ -715,6 +742,11 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_812) : ''}
+        <div class="drawer-criterion">
+            <div class="drawer-criterion-title">8.1.3. Experiência do proponente no desenvolvimento de ações relacionadas ao projeto inscrito.</div>
+        </div>
+        ${documentosItem813 ? `<div class="drawer-section">${documentosItem813}</div>` : ''}
+        ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_813) : ''}
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
             ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
@@ -725,7 +757,7 @@ function renderDrawerContent(item, existingScores = {}) {
         </div>
         <div class="drawer-section">
             <h4><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
-            ${renderDocumentosDrawer(item)}
+            ${renderDocumentosRestantesDrawer(item)}
         </div>
         </div>`;
     return html;
@@ -745,7 +777,7 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
     if (ehRubricaDeNiveis(crit)) {
         const opcoes = [...crit].sort((a, b) => Number(a.peso) - Number(b.peso));
         const estado = obterEstadoRubrica(criterionKey);
-        const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+        const sufixo = obterSufixoRubrica(criterionKey);
         const valorSalvo = Number(existingScores?.[criterionKey]);
         const temValorSalvo = Number.isFinite(valorSalvo) && opcoes.some(c => Number(c.peso) === valorSalvo);
         const valorAtual = Number(currentAvaliacaoScores?.[criterionKey]);
@@ -815,6 +847,12 @@ function escapeAttr(s) {
     return String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
 
+function obterSufixoRubrica(criterionKey) {
+    if (criterionKey === RUBRICA_NIVEL_ID_812) return '812';
+    if (criterionKey === RUBRICA_NIVEL_ID_813) return '813';
+    return '811';
+}
+
 function obterEstadoRubrica(criterionKey) {
     if (!rubricaEstados[criterionKey]) {
         rubricaEstados[criterionKey] = { opcoesAbertas: false, editando: false };
@@ -830,7 +868,7 @@ function resetarEstadosRubrica() {
 }
 
 function handleRubricaTrigger(criterionKey = RUBRICA_NIVEL_ID) {
-    const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+    const sufixo = obterSufixoRubrica(criterionKey);
     const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
     const estado = obterEstadoRubrica(criterionKey);
     if (!trigger) return;
@@ -842,7 +880,7 @@ function handleRubricaTrigger(criterionKey = RUBRICA_NIVEL_ID) {
 }
 
 function toggleRubricaOpcoes(criterionKey = RUBRICA_NIVEL_ID) {
-    const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+    const sufixo = obterSufixoRubrica(criterionKey);
     const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
     const estado = obterEstadoRubrica(criterionKey);
     const abrindo = !estado.opcoesAbertas;
@@ -865,7 +903,7 @@ function iniciarEdicaoRubrica(criterionKey = RUBRICA_NIVEL_ID) {
 function setRubricaNivel(criterionKey, criterioId, valor, nome) {
     currentAvaliacaoScores[criterionKey] = Number(valor);
     currentAvaliacaoScores[`${criterionKey}_label`] = nome;
-    const sufixo = criterionKey === RUBRICA_NIVEL_ID_812 ? '812' : '811';
+    const sufixo = obterSufixoRubrica(criterionKey);
     const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
     const estado = obterEstadoRubrica(criterionKey);
     const valorSalvo = trigger?.dataset.savedValue ?? '';
@@ -936,9 +974,10 @@ async function salvarAvaliacao(criterionKey = null) {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const chaveDoItem = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812].includes(criterionKey)
+        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813];
+        const chaveDoItem = chavesRubrica.includes(criterionKey)
             ? criterionKey
-            : [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812].find(chave =>
+            : chavesRubrica.find(chave =>
                 currentAvaliacaoScores[chave] !== undefined && currentAvaliacaoScores[chave] !== null
             );
         if (!chaveDoItem || currentAvaliacaoScores[chaveDoItem] === undefined || currentAvaliacaoScores[chaveDoItem] === null) {
