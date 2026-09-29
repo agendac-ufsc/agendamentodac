@@ -73,6 +73,7 @@
         .drawer-event-list li{margin-bottom:4px}
         .drawer-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
         .drawer-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
+        .drawer-document-title{font-size:13px;font-weight:800;color:#1d4ed8;line-height:1.3;margin-bottom:4px}
         .drawer-link-pill:hover{background:#dbeafe}
         .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;margin-bottom:34px;padding-top:20px}
         .drawer-save{text-align:right;margin-top:18px}
@@ -623,27 +624,30 @@ function formatarEtapaDrawer(etapa, fallbackTipo) {
 function obterRotuloDocumentoDrawer(documento) {
     const rotulos = {
         testeCurriculoPessoaFisica: 'Currículo',
-        testeDocumentoPessoaFisica: 'Pessoa Física — Documento oficial',
-        testePortfolioPessoaJuridica: 'Pessoa Jurídica — Portfólio',
-        testeContratoPessoaJuridica: 'Pessoa Jurídica — Contrato',
-        testeDocumentoRepresentantePessoaJuridica: 'Pessoa Jurídica — Documento do representante',
-        testeDocumentoCnpjPessoaJuridica: 'Pessoa Jurídica — Documento do CNPJ',
-        testeComprovanteVinculoUfsc: 'Pessoa Jurídica — Comprovante de vínculo com a UFSC',
-        testeFichaTecnicaProposta: 'Proposta — Ficha técnica',
-        testeLinksVideoProposta: 'Link de acesso a vídeo ou fotos da proposta (em caso de já realizada previamente)',
-        testeOutrosLinksProposta: 'Links com outras informações (site, blog, fotos e etc.) que possam ser úteis para qualificar a proposta',
+        testeDocumentoPessoaFisica: 'Documento oficial',
+        testePortfolioPessoaJuridica: 'Portfólio',
+        testeContratoPessoaJuridica: 'Contrato',
+        testeDocumentoRepresentantePessoaJuridica: 'Documento do representante',
+        testeDocumentoCnpjPessoaJuridica: 'Documento do CNPJ',
+        testeComprovanteVinculoUfsc: 'Comprovante de vínculo',
+        testeFichaTecnicaProposta: 'Ficha técnica',
+        testeLinksVideoProposta: 'Links e vídeos',
+        testeOutrosLinksProposta: 'Outros documentos',
         formsCurriculo: 'Currículo',
-        formsDocumentoOficial: 'Google Forms — Documento oficial',
-        formsPortfolio: 'Google Forms — Portfólio',
-        formsContrato: 'Google Forms — Contrato',
-        formsDocumentoRepresentante: 'Google Forms — Documento do representante',
-        formsDocumentoCnpj: 'Google Forms — Documento do CNPJ',
-        formsComprovanteVinculo: 'Google Forms — Comprovante de vínculo',
-        formsFichaTecnica: 'Google Forms — Ficha técnica',
-        formsLinksVideo: 'Link de acesso a vídeo ou fotos da proposta (em caso de já realizada previamente)',
-        formsDocumento: 'Links com outras informações (site, blog, fotos e etc.) que possam ser úteis para qualificar a proposta'
+        formsDocumentoOficial: 'Documento oficial',
+        formsPortfolio: 'Portfólio',
+        formsContrato: 'Contrato',
+        formsDocumentoRepresentante: 'Documento do representante',
+        formsDocumentoCnpj: 'Documento do CNPJ',
+        formsComprovanteVinculo: 'Comprovante de vínculo',
+        formsFichaTecnica: 'Ficha técnica',
+        formsLinksVideo: 'Links e vídeos',
+        formsDocumento: 'Outros documentos'
     };
-    return documento?.categoria || documento?.colunaForms || rotulos[documento?.campo] || documento?.campo || 'Arquivo enviado';
+    const chave = documento?.campo || documento?.colunaForms;
+    if (rotulos[chave]) return rotulos[chave];
+    return String(documento?.categoria || documento?.colunaForms || documento?.campo || 'Arquivo enviado')
+        .replace(/^(Pessoa Física|Pessoa Jurídica|Proposta|Google Forms)\s*[—-]\s*/i, '');
 }
 
 function formatarTamanhoDocumentoDrawer(bytes) {
@@ -674,7 +678,7 @@ function renderDocumentosDrawer(item, campos = null, mensagemVazia = 'Nenhum arq
             : '<span style="color:#aaa;font-size:12px">Visualização indisponível</span>';
         return `<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #dbeafe;border-radius:8px;background:#fff;padding:10px 12px">
             <div style="min-width:0">
-                <div style="font-size:11px;font-weight:700;color:#1d4ed8;margin-bottom:3px">${escapeHtml(obterRotuloDocumentoDrawer(documento))}</div>
+                <div class="drawer-document-title">${escapeHtml(obterRotuloDocumentoDrawer(documento))}</div>
                 <div style="font-size:13px;color:#1f2937;word-break:break-word">${escapeHtml(documento.nome || 'Arquivo sem nome')}</div>
                 ${detalhes ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px">${escapeHtml(detalhes)}</div>` : ''}
             </div>
