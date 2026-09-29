@@ -258,6 +258,7 @@ let openAvaliacaoIndex = null;
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
 const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
 const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
+const RUBRICA_NIVEL_ID_814 = '__nivel_avaliacao_814';
 const DOCUMENTOS_ITEM_813 = [
     'testeCurriculoPessoaFisica',
     'formsCurriculo',
@@ -449,7 +450,7 @@ function renderAvaliacaoList() {
 function calcMedia(scores) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813]
+        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814]
             .map(chave => Number(scores?.[chave]))
             .filter(Number.isFinite);
         if (!notas.length) return null;
@@ -570,6 +571,26 @@ function obterDadosViabilidadeDrawer(item) {
     ];
 }
 
+function obterDadosRelevanciaDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    let relevancia = '';
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        relevancia = dadosUnificados.relevancia;
+    } else {
+        const s = item?.segundaEtapa;
+        const headers = Array.isArray(s?.headers) ? s.headers : [];
+        const valores = Array.isArray(s?.valores) ? s.valores : [];
+        const indice = headers.findIndex(header =>
+            normalizarCampoDestaqueDrawer(header) === 'relevanciaculturaleimpactosocial'
+        );
+        relevancia = indice >= 0 ? valores[indice] : '';
+    }
+    return [
+        ['Relevância cultural e impacto social', formatarValorDrawer(relevancia) || '—']
+    ];
+}
+
 function obterDadosComplementaresDrawer(item) {
     const p = item?.primeiraEtapa || {};
     const dadosUnificados = p.segundaEtapaTeste;
@@ -597,7 +618,7 @@ function obterDadosComplementaresDrawer(item) {
             projetoDac: 'Projeto do DAC',
             arquivos: 'Arquivos enviados'
         };
-        const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'arquivos', 'concluidaEm']);
+        const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'arquivos', 'concluidaEm', 'relevancia']);
         return Object.entries(dadosUnificados)
             .filter(([chave, valor]) => !ignoradas.has(chave) && !ehCampoDestaqueDrawer(chave) && formatarValorDrawer(valor))
             .map(([chave, valor]) => [
@@ -613,7 +634,10 @@ function obterDadosComplementaresDrawer(item) {
                 String(header || 'Campo'),
                 formatarValorDrawer(s.valores[index]) || '—'
             ])
-            .filter(([header]) => !ehCampoDestaqueDrawer(header));
+            .filter(([header]) =>
+                !ehCampoDestaqueDrawer(header)
+                && normalizarCampoDestaqueDrawer(header) !== 'relevanciaculturaleimpactosocial'
+            );
     }
     return [];
 }
@@ -706,6 +730,7 @@ function renderDrawerContent(item, existingScores = {}) {
     const dadosComplementares = obterDadosComplementaresDrawer(item);
     const dadosDestaque = obterDadosDestaqueDrawer(item);
     const dadosViabilidade = obterDadosViabilidadeDrawer(item);
+    const dadosRelevancia = obterDadosRelevanciaDrawer(item);
     const documentosItem813 = renderDocumentosDrawer(item, DOCUMENTOS_ITEM_813, '');
     const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
@@ -749,6 +774,15 @@ function renderDrawerContent(item, existingScores = {}) {
         </div>
         ${documentosItem813 ? `<div class="drawer-section">${documentosItem813}</div>` : ''}
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_813) : ''}
+        <div class="drawer-criterion">
+            <div class="drawer-criterion-title">8.1.4. Relevância cultural e impacto social.</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-grid">
+                ${dadosRelevancia.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
+            </div>
+        </div>
+        ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_814) : ''}
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
             ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
@@ -852,6 +886,7 @@ function escapeAttr(s) {
 function obterSufixoRubrica(criterionKey) {
     if (criterionKey === RUBRICA_NIVEL_ID_812) return '812';
     if (criterionKey === RUBRICA_NIVEL_ID_813) return '813';
+    if (criterionKey === RUBRICA_NIVEL_ID_814) return '814';
     return '811';
 }
 
@@ -976,7 +1011,7 @@ async function salvarAvaliacao(criterionKey = null) {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813];
+        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814];
         const chaveDoItem = chavesRubrica.includes(criterionKey)
             ? criterionKey
             : chavesRubrica.find(chave =>
