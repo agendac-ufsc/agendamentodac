@@ -75,8 +75,6 @@
         .drawer-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
         .drawer-link-pill:hover{background:#dbeafe}
         .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;margin-bottom:34px;padding-top:20px}
-        .drawer-evaluation h4{font-size:15px;color:#1e3a8a;margin-bottom:6px}
-        .drawer-evaluation-note{font-size:12px;color:#64748b;margin-bottom:16px}
         .drawer-save{text-align:right;margin-top:18px}
         .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
         .av-status.done{background:#d1fae5;color:#065f46}
@@ -735,8 +733,6 @@ function renderDrawerContent(item, existingScores = {}) {
 
 function renderEvaluationBlock(existingScores, criterionKey) {
     return `<div class="drawer-evaluation">
-        <h4><i class="fas fa-star"></i> Avaliação</h4>
-        <p class="drawer-evaluation-note">${ehRubricaDeNiveis() ? 'Escolha o nível que melhor representa este item. Cada nível possui a pontuação definida no painel administrativo.' : 'Dê uma nota de 1 a 10 para cada critério.'}</p>
         ${renderCriteriaRows(existingScores, criterionKey)}
         ${!ehRubricaDeNiveis() && criterionKey === RUBRICA_NIVEL_ID ? `<div class="drawer-save">
             <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
