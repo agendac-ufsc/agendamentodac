@@ -759,7 +759,7 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
             ? (temAlteracao ? 'Escolha o nível e clique em Salvar' : (temValorSalvo ? 'Avaliação salva' : 'Clique para alterar o nível'))
             : 'Clique para abrir as três opções';
         const acao = temAlteracao
-            ? `<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar</button>`
+            ? `<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao('${escapeAttr(criterionKey)}')"><i class="fas fa-save"></i> Salvar</button>`
             : (temValorSalvo && !estado.editando
                 ? `<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica('${escapeAttr(criterionKey)}')"><i class="fas fa-pen"></i> Editar</button>`
                 : '');
@@ -921,7 +921,7 @@ function setStar(criterioId, valor) {
     if (label) label.textContent = `${valor}/10`;
 }
 
-async function salvarAvaliacao() {
+async function salvarAvaliacao(criterionKey = null) {
     if (currentAvaliacaoIndex === null) return;
     const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
     const id = p.id || p.email;
@@ -936,10 +936,13 @@ async function salvarAvaliacao() {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const niveisAusentes = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812]
-            .filter(chave => currentAvaliacaoScores[chave] === undefined || currentAvaliacaoScores[chave] === null);
-        if (niveisAusentes.length) {
-            await showAvaliadorDialog('Escolha um dos três níveis de avaliação para cada item antes de salvar.', {
+        const chaveDoItem = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812].includes(criterionKey)
+            ? criterionKey
+            : [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812].find(chave =>
+                currentAvaliacaoScores[chave] !== undefined && currentAvaliacaoScores[chave] !== null
+            );
+        if (!chaveDoItem || currentAvaliacaoScores[chaveDoItem] === undefined || currentAvaliacaoScores[chaveDoItem] === null) {
+            await showAvaliadorDialog('Escolha um dos três níveis de avaliação para este item antes de salvar.', {
                 title: 'Avaliação incompleta',
                 confirmLabel: 'OK',
                 hideCancel: true,
