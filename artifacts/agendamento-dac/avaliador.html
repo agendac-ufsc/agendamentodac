@@ -259,6 +259,7 @@ const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
 const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
 const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
 const RUBRICA_NIVEL_ID_814 = '__nivel_avaliacao_814';
+const RUBRICA_NIVEL_ID_815 = '__nivel_avaliacao_815';
 const DOCUMENTOS_ITEM_813 = [
     'testeCurriculoPessoaFisica',
     'formsCurriculo',
@@ -450,7 +451,7 @@ function renderAvaliacaoList() {
 function calcMedia(scores) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814]
+        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815]
             .map(chave => Number(scores?.[chave]))
             .filter(Number.isFinite);
         if (!notas.length) return null;
@@ -528,6 +529,28 @@ function ehCampoDestaqueDrawer(valor) {
     return ['areasegmento', 'areas', 'area', 'segmento', 'finalidade'].includes(campo) || campo.includes('sinopse');
 }
 
+function obterDadosInscricaoDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    let categoria = '';
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        categoria = dadosUnificados.categoriaProposta;
+    } else {
+        const s = item?.segundaEtapa;
+        const headers = Array.isArray(s?.headers) ? s.headers : [];
+        const valores = Array.isArray(s?.valores) ? s.valores : [];
+        const indice = headers.findIndex(header =>
+            normalizarCampoDestaqueDrawer(header) === 'categoriadaproposta'
+        );
+        categoria = indice >= 0 ? valores[indice] : '';
+    }
+    return [
+        ['Proponente', p.nome],
+        ['Evento', p.evento],
+        ['Categoria da proposta', formatarValorDrawer(categoria) || '—']
+    ];
+}
+
 function obterDadosDestaqueDrawer(item) {
     const p = item?.primeiraEtapa || {};
     const dadosUnificados = p.segundaEtapaTeste;
@@ -591,6 +614,42 @@ function obterDadosRelevanciaDrawer(item) {
     ];
 }
 
+function obterDadosGratuidadeDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    let gratuidade = '';
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        gratuidade = dadosUnificados.gratuidade;
+    } else {
+        const s = item?.segundaEtapa;
+        const headers = Array.isArray(s?.headers) ? s.headers : [];
+        const valores = Array.isArray(s?.valores) ? s.valores : [];
+        const indice = headers.findIndex(header => {
+            const campo = normalizarCampoDestaqueDrawer(header);
+            return campo === 'gratuidaddedoevento' || campo === 'gratuidadeevento';
+        });
+        gratuidade = indice >= 0 ? valores[indice] : '';
+    }
+    return [
+        ['Gratuidade do evento', formatarValorDrawer(gratuidade) || '—']
+    ];
+}
+
+function ehCampoComplementarOcultoDrawer(valor) {
+    const campo = normalizarCampoDestaqueDrawer(valor);
+    const nomePessoa = campo.includes('nome')
+        && (campo.includes('pessoafisica') || campo.includes('pessoajuridica'));
+    const razaoSocial = campo.includes('razaosocial');
+    const documentoPessoal = campo === 'cpf' || campo.includes('cpf') || campo === 'cep' || campo.includes('cep');
+    return [
+        'tipodeproponente',
+        'categoriadaproposta',
+        'relevanciaculturaleimpactosocial',
+        'gratuidaddedoevento',
+        'gratuidadeevento'
+    ].includes(campo) || nomePessoa || razaoSocial || documentoPessoal;
+}
+
 function obterDadosComplementaresDrawer(item) {
     const p = item?.primeiraEtapa || {};
     const dadosUnificados = p.segundaEtapaTeste;
@@ -618,7 +677,12 @@ function obterDadosComplementaresDrawer(item) {
             projetoDac: 'Projeto do DAC',
             arquivos: 'Arquivos enviados'
         };
-        const ignoradas = new Set(['id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas', 'documentos', 'arquivos', 'concluidaEm', 'relevancia']);
+        const ignoradas = new Set([
+            'id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas',
+            'documentos', 'arquivos', 'concluidaEm', 'tipoProponente',
+            'nomePessoaFisica', 'razaoSocialPessoaJuridica', 'cpfPessoaFisica',
+            'cepPessoaFisica', 'categoriaProposta', 'relevancia', 'gratuidade'
+        ]);
         return Object.entries(dadosUnificados)
             .filter(([chave, valor]) => !ignoradas.has(chave) && !ehCampoDestaqueDrawer(chave) && formatarValorDrawer(valor))
             .map(([chave, valor]) => [
@@ -635,8 +699,7 @@ function obterDadosComplementaresDrawer(item) {
                 formatarValorDrawer(s.valores[index]) || '—'
             ])
             .filter(([header]) =>
-                !ehCampoDestaqueDrawer(header)
-                && normalizarCampoDestaqueDrawer(header) !== 'relevanciaculturaleimpactosocial'
+                !ehCampoDestaqueDrawer(header) && !ehCampoComplementarOcultoDrawer(header)
             );
     }
     return [];
@@ -727,10 +790,12 @@ function renderDocumentosRestantesDrawer(item) {
 
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
+    const dadosInscricao = obterDadosInscricaoDrawer(item);
     const dadosComplementares = obterDadosComplementaresDrawer(item);
     const dadosDestaque = obterDadosDestaqueDrawer(item);
     const dadosViabilidade = obterDadosViabilidadeDrawer(item);
     const dadosRelevancia = obterDadosRelevanciaDrawer(item);
+    const dadosGratuidade = obterDadosGratuidadeDrawer(item);
     const documentosItem813 = renderDocumentosDrawer(item, DOCUMENTOS_ITEM_813, '');
     const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
@@ -745,10 +810,7 @@ function renderDrawerContent(item, existingScores = {}) {
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-check"></i> Dados da inscrição</h4>
             <div class="drawer-grid">
-                ${[
-                    ['Proponente', p.nome],
-                    ['Evento', p.evento]
-                ].map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
+                ${dadosInscricao.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
             </div>
         </div>
         <div class="drawer-criterion">
@@ -783,6 +845,15 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_814) : ''}
+        <div class="drawer-criterion">
+            <div class="drawer-criterion-title">8.1.5. Gratuidade.</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-grid">
+                ${dadosGratuidade.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
+            </div>
+        </div>
+        ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_815) : ''}
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
             ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
@@ -887,6 +958,7 @@ function obterSufixoRubrica(criterionKey) {
     if (criterionKey === RUBRICA_NIVEL_ID_812) return '812';
     if (criterionKey === RUBRICA_NIVEL_ID_813) return '813';
     if (criterionKey === RUBRICA_NIVEL_ID_814) return '814';
+    if (criterionKey === RUBRICA_NIVEL_ID_815) return '815';
     return '811';
 }
 
@@ -1011,7 +1083,7 @@ async function salvarAvaliacao(criterionKey = null) {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814];
+        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815];
         const chaveDoItem = chavesRubrica.includes(criterionKey)
             ? criterionKey
             : chavesRubrica.find(chave =>
