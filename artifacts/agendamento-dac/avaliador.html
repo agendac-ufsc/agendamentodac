@@ -646,6 +646,14 @@ function renderDrawerContent(item, existingScores = {}) {
                 ${dadosDestaque.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
             </div>
         </div>
+        <div class="drawer-evaluation">
+            <h4><i class="fas fa-star"></i> Avaliação</h4>
+            <p class="drawer-evaluation-note">${ehRubricaDeNiveis() ? 'Escolha o nível que melhor representa a proposta. Cada nível possui a pontuação definida no painel administrativo.' : 'Dê uma nota de 1 a 10 para cada critério.'}</p>
+            ${renderCriteriaRows(existingScores)}
+            <div class="drawer-save">
+                <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
+            </div>
+        </div>
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
             ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
@@ -658,13 +666,6 @@ function renderDrawerContent(item, existingScores = {}) {
             <h4><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
             ${renderDocumentosDrawer(item)}
         </div>
-         <div class="drawer-evaluation">
-            <h4><i class="fas fa-star"></i> Avaliação</h4>
-             <p class="drawer-evaluation-note">${ehRubricaDeNiveis() ? 'Escolha o nível que melhor representa a proposta. Cada nível possui a pontuação definida no painel administrativo.' : 'Dê uma nota de 1 a 10 para cada critério.'}</p>
-            ${renderCriteriaRows(existingScores)}
-            <div class="drawer-save">
-                <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
-            </div>
         </div>`;
     return html;
 }
