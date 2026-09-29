@@ -261,6 +261,10 @@ const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
 const DOCUMENTOS_ITEM_813 = [
     'testeCurriculoPessoaFisica',
     'formsCurriculo',
+    'testeDocumentoPessoaFisica',
+    'formsDocumentoOficial',
+    'testeFichaTecnicaProposta',
+    'formsFichaTecnica',
     'testeLinksVideoProposta',
     'formsLinksVideo',
     'testeOutrosLinksProposta',
@@ -713,12 +717,6 @@ function renderDrawerContent(item, existingScores = {}) {
     });
 
     let html = `
-        <div class="drawer-heading">
-            <div>
-                <h3><i class="fas fa-file-alt"></i> Inscrição completa</h3>
-                <p>Todos os dados usados na ficha de inscrição do proponente.</p>
-            </div>
-        </div>
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-check"></i> Dados da inscrição</h4>
             <div class="drawer-grid">
