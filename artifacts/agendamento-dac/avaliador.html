@@ -110,6 +110,7 @@
         .btn-rubric-edit{background:#fff;color:#2563eb}
         .btn-rubric-edit:hover{color:#fff}
         .rubric-options{display:grid;gap:8px;margin-top:8px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc}
+        .rubric-options[hidden]{display:none}
         .rubric-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1.5px solid transparent;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-size:13px;font-weight:700;transition:.16s}
         .rubric-option:hover,.rubric-option:focus-visible{filter:brightness(.97);transform:translateY(-1px);outline:none}
         .rubric-option.selected{box-shadow:0 0 0 3px rgba(37,99,235,.16);border-color:#2563eb}
@@ -704,7 +705,7 @@ function renderCriteriaRows(existingScores = {}) {
             <div class="criteria-label" style="margin-bottom:10px">Avaliação do critério</div>
             <div class="rubric-picker">
                 <div class="rubric-control-row">
-                    <button type="button" class="rubric-trigger ${classeSelecionada}" onclick="handleRubricaTrigger()" aria-expanded="${rubricaOpcoesAbertas ? 'true' : 'false'}" data-saved="${temValorSalvo ? 'true' : 'false'}" data-saved-value="${temValorSalvo ? valorSalvo : ''}" id="rubricTrigger">
+                    <button type="button" class="rubric-trigger ${classeSelecionada}" onclick="handleRubricaTrigger()" aria-expanded="${rubricaOpcoesAbertas ? 'true' : 'false'}" aria-controls="rubricOptions" data-saved="${temValorSalvo ? 'true' : 'false'}" data-saved-value="${temValorSalvo ? valorSalvo : ''}" id="rubricTrigger">
                         <span class="rubric-trigger-copy">
                             <span class="rubric-trigger-title">${escapeHtml(titulo)}</span>
                             <span class="rubric-trigger-hint">${escapeHtml(dica)}</span>
