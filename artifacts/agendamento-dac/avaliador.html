@@ -813,6 +813,10 @@ function renderDrawerContent(item, existingScores = {}) {
                 ${dadosInscricao.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value || '—')}</div>`).join('')}
             </div>
         </div>
+        <div class="drawer-section">
+            <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
+            ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
+        </div>
         <div class="drawer-criterion">
             <div class="drawer-criterion-title">8.1.1 Caráter artístico-cultural da proposta conforme descrito no item 5.5 deste edital.</div>
         </div>
@@ -854,10 +858,6 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_815) : ''}
-        <div class="drawer-section">
-            <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
-            ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
-        </div>
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-list"></i> Dados complementares (formulário)</h4>
             ${dadosComplementares.length ? `<div class="drawer-grid">${dadosComplementares.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}</div>` : '<div class="drawer-empty">Nenhum dado complementar preenchido.</div>'}
