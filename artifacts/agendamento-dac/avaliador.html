@@ -260,6 +260,7 @@ const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
 const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
 const RUBRICA_NIVEL_ID_814 = '__nivel_avaliacao_814';
 const RUBRICA_NIVEL_ID_815 = '__nivel_avaliacao_815';
+const RUBRICA_NIVEL_ID_818 = '__nivel_avaliacao_818';
 const DOCUMENTOS_ITEM_813 = [
     'testeCurriculoPessoaFisica',
     'formsCurriculo',
@@ -451,7 +452,7 @@ function renderAvaliacaoList() {
 function calcMedia(scores) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815]
+        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815, RUBRICA_NIVEL_ID_818]
             .map(chave => Number(scores?.[chave]))
             .filter(Number.isFinite);
         if (!notas.length) return null;
@@ -635,6 +636,37 @@ function obterDadosGratuidadeDrawer(item) {
     ];
 }
 
+function obterDadosAcessibilidadeDrawer(item) {
+    const p = item?.primeiraEtapa || {};
+    const dadosUnificados = p.segundaEtapaTeste;
+    let acessibilidade = '';
+    let recursos = '';
+    let outroRecurso = '';
+
+    if (p.inscricaoTeste === true && dadosUnificados && typeof dadosUnificados === 'object') {
+        acessibilidade = dadosUnificados.acessibilidade;
+        recursos = dadosUnificados.recursosAcessibilidade;
+        outroRecurso = dadosUnificados.descricaoOutroRecursoAcessibilidade;
+    } else {
+        const s = item?.segundaEtapa;
+        const headers = Array.isArray(s?.headers) ? s.headers : [];
+        const valores = Array.isArray(s?.valores) ? s.valores : [];
+        const localizar = (alvos) => {
+            const indice = headers.findIndex(header => alvos.includes(normalizarCampoDestaqueDrawer(header)));
+            return indice >= 0 ? valores[indice] : '';
+        };
+        acessibilidade = localizar(['acessibilidade', 'acessibilidadecomunicacional']);
+        recursos = localizar(['recursosdeacessibilidade', 'recursosdeacessibilidadecomunicacional']);
+        outroRecurso = localizar(['descricaodeoutrorecurso', 'descricaodeoutrorecursoacessibilidade']);
+    }
+
+    return [
+        ['Acessibilidade comunicacional', formatarValorDrawer(acessibilidade) || '—'],
+        ['Recursos de acessibilidade', formatarValorDrawer(recursos) || '—'],
+        ['Descrição do outro recurso de acessibilidade', formatarValorDrawer(outroRecurso) || '—']
+    ];
+}
+
 function ehCampoComplementarOcultoDrawer(valor) {
     const campo = normalizarCampoDestaqueDrawer(valor);
     const nomePessoa = campo.includes('nome')
@@ -646,7 +678,13 @@ function ehCampoComplementarOcultoDrawer(valor) {
         'categoriadaproposta',
         'relevanciaculturaleimpactosocial',
         'gratuidaddedoevento',
-        'gratuidadeevento'
+        'gratuidadeevento',
+        'acessibilidade',
+        'acessibilidadecomunicacional',
+        'recursosdeacessibilidade',
+        'recursosdeacessibilidadecomunicacional',
+        'descricaodeoutrorecurso',
+        'descricaodeoutrorecursoacessibilidade'
     ].includes(campo) || nomePessoa || razaoSocial || documentoPessoal;
 }
 
@@ -670,9 +708,6 @@ function obterDadosComplementaresDrawer(item) {
             finalidade: 'Finalidade',
             sinopse: 'Sinopse/descrição da proposta',
             relevancia: 'Relevância cultural e impacto social',
-            acessibilidade: 'Acessibilidade comunicacional',
-            recursosAcessibilidade: 'Recursos de acessibilidade',
-            descricaoOutroRecursoAcessibilidade: 'Descrição de outro recurso de acessibilidade',
             gratuidade: 'Gratuidade do evento',
             projetoDac: 'Projeto do DAC',
             arquivos: 'Arquivos enviados'
@@ -681,7 +716,8 @@ function obterDadosComplementaresDrawer(item) {
             'id', 'nome', 'email', 'telefone', 'evento', 'local', 'etapas',
             'documentos', 'arquivos', 'concluidaEm', 'tipoProponente',
             'nomePessoaFisica', 'razaoSocialPessoaJuridica', 'cpfPessoaFisica',
-            'cepPessoaFisica', 'categoriaProposta', 'relevancia', 'gratuidade'
+            'cepPessoaFisica', 'categoriaProposta', 'relevancia', 'gratuidade',
+            'acessibilidade', 'recursosAcessibilidade', 'descricaoOutroRecursoAcessibilidade'
         ]);
         return Object.entries(dadosUnificados)
             .filter(([chave, valor]) => !ignoradas.has(chave) && !ehCampoDestaqueDrawer(chave) && formatarValorDrawer(valor))
@@ -796,6 +832,7 @@ function renderDrawerContent(item, existingScores = {}) {
     const dadosViabilidade = obterDadosViabilidadeDrawer(item);
     const dadosRelevancia = obterDadosRelevanciaDrawer(item);
     const dadosGratuidade = obterDadosGratuidadeDrawer(item);
+    const dadosAcessibilidade = obterDadosAcessibilidadeDrawer(item);
     const documentosItem813 = renderDocumentosDrawer(item, DOCUMENTOS_ITEM_813, '');
     const nomesEtapas = {ensaio:'Ensaio',montagem:'Montagem',evento:'Evento',desmontagem:'Desmontagem'};
     const eventos = [];
@@ -858,6 +895,15 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_815) : ''}
+        <div class="drawer-criterion">
+            <div class="drawer-criterion-title">8.1.8. Utilização, por parte do (a) proponente, de recursos de acessibilidade que possam contribuir com a ampliação do acesso e da inclusão.</div>
+        </div>
+        <div class="drawer-section">
+            <div class="drawer-grid">
+                ${dadosAcessibilidade.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}
+            </div>
+        </div>
+        ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_818) : ''}
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-list"></i> Dados complementares (formulário)</h4>
             ${dadosComplementares.length ? `<div class="drawer-grid">${dadosComplementares.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}</div>` : '<div class="drawer-empty">Nenhum dado complementar preenchido.</div>'}
@@ -959,6 +1005,7 @@ function obterSufixoRubrica(criterionKey) {
     if (criterionKey === RUBRICA_NIVEL_ID_813) return '813';
     if (criterionKey === RUBRICA_NIVEL_ID_814) return '814';
     if (criterionKey === RUBRICA_NIVEL_ID_815) return '815';
+    if (criterionKey === RUBRICA_NIVEL_ID_818) return '818';
     return '811';
 }
 
@@ -1083,7 +1130,7 @@ async function salvarAvaliacao(criterionKey = null) {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815];
+        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815, RUBRICA_NIVEL_ID_818];
         const chaveDoItem = chavesRubrica.includes(criterionKey)
             ? criterionKey
             : chavesRubrica.find(chave =>
