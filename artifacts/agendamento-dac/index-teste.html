@@ -1784,7 +1784,12 @@
                     }
                 }
 
-                if (date < limiteMin || !diaPermitido) {
+                if (!diaPermitido) {
+                    d.classList.add('busy-full');
+                    d.title = 'Inscrições somente de quinta a domingo';
+                    d.onclick = null;
+                    d.style.cursor = 'not-allowed';
+                } else if (date < limiteMin) {
                     d.classList.add('other-month');
                 } else {
                     const dateStr = date.toISOString().split('T')[0];
