@@ -75,6 +75,8 @@
         .drawer-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
         .drawer-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
         .drawer-document-title{font-size:13px;font-weight:800;color:#1d4ed8;line-height:1.3;margin-bottom:4px}
+        .drawer-document-title-dark{color:#111827}
+        .drawer-section h4.drawer-files-heading{margin-block:18px}
         .drawer-link-pill:hover{background:#dbeafe}
         .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;margin-bottom:34px;padding-top:20px}
         .drawer-total-score{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;padding:16px 18px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a8a;font-size:14px;font-weight:700}
@@ -828,12 +830,14 @@ function renderDocumentosDrawer(item, campos = null, mensagemVazia = 'Nenhum arq
             ? `/api/admin/documentos/${encodeURIComponent(p.id)}/${encodeURIComponent(documento.id)}`
             : '';
         const detalhes = [documento.mimeType, formatarTamanhoDocumentoDrawer(documento.tamanho)].filter(Boolean).join(' · ');
+        const rotuloDocumento = obterRotuloDocumentoDrawer(documento);
+        const classeRotuloDocumento = rotuloDocumento === 'Comprovante de vínculo' ? ' drawer-document-title-dark' : '';
         const visualizar = url
             ? `<a href="${url}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;white-space:nowrap;color:#2563eb;font-size:12px;font-weight:700;text-decoration:none"><i class="fas fa-eye"></i> Visualizar</a>`
             : '<span style="color:#aaa;font-size:12px">Visualização indisponível</span>';
         return `<div style="display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #dbeafe;border-radius:8px;background:#fff;padding:10px 12px">
             <div style="min-width:0">
-                <div class="drawer-document-title">${escapeHtml(obterRotuloDocumentoDrawer(documento))}</div>
+                <div class="drawer-document-title${classeRotuloDocumento}">${escapeHtml(rotuloDocumento)}</div>
                 <div style="font-size:13px;color:#1f2937;word-break:break-word">${escapeHtml(documento.nome || 'Arquivo sem nome')}</div>
                 ${detalhes ? `<div style="font-size:11px;color:#94a3b8;margin-top:3px">${escapeHtml(detalhes)}</div>` : ''}
             </div>
@@ -881,7 +885,7 @@ function renderDrawerContent(item, existingScores = {}) {
         <div class="drawer-section">
             <h4><i class="fas fa-clipboard-list"></i> Dados complementares</h4>
             ${dadosComplementares.length ? `<div class="drawer-grid">${dadosComplementares.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}</div>` : '<div class="drawer-empty">Nenhum dado complementar preenchido.</div>'}
-            <h4><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
+            <h4 class="drawer-files-heading"><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
             ${renderDocumentosRestantesDrawer(item)}
         </div>
         <div class="drawer-section">
