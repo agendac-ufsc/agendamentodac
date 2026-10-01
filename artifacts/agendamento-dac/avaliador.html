@@ -77,6 +77,8 @@
         .drawer-document-title{font-size:13px;font-weight:800;color:#1d4ed8;line-height:1.3;margin-bottom:4px}
         .drawer-link-pill:hover{background:#dbeafe}
         .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;margin-bottom:34px;padding-top:20px}
+        .drawer-total-score{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;padding:16px 18px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a8a;font-size:14px;font-weight:700}
+        .drawer-total-score strong{color:#1d4ed8;font-size:18px;white-space:nowrap}
         .drawer-save{text-align:right;margin-top:18px}
         .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
         .av-status.done{background:#d1fae5;color:#065f46}
@@ -262,6 +264,14 @@ const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
 const RUBRICA_NIVEL_ID_814 = '__nivel_avaliacao_814';
 const RUBRICA_NIVEL_ID_815 = '__nivel_avaliacao_815';
 const RUBRICA_NIVEL_ID_818 = '__nivel_avaliacao_818';
+const CHAVES_RUBRICA_NIVEIS = [
+    RUBRICA_NIVEL_ID,
+    RUBRICA_NIVEL_ID_812,
+    RUBRICA_NIVEL_ID_813,
+    RUBRICA_NIVEL_ID_814,
+    RUBRICA_NIVEL_ID_815,
+    RUBRICA_NIVEL_ID_818
+];
 const DOCUMENTOS_ITEM_813 = [
     'testeCurriculoPessoaFisica',
     'formsCurriculo',
@@ -453,7 +463,7 @@ function renderAvaliacaoList() {
 function calcMedia(scores) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const notas = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815, RUBRICA_NIVEL_ID_818]
+        const notas = CHAVES_RUBRICA_NIVEIS
             .map(chave => Number(scores?.[chave]))
             .filter(Number.isFinite);
         if (!notas.length) return null;
@@ -474,6 +484,23 @@ function ehRubricaDeNiveis(lista = criterios) {
     if (!Array.isArray(lista) || lista.length !== 3) return false;
     const pesos = lista.map(c => Number(c?.peso));
     return pesos.every(Number.isFinite) && [0, 1, 2].every(valor => pesos.includes(valor));
+}
+
+function calcularPontuacaoMaxima() {
+    const crit = criterios.length ? criterios : defaultCriterios();
+    if (ehRubricaDeNiveis(crit)) {
+        const maximoPorCriterio = Math.max(...crit.map(c => Number(c.peso)));
+        return CHAVES_RUBRICA_NIVEIS.length * maximoPorCriterio;
+    }
+    return crit.reduce((total, criterio) => {
+        const peso = Number(criterio?.peso);
+        return total + 10 * (Number.isFinite(peso) ? peso : 1);
+    }, 0);
+}
+
+function formatarPontuacaoMaxima() {
+    const total = calcularPontuacaoMaxima();
+    return Number.isInteger(total) ? String(total) : total.toFixed(1);
 }
 
 function defaultCriterios() {
@@ -852,8 +879,10 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         <div class="drawer-section">
-            <h4><i class="fas fa-clipboard-list"></i> Dados complementares (formulário)</h4>
+            <h4><i class="fas fa-clipboard-list"></i> Dados complementares</h4>
             ${dadosComplementares.length ? `<div class="drawer-grid">${dadosComplementares.map(([label, value]) => `<div class="lbl">${escapeHtml(label)}:</div><div class="val">${renderValueAsHtml(value)}</div>`).join('')}</div>` : '<div class="drawer-empty">Nenhum dado complementar preenchido.</div>'}
+            <h4><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
+            ${renderDocumentosRestantesDrawer(item)}
         </div>
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
@@ -909,9 +938,9 @@ function renderDrawerContent(item, existingScores = {}) {
             </div>
         </div>
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_818) : ''}
-        <div class="drawer-section">
-            <h4><i class="fas fa-paperclip"></i> Arquivos enviados</h4>
-            ${renderDocumentosRestantesDrawer(item)}
+        <div class="drawer-total-score">
+            <span><i class="fas fa-trophy"></i> Pontuação máxima</span>
+            <strong>${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
         </div>
         </div>`;
     return html;
@@ -1131,7 +1160,7 @@ async function salvarAvaliacao(criterionKey = null) {
     }
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const chavesRubrica = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812, RUBRICA_NIVEL_ID_813, RUBRICA_NIVEL_ID_814, RUBRICA_NIVEL_ID_815, RUBRICA_NIVEL_ID_818];
+        const chavesRubrica = CHAVES_RUBRICA_NIVEIS;
         const chaveDoItem = chavesRubrica.includes(criterionKey)
             ? criterionKey
             : chavesRubrica.find(chave =>
