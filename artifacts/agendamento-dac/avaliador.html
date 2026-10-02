@@ -327,6 +327,7 @@ let avaliacoesNecessarias = 3;
 let currentAvaliacaoIndex = null;
 let currentAvaliacaoScores = {};
 let scoresCache = {}; // {inscricaoId: [avaliacoes]}
+let myAssessmentsCache = null; // fonte persistente da aba "Minhas avaliações"
 let openAvaliacaoIndex = null;
 let avaliadorTabAtiva = 'avaliacoes';
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
@@ -458,6 +459,16 @@ async function loadData() {
                 scoresCache[id] = await rr.json();
             } catch(e) { scoresCache[id] = []; }
         }));
+        try {
+            const minhasResponse = await fetch(`/api/my-assessments?evaluatorEmail=${encodeURIComponent(viewerEmail)}`);
+            if (!minhasResponse.ok) throw new Error('Não foi possível carregar minhas avaliações.');
+            const minhasAvaliacoes = await minhasResponse.json();
+            myAssessmentsCache = Array.isArray(minhasAvaliacoes) ? minhasAvaliacoes : [];
+        } catch (e) {
+            // Mantém a tela utilizável durante indisponibilidade do novo índice;
+            // a lista principal continua sendo a fonte de fallback temporário.
+            myAssessmentsCache = null;
+        }
         renderAvaliacaoList();
     } catch (e) {
         document.getElementById('avaliacaoList').innerHTML = '<div class="error-msg">Erro ao carregar inscrições. Tente novamente.</div>';
@@ -619,15 +630,35 @@ function renderClassificacaoList() {
     const tbody = document.getElementById('classificacaoRows');
     if (!tbody) return;
     const propostasOrdenadas = obterPropostasEmOrdem();
-    const avaliadas = propostasOrdenadas.map(item => {
-        const p = item?.primeiraEtapa;
-        if (!p) return null;
-        const id = p.id || p.email;
-        const avaliacao = (scoresCache[id] || []).find(
-            registro => (registro.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
-        );
-        if (!avaliacaoFinalizada(avaliacao)) return null;
-        return { item, id, p, avaliacao, pontuacao: calcularPontuacaoObtida(avaliacao.scoresJson || {}) };
+    const registrosPersistidos = Array.isArray(myAssessmentsCache)
+        ? myAssessmentsCache
+        : propostasOrdenadas.flatMap(item => {
+            const id = item?.primeiraEtapa?.id || item?.primeiraEtapa?.email;
+            return id ? (scoresCache[id] || []) : [];
+        });
+    const avaliadas = registrosPersistidos.map(avaliacao => {
+        if ((avaliacao?.evaluatorEmail || '').toLowerCase() !== viewerEmail.toLowerCase()) return null;
+        const id = String(avaliacao?.inscriptionId || '').trim();
+        if (!id || !avaliacaoFinalizada(avaliacao)) return null;
+        const itemAtual = propostasOrdenadas.find(item => {
+            const proposalId = item?.primeiraEtapa?.id || item?.primeiraEtapa?.email;
+            return String(proposalId || '') === id;
+        });
+        const p = itemAtual?.primeiraEtapa || { id, ...(avaliacao.inscriptionSnapshot || {}) };
+        const numeroSalvo = avaliacao.inscriptionSnapshot?.numeroProposta
+            || avaliacao.inscriptionSnapshot?.numeroInscricao
+            || avaliacao.inscriptionSnapshot?.numeroDaProposta
+            || avaliacao.inscriptionSnapshot?.proposalNumber;
+        const numeroProposta = itemAtual
+            ? obterNumeroProposta(itemAtual, propostasOrdenadas)
+            : (numeroSalvo || '—');
+        return {
+            id,
+            p,
+            avaliacao,
+            numeroProposta,
+            pontuacao: calcularPontuacaoObtida(avaliacao.scoresJson || {})
+        };
     }).filter(Boolean);
 
     document.getElementById('classificacaoTabCount').textContent = String(avaliadas.length);
@@ -637,10 +668,10 @@ function renderClassificacaoList() {
         return;
     }
 
-    tbody.innerHTML = avaliadas.map(({ item, id, p, avaliacao, pontuacao }) => `
+    tbody.innerHTML = avaliadas.map(({ id, p, avaliacao, numeroProposta, pontuacao }) => `
         <tr>
-            <td class="proposal-number">${escapeHtml(obterNumeroProposta(item, propostasOrdenadas))}</td>
-            <td>${escapeHtml(p.evento || p.nome || 'Sem título')}</td>
+            <td class="proposal-number">${escapeHtml(numeroProposta)}</td>
+            <td>${escapeHtml(p.evento || p.nome || `Inscrição ${id}`)}</td>
             <td class="proposal-score">${escapeHtml(formatarPontuacao(pontuacao))}</td>
             <td class="ranking-classification-cell">
                 <input class="ranking-classification-input" type="text" maxlength="100"
@@ -1436,7 +1467,13 @@ async function salvarAvaliacao(criterionKey = null) {
                 inscriptionId: id,
                 evaluatorEmail: viewerEmail,
                 scoresJson: scoresParaSalvar,
-                finalize: !salvarCriterio
+                finalize: !salvarCriterio,
+                inscriptionSnapshot: {
+                    evento: p.evento || '',
+                    nome: p.nome || '',
+                    numeroProposta: p.numeroProposta ?? p.numeroInscricao ?? p.numeroDaProposta ?? p.proposalNumber ?? '',
+                    localNome: p.localNome || ''
+                }
             })
         });
         const d = await r.json();
@@ -1462,6 +1499,26 @@ async function salvarAvaliacao(criterionKey = null) {
                 avaliacoesAtuais.push(avaliacaoSalva);
             }
             scoresCache[id] = avaliacoesAtuais;
+            const avaliacaoPersistida = {
+                ...avaliacaoSalva,
+                inscriptionSnapshot: {
+                    evento: p.evento || '',
+                    nome: p.nome || '',
+                    numeroProposta: p.numeroProposta ?? p.numeroInscricao ?? p.numeroDaProposta ?? p.proposalNumber ?? '',
+                    localNome: p.localNome || ''
+                }
+            };
+            if (!Array.isArray(myAssessmentsCache)) {
+                myAssessmentsCache = Object.values(scoresCache).flat().filter(
+                    avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+                );
+            }
+            const indicePersistida = myAssessmentsCache.findIndex(
+                avaliacao => String(avaliacao.inscriptionId || '') === String(id)
+                    && (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+            );
+            if (indicePersistida >= 0) myAssessmentsCache[indicePersistida] = avaliacaoPersistida;
+            else myAssessmentsCache.push(avaliacaoPersistida);
             const avaliacaoConcluidaAgora = !salvarCriterio
                 && d.finalized === true
                 && !avaliacaoFinalizada(avaliacaoAnterior);
@@ -1546,6 +1603,18 @@ async function salvarClassificacao(input) {
         if (indice >= 0) {
             avaliacoes[indice] = { ...avaliacoes[indice], classification: classificacao };
             scoresCache[id] = avaliacoes;
+        }
+        if (Array.isArray(myAssessmentsCache)) {
+            const indiceMinhaAvaliacao = myAssessmentsCache.findIndex(
+                avaliacao => String(avaliacao.inscriptionId || '') === String(id)
+                    && (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+            );
+            if (indiceMinhaAvaliacao >= 0) {
+                myAssessmentsCache[indiceMinhaAvaliacao] = {
+                    ...myAssessmentsCache[indiceMinhaAvaliacao],
+                    classification: classificacao
+                };
+            }
         }
         input.dataset.savedValue = classificacao;
         input.value = classificacao;
