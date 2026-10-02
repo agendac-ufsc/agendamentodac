@@ -1126,7 +1126,7 @@ function renderDrawerContent(item, existingScores = {}) {
             <strong>${escapeHtml(formatarPontuacao(pontuacaoObtida))} / ${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
         </div>
         <div class="drawer-save drawer-save-complete">
-            <span class="drawer-save-progress">${avaliacaoCompletaAgora ? 'Todos os itens foram avaliados.' : `${itensAvaliados} de ${totalItens} itens avaliados — complete todos para salvar.`}</span>
+            <span class="drawer-save-progress">${avaliacaoCompletaAgora ? 'Todos os itens foram avaliados.' : `${itensAvaliados} de ${totalItens} itens avaliados — salve cada critério após escolher o nível.`}</span>
             <button type="button" class="btn-save-modal" onclick="salvarAvaliacao()" ${avaliacaoCompletaAgora ? '' : 'disabled'}>
                 <i class="fas fa-save"></i> Salvar avaliação
             </button>
@@ -1157,11 +1157,13 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
         const classeSelecionada = selecionada ? classeRubrica(selecionada.peso) : 'rubric-prompt';
         const titulo = selecionada?.nome || 'Clique aqui para avaliar';
         const dica = selecionada
-            ? (temAlteracao ? 'Nível alterado — salve a avaliação completa ao final' : (temValorSalvo ? 'Nível selecionado' : 'Selecione os demais itens e salve ao final'))
+            ? (temAlteracao ? 'Nível alterado — clique em Salvar neste critério' : (temValorSalvo ? 'Avaliação salva — altere se necessário' : 'Escolha um nível e salve este critério'))
             : 'Clique para abrir as três opções';
-        const acao = temValorSalvo && !estado.editando
-            ? `<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica('${escapeAttr(criterionKey)}')"><i class="fas fa-pen"></i> Editar</button>`
-            : '';
+        const acao = temAlteracao
+            ? `<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao('${escapeAttr(criterionKey)}')"><i class="fas fa-save"></i> Salvar</button>`
+            : (temValorSalvo && !estado.editando
+                ? `<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica('${escapeAttr(criterionKey)}')"><i class="fas fa-pen"></i> Editar</button>`
+                : '');
         return `<div class="criteria-row" style="display:block">
             <div class="criteria-label" style="margin-bottom:10px">Avaliação do critério</div>
             <div class="rubric-picker">
@@ -1327,7 +1329,7 @@ function setStar(criterioId, valor) {
     renderAvaliacaoList();
 }
 
-async function salvarAvaliacao() {
+async function salvarAvaliacao(criterionKey = null) {
     if (currentAvaliacaoIndex === null) return;
     const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
     const id = p.id || p.email;
@@ -1341,19 +1343,38 @@ async function salvarAvaliacao() {
         return;
     }
     const crit = criterios.length ? criterios : defaultCriterios();
-    const chaves = ehRubricaDeNiveis(crit) ? CHAVES_RUBRICA_NIVEIS : crit.map(c => c.id);
-    const faltando = chaves.filter(chave => !criterioTemNotaValida(currentAvaliacaoScores, chave));
-    if (faltando.length > 0) {
-        await showAvaliadorDialog(
-            `Ainda faltam ${faltando.length} item(ns). Avalie todos os critérios antes de salvar.`,
-            { title: 'Avaliação incompleta', confirmLabel: 'OK', hideCancel: true, danger: true }
-        );
-        return;
+    const salvarCriterio = ehRubricaDeNiveis(crit) && CHAVES_RUBRICA_NIVEIS.includes(criterionKey);
+    let scoresParaSalvar = currentAvaliacaoScores;
+    if (salvarCriterio) {
+        if (!criterioTemNotaValida(currentAvaliacaoScores, criterionKey)) {
+            await showAvaliadorDialog('Escolha um dos níveis deste critério antes de salvar.', {
+                title: 'Critério sem nota',
+                confirmLabel: 'OK',
+                hideCancel: true,
+                danger: true
+            });
+            return;
+        }
+        scoresParaSalvar = { [criterionKey]: currentAvaliacaoScores[criterionKey] };
+        const labelKey = `${criterionKey}_label`;
+        if (currentAvaliacaoScores[labelKey] !== undefined) {
+            scoresParaSalvar[labelKey] = currentAvaliacaoScores[labelKey];
+        }
+    } else {
+        const chaves = ehRubricaDeNiveis(crit) ? CHAVES_RUBRICA_NIVEIS : crit.map(c => c.id);
+        const faltando = chaves.filter(chave => !criterioTemNotaValida(currentAvaliacaoScores, chave));
+        if (faltando.length > 0) {
+            await showAvaliadorDialog(
+                `Ainda faltam ${faltando.length} item(ns). Avalie todos os critérios antes de salvar.`,
+                { title: 'Avaliação incompleta', confirmLabel: 'OK', hideCancel: true, danger: true }
+            );
+            return;
+        }
     }
     try {
         const r = await fetch('/api/save-assessment', {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: viewerEmail, scoresJson: currentAvaliacaoScores })
+            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: viewerEmail, scoresJson: scoresParaSalvar })
         });
         const d = await r.json();
         if (d.success) {
@@ -1367,7 +1388,7 @@ async function salvarAvaliacao() {
                 ...avaliacaoAnterior,
                 inscriptionId: id,
                 evaluatorEmail: viewerEmail,
-                scoresJson: { ...currentAvaliacaoScores },
+                scoresJson: { ...(avaliacaoAnterior.scoresJson || {}), ...scoresParaSalvar },
                 updatedAt: new Date().toISOString()
             };
             if (indiceMinhaAvaliacao >= 0) {
@@ -1376,15 +1397,19 @@ async function salvarAvaliacao() {
                 avaliacoesAtuais.push(avaliacaoSalva);
             }
             scoresCache[id] = avaliacoesAtuais;
-            if (ehRubricaDeNiveis(crit)) {
+            if (salvarCriterio) {
+                const estado = obterEstadoRubrica(criterionKey);
+                estado.opcoesAbertas = false;
+                estado.editando = false;
+            } else if (ehRubricaDeNiveis(crit)) {
                 resetarEstadosRubrica();
             } else {
                 openAvaliacaoIndex = null;
                 currentAvaliacaoIndex = null;
             }
             renderAvaliacaoList();
-            await showAvaliadorDialog('Avaliação salva com sucesso!', {
-                title: 'Avaliação salva',
+            await showAvaliadorDialog(salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!', {
+                title: salvarCriterio ? 'Critério salvo' : 'Avaliação salva',
                 confirmLabel: 'OK',
                 hideCancel: true,
                 success: true
