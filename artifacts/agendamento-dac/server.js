@@ -4333,7 +4333,18 @@ app.post('/api/save-assessment', async (req, res) => {
         };
         if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
         await redis.set(key, avaliacoes);
-        res.json({ success: true, finalized: entry.finalized, finalizedAt: entry.finalizedAt });
+        const savedRaw = await redis.get(key);
+        const savedAssessments = parseRedisValue(savedRaw);
+        const savedEntry = Array.isArray(savedAssessments)
+            ? savedAssessments.find(av => String(av.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado)
+            : null;
+        const scoresConfirmed = savedEntry && Object.entries(scoresAtualizados).every(
+            ([criterion, score]) => savedEntry.scoresJson?.[criterion] === score
+        );
+        if (!savedEntry || !scoresConfirmed || savedEntry.finalized !== entry.finalized) {
+            return res.status(500).json({ error: 'Não foi possível confirmar a persistência da avaliação.' });
+        }
+        res.json({ success: true, finalized: savedEntry.finalized, finalizedAt: savedEntry.finalizedAt || null });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar avaliação.' });
     }
@@ -4365,7 +4376,15 @@ app.post('/api/save-assessment-classification', async (req, res) => {
             updatedAt: new Date().toISOString()
         };
         await redis.set(key, avaliacoes);
-        res.json({ success: true, classification });
+        const savedRaw = await redis.get(key);
+        const savedAssessments = parseRedisValue(savedRaw);
+        const savedEntry = Array.isArray(savedAssessments)
+            ? savedAssessments.find(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado)
+            : null;
+        if (!savedEntry || savedEntry.classification !== classification) {
+            return res.status(500).json({ error: 'Não foi possível confirmar a persistência da classificação.' });
+        }
+        res.json({ success: true, classification: savedEntry.classification });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar a classificação.' });
     }
