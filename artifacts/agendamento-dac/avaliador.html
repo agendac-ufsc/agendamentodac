@@ -1392,9 +1392,18 @@ async function salvarAvaliacao(criterionKey = null) {
         return;
     }
     const crit = criterios.length ? criterios : defaultCriterios();
-    const salvarCriterio = ehRubricaDeNiveis(crit) && CHAVES_RUBRICA_NIVEIS.includes(criterionKey);
+    const salvarCriterio = criterionKey !== null && criterionKey !== undefined;
     let scoresParaSalvar = currentAvaliacaoScores;
     if (salvarCriterio) {
+        if (!obterChavesAvaliacao().includes(criterionKey)) {
+            await showAvaliadorDialog('Critério inválido para esta avaliação.', {
+                title: 'Não foi possível salvar',
+                confirmLabel: 'OK',
+                hideCancel: true,
+                danger: true
+            });
+            return;
+        }
         if (!criterioTemNotaValida(currentAvaliacaoScores, criterionKey)) {
             await showAvaliadorDialog('Escolha um dos níveis deste critério antes de salvar.', {
                 title: 'Critério sem nota',
@@ -1444,7 +1453,7 @@ async function salvarAvaliacao(criterionKey = null) {
                 evaluatorEmail: viewerEmail,
                 scoresJson: { ...(avaliacaoAnterior.scoresJson || {}), ...scoresParaSalvar },
                 finalized: d.finalized === true,
-                finalizedAt: d.finalizedAt || avaliacaoAnterior.finalizedAt || null,
+                finalizedAt: d.finalizedAt || null,
                 updatedAt: new Date().toISOString()
             };
             if (indiceMinhaAvaliacao >= 0) {
