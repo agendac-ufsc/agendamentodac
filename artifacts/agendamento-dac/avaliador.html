@@ -432,8 +432,7 @@ function renderAvaliacaoList() {
         const avs = scoresCache[id] || [];
         const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
-        const minhaMedia = myAv ? calcMedia(myAv.scoresJson || {}) : null;
-        const rubricaNiveis = ehRubricaDeNiveis();
+        const minhaPontuacao = myAv ? calcularPontuacaoObtida(myAv.scoresJson || {}) : null;
         const statusBadge = myAv
             ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
             : `<span class="av-status">Pendente</span>`;
@@ -450,7 +449,7 @@ function renderAvaliacaoList() {
                     </p>
                 </div>
                 <div class="av-actions">
-                    ${minhaMedia !== null ? `<span class="av-score">${minhaMedia}${rubricaNiveis ? ' pts' : '/10'}</span>` : ''}
+                    ${minhaPontuacao !== null ? `<span class="av-score" title="Pontuação acumulada">${formatarPontuacao(minhaPontuacao)}/${formatarPontuacaoMaxima()} pts</span>` : ''}
                     <button class="btn-top btn-refresh" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}">
                         <i class="fas fa-star"></i> Avaliar
                     </button>
@@ -462,24 +461,24 @@ function renderAvaliacaoList() {
     container.innerHTML = html;
 }
 
-function calcMedia(scores) {
+function calcularPontuacaoObtida(scores = {}) {
     const crit = criterios.length ? criterios : defaultCriterios();
     if (ehRubricaDeNiveis(crit)) {
-        const notas = CHAVES_RUBRICA_NIVEIS
-            .map(chave => Number(scores?.[chave]))
-            .filter(Number.isFinite);
-        if (!notas.length) return null;
-        if (notas.length === 1) return notas[0];
-        return (notas.reduce((total, nota) => total + nota, 0) / notas.length).toFixed(1);
+        return CHAVES_RUBRICA_NIVEIS.reduce((total, chave) => {
+            const nota = Number(scores?.[chave]);
+            return total + (Number.isFinite(nota) ? nota : 0);
+        }, 0);
     }
-    let total = 0, peso = 0;
-    crit.forEach(c => {
-        const v = parseFloat(scores[c.id] ?? 0);
+    return crit.reduce((total, c) => {
+        const nota = Number(scores?.[c.id]);
         const pesoCriterio = Number.isFinite(Number(c.peso)) ? Number(c.peso) : 1;
-        total += v * pesoCriterio;
-        peso += pesoCriterio;
-    });
-    return peso > 0 ? (total / peso).toFixed(1) : '—';
+        return total + (Number.isFinite(nota) ? nota : 0) * pesoCriterio;
+    }, 0);
+}
+
+function formatarPontuacao(total) {
+    const pontuacao = Number(total) || 0;
+    return Number.isInteger(pontuacao) ? String(pontuacao) : pontuacao.toFixed(1);
 }
 
 function ehRubricaDeNiveis(lista = criterios) {
@@ -501,8 +500,7 @@ function calcularPontuacaoMaxima() {
 }
 
 function formatarPontuacaoMaxima() {
-    const total = calcularPontuacaoMaxima();
-    return Number.isInteger(total) ? String(total) : total.toFixed(1);
+    return formatarPontuacao(calcularPontuacaoMaxima());
 }
 
 function defaultCriterios() {
@@ -858,6 +856,7 @@ function renderDocumentosRestantesDrawer(item) {
 
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
+    const pontuacaoObtida = calcularPontuacaoObtida(existingScores);
     const dadosInscricao = obterDadosInscricaoDrawer(item);
     const dadosComplementares = obterDadosComplementaresDrawer(item);
     const dadosDestaque = obterDadosDestaqueDrawer(item);
@@ -943,8 +942,8 @@ function renderDrawerContent(item, existingScores = {}) {
         </div>
         ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_818) : ''}
         <div class="drawer-total-score">
-            <span><i class="fas fa-trophy"></i> Pontuação máxima</span>
-            <strong>${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
+            <span><i class="fas fa-trophy"></i> Pontuação obtida</span>
+            <strong>${escapeHtml(formatarPontuacao(pontuacaoObtida))} / ${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
         </div>
         </div>`;
     return html;
@@ -1197,11 +1196,23 @@ async function salvarAvaliacao(criterionKey = null) {
         });
         const d = await r.json();
         if (d.success) {
-            // Atualizar cache local
-            try {
-                const rr = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
-                scoresCache[id] = await rr.json();
-            } catch(e) {}
+            // Atualizar a pontuação exibida imediatamente após o salvamento.
+            const avaliacaoSalva = {
+                inscriptionId: id,
+                evaluatorEmail: viewerEmail,
+                scoresJson: { ...currentAvaliacaoScores },
+                updatedAt: new Date().toISOString()
+            };
+            const avaliacoesAtuais = Array.isArray(scoresCache[id]) ? [...scoresCache[id]] : [];
+            const indiceMinhaAvaliacao = avaliacoesAtuais.findIndex(
+                avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+            );
+            if (indiceMinhaAvaliacao >= 0) {
+                avaliacoesAtuais[indiceMinhaAvaliacao] = avaliacaoSalva;
+            } else {
+                avaliacoesAtuais.push(avaliacaoSalva);
+            }
+            scoresCache[id] = avaliacoesAtuais;
             if (ehRubricaDeNiveis(crit)) {
                 resetarEstadosRubrica();
             } else {
