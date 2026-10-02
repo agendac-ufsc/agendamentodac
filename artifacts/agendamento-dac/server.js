@@ -20,6 +20,7 @@ const AdmZip = require('adm-zip');
 const { put: putBlob, get: getBlob, del: deleteBlob } = require('@vercel/blob');
 const { randomUUID, randomInt } = require('crypto');
 const { Readable } = require('stream');
+const { createAssessmentStore } = require('./assessment-store');
 
 const app = express();
 app.use(cors());
@@ -107,6 +108,8 @@ try {
 } catch (e) {
     console.error('❌ [Redis] Erro ao inicializar cliente:', e.message);
 }
+
+const assessmentStore = redis ? createAssessmentStore(redis) : null;
 
 const parseRedisValue = (data) => {
     if (!data) return null;
@@ -4257,6 +4260,22 @@ function ehRubricaDeNiveis(criterios) {
     return pesos.every(Number.isFinite) && [0, 1, 2].every(valor => pesos.includes(valor));
 }
 
+function normalizarSnapshotAvaliacao(snapshot) {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) return null;
+    const texto = valor => String(valor ?? '').trim().slice(0, 200);
+    const numeroProposta = snapshot.numeroProposta
+        ?? snapshot.numeroInscricao
+        ?? snapshot.numeroDaProposta
+        ?? snapshot.proposalNumber;
+    const resultado = {
+        evento: texto(snapshot.evento),
+        nome: texto(snapshot.nome),
+        numeroProposta: texto(numeroProposta),
+        localNome: texto(snapshot.localNome)
+    };
+    return Object.values(resultado).some(Boolean) ? resultado : null;
+}
+
 app.get('/api/criteria', async (req, res) => {
     try {
         const raw = redis ? await redis.get('criterios') : null;
@@ -4282,15 +4301,13 @@ app.post('/api/criteria', async (req, res) => {
 // ============================================================
 
 app.post('/api/save-assessment', async (req, res) => {
-    const { inscriptionId, evaluatorEmail, scoresJson, finalize } = req.body || {};
+    const { inscriptionId, evaluatorEmail, scoresJson, finalize, inscriptionSnapshot } = req.body || {};
     if (!inscriptionId || !evaluatorEmail || !scoresJson || typeof scoresJson !== 'object' || Array.isArray(scoresJson)) {
         return res.status(400).json({ error: 'Dados incompletos.' });
     }
     if (!redis) return res.status(503).json({ error: 'Armazenamento de avaliações indisponível.' });
     try {
-        const key = `avaliacoes_${inscriptionId}`;
-        const raw = await redis.get(key);
-        const avaliacoes = parseRedisValue(raw) || [];
+        const avaliacoes = await assessmentStore.getByInscription(inscriptionId);
         const emailNormalizado = String(evaluatorEmail).trim().toLowerCase();
         const idx = avaliacoes.findIndex(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado);
         const scoresAnteriores = idx >= 0 && avaliacoes[idx].scoresJson && typeof avaliacoes[idx].scoresJson === 'object'
@@ -4329,15 +4346,15 @@ app.post('/api/save-assessment', async (req, res) => {
             scoresJson: scoresAtualizados,
             finalized,
             finalizedAt: finalized ? updatedAt : null,
-            updatedAt
+            updatedAt,
+            inscriptionSnapshot: normalizarSnapshotAvaliacao(inscriptionSnapshot)
+                || (idx >= 0 ? avaliacoes[idx].inscriptionSnapshot : null)
         };
-        if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
-        await redis.set(key, avaliacoes);
-        const savedRaw = await redis.get(key);
-        const savedAssessments = parseRedisValue(savedRaw);
-        const savedEntry = Array.isArray(savedAssessments)
-            ? savedAssessments.find(av => String(av.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado)
-            : null;
+        await assessmentStore.save(entry);
+        const savedAssessments = await assessmentStore.getByInscription(inscriptionId);
+        const savedEntry = savedAssessments.find(
+            av => String(av.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado
+        );
         const scoresConfirmed = savedEntry && Object.entries(scoresAtualizados).every(
             ([criterion, score]) => savedEntry.scoresJson?.[criterion] === score
         );
@@ -4363,24 +4380,21 @@ app.post('/api/save-assessment-classification', async (req, res) => {
     }
     if (!redis) return res.status(503).json({ error: 'Armazenamento de avaliações indisponível.' });
     try {
-        const key = `avaliacoes_${inscriptionId}`;
-        const raw = await redis.get(key);
-        const avaliacoes = parseRedisValue(raw) || [];
+        const avaliacoes = await assessmentStore.getByInscription(inscriptionId);
         const emailNormalizado = String(evaluatorEmail).trim().toLowerCase();
         const idx = avaliacoes.findIndex(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado);
         if (idx < 0) return res.status(404).json({ error: 'Avaliação do avaliador não encontrada.' });
 
-        avaliacoes[idx] = {
+        const avaliacaoAtualizada = {
             ...avaliacoes[idx],
             classification,
             updatedAt: new Date().toISOString()
         };
-        await redis.set(key, avaliacoes);
-        const savedRaw = await redis.get(key);
-        const savedAssessments = parseRedisValue(savedRaw);
-        const savedEntry = Array.isArray(savedAssessments)
-            ? savedAssessments.find(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado)
-            : null;
+        await assessmentStore.save(avaliacaoAtualizada);
+        const savedAssessments = await assessmentStore.getByInscription(inscriptionId);
+        const savedEntry = savedAssessments.find(
+            a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado
+        );
         if (!savedEntry || savedEntry.classification !== classification) {
             return res.status(500).json({ error: 'Não foi possível confirmar a persistência da classificação.' });
         }
@@ -4416,8 +4430,9 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
         for (const p of inscricoes) {
             const id = p.id || p.email;
             if (!id) continue;
-            const avRaw = redis ? await redis.get(`avaliacoes_${id}`) : null;
-            const avaliacoesSalvas = parseRedisValue(avRaw) || [];
+            const avaliacoesSalvas = assessmentStore
+                ? await assessmentStore.getByInscription(id)
+                : [];
             const avaliacoes = avaliacoesSalvas.filter(av => av?.finalized === true);
 
             const detalhesPorCriterio = {};
@@ -4500,12 +4515,40 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
     }
 });
 
+app.get('/api/my-assessments', async (req, res) => {
+    const evaluatorEmail = String(req.query?.evaluatorEmail || '').trim().toLowerCase();
+    if (!evaluatorEmail) return res.status(400).json({ error: 'E-mail do avaliador obrigatório.' });
+    if (!assessmentStore) return res.status(503).json({ error: 'Armazenamento de avaliações indisponível.' });
+    try {
+        const inscricoes = await getAgendamentos();
+        const inscricoesPorId = new Map();
+        for (const inscricao of inscricoes) {
+            const id = String(inscricao?.id || inscricao?.email || '').trim();
+            if (!id) continue;
+            inscricoesPorId.set(id, inscricao);
+        }
+        const avaliacoes = await assessmentStore.getByEvaluator(evaluatorEmail);
+        res.json(avaliacoes.map(avaliacao => {
+            const inscricao = inscricoesPorId.get(String(avaliacao.inscriptionId));
+            return {
+                ...avaliacao,
+                inscriptionSnapshot: normalizarSnapshotAvaliacao(avaliacao.inscriptionSnapshot)
+                    || normalizarSnapshotAvaliacao(inscricao)
+                    || null
+            };
+        }));
+    } catch (e) {
+        res.status(500).json({ error: 'Erro ao buscar as avaliações do avaliador.' });
+    }
+});
+
 app.get('/api/assessments/:inscriptionId', async (req, res) => {
     const { inscriptionId } = req.params;
     try {
-        const key = `avaliacoes_${inscriptionId}`;
-        const raw = redis ? await redis.get(key) : null;
-        res.json(parseRedisValue(raw) || []);
+        const avaliacoes = assessmentStore
+            ? await assessmentStore.getByInscription(inscriptionId)
+            : [];
+        res.json(avaliacoes);
     } catch (e) {
         res.status(500).json({ error: 'Erro ao buscar avaliações.' });
     }
