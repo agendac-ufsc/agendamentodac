@@ -20,6 +20,10 @@
       "dest": "/api/[...path].js"
     },
     {
+      "src": "^/api/assessments/[^/]+$",
+      "dest": "/api/[...path].js"
+    },
+    {
       "src": "^/api/admin/inscricoes/[^/]+$",
       "dest": "/api/admin-documents.js"
     },
