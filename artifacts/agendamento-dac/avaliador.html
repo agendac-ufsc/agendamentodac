@@ -472,6 +472,10 @@ function obterMinhaAvaliacao(item) {
     ) || null;
 }
 
+function avaliacaoFinalizada(avaliacao) {
+    return Boolean(avaliacao?.finalized === true && avaliacaoCompleta(avaliacao.scoresJson || {}));
+}
+
 function renderAvaliacaoList() {
     const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
     const filterLocal = document.getElementById('filterLocalAv').value;
@@ -481,27 +485,25 @@ function renderAvaliacaoList() {
     const filtered = allUnificados.filter(item => {
         const p = item.primeiraEtapa;
         if (!p) return false;
-        const id = p.id || p.email;
-        const avs = scoresCache[id] || [];
         const myAv = obterMinhaAvaliacao(item);
-        const myAvCompleta = myAv ? avaliacaoCompleta(myAv.scoresJson || {}) : false;
+        const myAvFinalizada = avaliacaoFinalizada(myAv);
         const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
         const matchStatus = !filterStatus
-            || (filterStatus === 'pendente' && !myAvCompleta)
-            || (filterStatus === 'avaliado' && myAvCompleta);
+            || (filterStatus === 'pendente' && !myAvFinalizada)
+            || (filterStatus === 'avaliado' && myAvFinalizada);
         return matchQ && matchLocal && matchStatus;
     });
 
     filtered.sort((itemA, itemB) => {
         const avaliacaoA = obterMinhaAvaliacao(itemA);
         const avaliacaoB = obterMinhaAvaliacao(itemB);
-        const completaA = Boolean(avaliacaoA && avaliacaoCompleta(avaliacaoA.scoresJson || {}));
-        const completaB = Boolean(avaliacaoB && avaliacaoCompleta(avaliacaoB.scoresJson || {}));
-        if (completaA !== completaB) return completaA ? 1 : -1;
-        if (completaA) {
-            const atualizadaA = Date.parse(avaliacaoA.updatedAt || '') || 0;
-            const atualizadaB = Date.parse(avaliacaoB.updatedAt || '') || 0;
+        const finalizadaA = avaliacaoFinalizada(avaliacaoA);
+        const finalizadaB = avaliacaoFinalizada(avaliacaoB);
+        if (finalizadaA !== finalizadaB) return finalizadaA ? 1 : -1;
+        if (finalizadaA) {
+            const atualizadaA = Date.parse(avaliacaoA.finalizedAt || avaliacaoA.updatedAt || '') || 0;
+            const atualizadaB = Date.parse(avaliacaoB.finalizedAt || avaliacaoB.updatedAt || '') || 0;
             if (atualizadaA !== atualizadaB) return atualizadaA - atualizadaB;
         }
         return allUnificados.indexOf(itemA) - allUnificados.indexOf(itemB);
@@ -522,13 +524,15 @@ function renderAvaliacaoList() {
         const idx = allUnificados.indexOf(item);
         const id = p.id || p.email;
         const avs = scoresCache[id] || [];
+        const avaliacoesFinalizadas = avs.filter(av => avaliacaoFinalizada(av)).length;
         const myAv = obterMinhaAvaliacao(item);
-        const myAvCompleta = myAv ? avaliacaoCompleta(myAv.scoresJson || {}) : false;
+        const myAvFinalizada = avaliacaoFinalizada(myAv);
+        const myAvProntaParaFinalizar = Boolean(myAv && avaliacaoCompleta(myAv.scoresJson || {}));
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const minhaPontuacao = myAv ? calcularPontuacaoObtida(myAv.scoresJson || {}) : null;
-        const statusBadge = myAvCompleta
+        const statusBadge = myAvFinalizada
             ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
-            : `<span class="av-status">${myAv ? 'Em andamento' : 'Pendente'}</span>`;
+            : `<span class="av-status">${myAvProntaParaFinalizar ? 'Pronta para confirmar' : (myAv ? 'Em andamento' : 'Pendente')}</span>`;
         const aberta = openAvaliacaoIndex === idx;
         html += `
         <div class="av-card${aberta ? ' open' : ''}">
@@ -538,13 +542,13 @@ function renderAvaliacaoList() {
                     <p>${escapeHtml(p.nome||'')} &middot;
                         <span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}">${escapeHtml(p.localNome||'Teatro')}</span>
                         ${statusBadge}
-                        <span style="color:#888;margin-left:6px">(${avs.length}/${avaliacoesNecessarias} avaliações)</span>
+                        <span style="color:#888;margin-left:6px">(${avaliacoesFinalizadas}/${avaliacoesNecessarias} avaliações finalizadas)</span>
                     </p>
                 </div>
                 <div class="av-actions">
                     ${minhaPontuacao !== null ? `<span class="av-score" title="Pontuação acumulada">${formatarPontuacao(minhaPontuacao)}/${formatarPontuacaoMaxima()} pts</span>` : ''}
-                    <button class="btn-top ${myAvCompleta ? 'btn-avaliado' : 'btn-refresh'}" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}" aria-label="${myAvCompleta ? 'Editar avaliação' : 'Avaliar inscrição'}" title="${myAvCompleta ? 'Clique para editar a avaliação' : 'Avaliar inscrição'}">
-                        <i class="fas ${myAvCompleta ? 'fa-check-circle' : 'fa-star'}"></i> ${myAvCompleta ? 'Avaliado' : 'Avaliar'}
+                    <button class="btn-top ${myAvFinalizada ? 'btn-avaliado' : 'btn-refresh'}" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}" aria-label="${myAvFinalizada ? 'Editar avaliação' : 'Avaliar inscrição'}" title="${myAvFinalizada ? 'Clique para editar a avaliação' : 'Avaliar inscrição'}">
+                        <i class="fas ${myAvFinalizada ? 'fa-check-circle' : 'fa-star'}"></i> ${myAvFinalizada ? 'Avaliado' : 'Avaliar'}
                     </button>
                 </div>
             </div>
@@ -621,7 +625,7 @@ function renderClassificacaoList() {
         const avaliacao = (scoresCache[id] || []).find(
             registro => (registro.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
         );
-        if (!avaliacao || !avaliacaoCompleta(avaliacao.scoresJson || {})) return null;
+        if (!avaliacaoFinalizada(avaliacao)) return null;
         return { item, id, p, avaliacao, pontuacao: calcularPontuacaoObtida(avaliacao.scoresJson || {}) };
     }).filter(Boolean);
 
@@ -1061,6 +1065,25 @@ function renderDrawerContent(item, existingScores = {}) {
     const itensAvaliados = contarCriteriosAvaliados(scoresEmEdicao);
     const totalItens = obterChavesAvaliacao().length;
     const avaliacaoCompletaAgora = avaliacaoCompleta(scoresEmEdicao);
+    const rubricaPorCriterio = ehRubricaDeNiveis();
+    const chavesAvaliacao = obterChavesAvaliacao();
+    const itensSalvos = rubricaPorCriterio
+        ? contarCriteriosAvaliados(existingScores)
+        : itensAvaliados;
+    const existemCriteriosNaoSalvos = rubricaPorCriterio && chavesAvaliacao.some(chave => {
+        const notaAtualValida = criterioTemNotaValida(scoresEmEdicao, chave);
+        const notaSalvaValida = criterioTemNotaValida(existingScores, chave);
+        return notaAtualValida !== notaSalvaValida
+            || (notaAtualValida && Number(scoresEmEdicao[chave]) !== Number(existingScores[chave]));
+    });
+    const todosItensSalvos = rubricaPorCriterio
+        ? avaliacaoCompleta(existingScores) && !existemCriteriosNaoSalvos
+        : avaliacaoCompletaAgora;
+    const progressoSalvamento = todosItensSalvos
+        ? 'Todos os critérios foram salvos. Confirme para finalizar a avaliação.'
+        : (existemCriteriosNaoSalvos && avaliacaoCompleta(existingScores)
+            ? 'Há alterações pendentes. Salve cada critério para liberar a confirmação final.'
+            : `${itensSalvos} de ${totalItens} critérios salvos — escolha e salve cada critério antes de finalizar.`);
     const pontuacaoObtida = calcularPontuacaoObtida(scoresEmEdicao);
     const dadosInscricao = obterDadosInscricaoDrawer(item);
     const dadosComplementares = obterDadosComplementaresDrawer(item);
@@ -1151,8 +1174,8 @@ function renderDrawerContent(item, existingScores = {}) {
             <strong>${escapeHtml(formatarPontuacao(pontuacaoObtida))} / ${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
         </div>
         <div class="drawer-save drawer-save-complete">
-            <span class="drawer-save-progress">${avaliacaoCompletaAgora ? 'Todos os itens foram avaliados.' : `${itensAvaliados} de ${totalItens} itens avaliados — salve cada critério após escolher o nível.`}</span>
-            <button type="button" class="btn-save-modal" onclick="salvarAvaliacao()" ${avaliacaoCompletaAgora ? '' : 'disabled'}>
+            <span class="drawer-save-progress">${escapeHtml(progressoSalvamento)}</span>
+            <button type="button" class="btn-save-modal" onclick="salvarAvaliacao()" ${todosItensSalvos ? '' : 'disabled'}>
                 <i class="fas fa-save"></i> Salvar avaliação
             </button>
         </div>
@@ -1399,7 +1422,12 @@ async function salvarAvaliacao(criterionKey = null) {
     try {
         const r = await fetch('/api/save-assessment', {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: viewerEmail, scoresJson: scoresParaSalvar })
+            body: JSON.stringify({
+                inscriptionId: id,
+                evaluatorEmail: viewerEmail,
+                scoresJson: scoresParaSalvar,
+                finalize: !salvarCriterio
+            })
         });
         const d = await r.json();
         if (d.success) {
@@ -1409,14 +1437,13 @@ async function salvarAvaliacao(criterionKey = null) {
                 avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
             );
             const avaliacaoAnterior = indiceMinhaAvaliacao >= 0 ? avaliacoesAtuais[indiceMinhaAvaliacao] : {};
-            const avaliacaoAnteriorCompleta = Boolean(
-                indiceMinhaAvaliacao >= 0 && avaliacaoCompleta(avaliacaoAnterior.scoresJson || {})
-            );
             const avaliacaoSalva = {
                 ...avaliacaoAnterior,
                 inscriptionId: id,
                 evaluatorEmail: viewerEmail,
                 scoresJson: { ...(avaliacaoAnterior.scoresJson || {}), ...scoresParaSalvar },
+                finalized: d.finalized === true,
+                finalizedAt: d.finalizedAt || avaliacaoAnterior.finalizedAt || null,
                 updatedAt: new Date().toISOString()
             };
             if (indiceMinhaAvaliacao >= 0) {
@@ -1425,9 +1452,11 @@ async function salvarAvaliacao(criterionKey = null) {
                 avaliacoesAtuais.push(avaliacaoSalva);
             }
             scoresCache[id] = avaliacoesAtuais;
-            const avaliacaoCompletaSalva = avaliacaoCompleta(avaliacaoSalva.scoresJson || {});
-            const avaliacaoConcluidaAgora = avaliacaoCompletaSalva && (!salvarCriterio || !avaliacaoAnteriorCompleta);
-            if (avaliacaoConcluidaAgora) {
+            const avaliacaoConcluidaAgora = !salvarCriterio
+                && d.finalized === true
+                && !avaliacaoFinalizada(avaliacaoAnterior);
+            const confirmacaoFinalSalva = !salvarCriterio && d.finalized === true;
+            if (confirmacaoFinalSalva) {
                 openAvaliacaoIndex = null;
                 currentAvaliacaoIndex = null;
                 currentAvaliacaoScores = {};
