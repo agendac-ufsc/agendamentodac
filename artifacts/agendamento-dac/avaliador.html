@@ -34,6 +34,8 @@
         .btn-top{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s}
         .btn-top:hover{opacity:.85}
         .btn-refresh{background:#2563eb;color:#fff}
+        .btn-avaliado{background:#15803d;color:#fff}
+        .btn-avaliado:hover{background:#166534;opacity:1}
         .btn-logout{background:#eee;color:#555;border:1px solid #ddd}
 
         .content-wrap{padding:24px;max-width:1100px;margin:0 auto}
@@ -98,16 +100,16 @@
         .ranking-summary p{font-size:12px;color:#64748b}
         .ranking-table-wrap{overflow:auto;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
         .ranking-table{width:100%;min-width:680px;border-collapse:collapse;font-size:13px}
-        .ranking-table th{padding:12px 14px;background:#68a957;color:#17351a;text-align:left;font-weight:800;border:1px solid #85bb78}
+        .ranking-table th{padding:12px 14px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;text-align:left;font-weight:800;border:1px solid #3b82f6}
         .ranking-table td{padding:10px 14px;border:1px solid #d5dbe2;color:#263238}
-        .ranking-table tbody tr:nth-child(even){background:#e2f5f7}
-        .ranking-table tbody tr:hover{background:#d5edf0}
+        .ranking-table tbody tr:nth-child(even){background:#f8fbff}
+        .ranking-table tbody tr:hover{background:#eff6ff}
         .ranking-table .proposal-number,.ranking-table .proposal-score{text-align:center;font-weight:800;white-space:nowrap}
         .ranking-classification-cell{min-width:210px}
         .ranking-classification-input{width:100%;min-width:180px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;background:#fff}
         .ranking-classification-input:focus{outline:3px solid rgba(37,99,235,.14);border-color:#2563eb}
         .ranking-save-status{display:block;min-height:15px;margin-top:4px;color:#64748b;font-size:10px}
-        .ranking-save-status.saved{color:#047857}
+        .ranking-save-status.saved{color:#1d4ed8}
         .ranking-save-status.error{color:#b91c1c}
         .ranking-empty{text-align:center;color:#64748b;padding:24px!important}
         .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
@@ -461,6 +463,15 @@ async function loadData() {
     }
 }
 
+function obterMinhaAvaliacao(item) {
+    const p = item?.primeiraEtapa;
+    if (!p || !viewerEmail) return null;
+    const id = p.id || p.email;
+    return (scoresCache[id] || []).find(
+        avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+    ) || null;
+}
+
 function renderAvaliacaoList() {
     const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
     const filterLocal = document.getElementById('filterLocalAv').value;
@@ -472,7 +483,7 @@ function renderAvaliacaoList() {
         if (!p) return false;
         const id = p.id || p.email;
         const avs = scoresCache[id] || [];
-        const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        const myAv = obterMinhaAvaliacao(item);
         const myAvCompleta = myAv ? avaliacaoCompleta(myAv.scoresJson || {}) : false;
         const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
@@ -480,6 +491,20 @@ function renderAvaliacaoList() {
             || (filterStatus === 'pendente' && !myAvCompleta)
             || (filterStatus === 'avaliado' && myAvCompleta);
         return matchQ && matchLocal && matchStatus;
+    });
+
+    filtered.sort((itemA, itemB) => {
+        const avaliacaoA = obterMinhaAvaliacao(itemA);
+        const avaliacaoB = obterMinhaAvaliacao(itemB);
+        const completaA = Boolean(avaliacaoA && avaliacaoCompleta(avaliacaoA.scoresJson || {}));
+        const completaB = Boolean(avaliacaoB && avaliacaoCompleta(avaliacaoB.scoresJson || {}));
+        if (completaA !== completaB) return completaA ? 1 : -1;
+        if (completaA) {
+            const atualizadaA = Date.parse(avaliacaoA.updatedAt || '') || 0;
+            const atualizadaB = Date.parse(avaliacaoB.updatedAt || '') || 0;
+            if (atualizadaA !== atualizadaB) return atualizadaA - atualizadaB;
+        }
+        return allUnificados.indexOf(itemA) - allUnificados.indexOf(itemB);
     });
 
     document.getElementById('resultsCount').textContent =
@@ -497,7 +522,7 @@ function renderAvaliacaoList() {
         const idx = allUnificados.indexOf(item);
         const id = p.id || p.email;
         const avs = scoresCache[id] || [];
-        const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        const myAv = obterMinhaAvaliacao(item);
         const myAvCompleta = myAv ? avaliacaoCompleta(myAv.scoresJson || {}) : false;
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const minhaPontuacao = myAv ? calcularPontuacaoObtida(myAv.scoresJson || {}) : null;
@@ -518,8 +543,8 @@ function renderAvaliacaoList() {
                 </div>
                 <div class="av-actions">
                     ${minhaPontuacao !== null ? `<span class="av-score" title="Pontuação acumulada">${formatarPontuacao(minhaPontuacao)}/${formatarPontuacaoMaxima()} pts</span>` : ''}
-                    <button class="btn-top btn-refresh" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}">
-                        <i class="fas fa-star"></i> Avaliar
+                    <button class="btn-top ${myAvCompleta ? 'btn-avaliado' : 'btn-refresh'}" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}" aria-label="${myAvCompleta ? 'Editar avaliação' : 'Avaliar inscrição'}" title="${myAvCompleta ? 'Clique para editar a avaliação' : 'Avaliar inscrição'}">
+                        <i class="fas ${myAvCompleta ? 'fa-check-circle' : 'fa-star'}"></i> ${myAvCompleta ? 'Avaliado' : 'Avaliar'}
                     </button>
                 </div>
             </div>
@@ -1384,6 +1409,9 @@ async function salvarAvaliacao(criterionKey = null) {
                 avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
             );
             const avaliacaoAnterior = indiceMinhaAvaliacao >= 0 ? avaliacoesAtuais[indiceMinhaAvaliacao] : {};
+            const avaliacaoAnteriorCompleta = Boolean(
+                indiceMinhaAvaliacao >= 0 && avaliacaoCompleta(avaliacaoAnterior.scoresJson || {})
+            );
             const avaliacaoSalva = {
                 ...avaliacaoAnterior,
                 inscriptionId: id,
@@ -1397,7 +1425,14 @@ async function salvarAvaliacao(criterionKey = null) {
                 avaliacoesAtuais.push(avaliacaoSalva);
             }
             scoresCache[id] = avaliacoesAtuais;
-            if (salvarCriterio) {
+            const avaliacaoCompletaSalva = avaliacaoCompleta(avaliacaoSalva.scoresJson || {});
+            const avaliacaoConcluidaAgora = avaliacaoCompletaSalva && (!salvarCriterio || !avaliacaoAnteriorCompleta);
+            if (avaliacaoConcluidaAgora) {
+                openAvaliacaoIndex = null;
+                currentAvaliacaoIndex = null;
+                currentAvaliacaoScores = {};
+                resetarEstadosRubrica();
+            } else if (salvarCriterio) {
                 const estado = obterEstadoRubrica(criterionKey);
                 estado.opcoesAbertas = false;
                 estado.editando = false;
@@ -1408,8 +1443,14 @@ async function salvarAvaliacao(criterionKey = null) {
                 currentAvaliacaoIndex = null;
             }
             renderAvaliacaoList();
-            await showAvaliadorDialog(salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!', {
-                title: salvarCriterio ? 'Critério salvo' : 'Avaliação salva',
+            const mensagemSucesso = avaliacaoConcluidaAgora
+                ? 'Avaliação concluída e salva com sucesso!'
+                : (salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!');
+            const tituloSucesso = avaliacaoConcluidaAgora
+                ? 'Avaliação concluída'
+                : (salvarCriterio ? 'Critério salvo' : 'Avaliação salva');
+            await showAvaliadorDialog(mensagemSucesso, {
+                title: tituloSucesso,
                 confirmLabel: 'OK',
                 hideCancel: true,
                 success: true
