@@ -4275,7 +4275,7 @@ app.post('/api/criteria', async (req, res) => {
 
 app.post('/api/save-assessment', async (req, res) => {
     const { inscriptionId, evaluatorEmail, scoresJson } = req.body;
-    if (!inscriptionId || !evaluatorEmail || !scoresJson) {
+    if (!inscriptionId || !evaluatorEmail || !scoresJson || typeof scoresJson !== 'object' || Array.isArray(scoresJson)) {
         return res.status(400).json({ error: 'Dados incompletos.' });
     }
     if (!redis) return res.status(503).json({ error: 'Armazenamento de avaliações indisponível.' });
@@ -4285,11 +4285,14 @@ app.post('/api/save-assessment', async (req, res) => {
         const avaliacoes = parseRedisValue(raw) || [];
         const emailNormalizado = String(evaluatorEmail).trim().toLowerCase();
         const idx = avaliacoes.findIndex(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado);
+        const scoresAnteriores = idx >= 0 && avaliacoes[idx].scoresJson && typeof avaliacoes[idx].scoresJson === 'object'
+            ? avaliacoes[idx].scoresJson
+            : {};
         const entry = {
             ...(idx >= 0 ? avaliacoes[idx] : {}),
             inscriptionId,
             evaluatorEmail: emailNormalizado,
-            scoresJson,
+            scoresJson: { ...scoresAnteriores, ...scoresJson },
             updatedAt: new Date().toISOString()
         };
         if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
