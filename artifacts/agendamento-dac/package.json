@@ -8,7 +8,7 @@
     "start": "node server.js",
     "build": "mkdir -p dist/public && cp -R *.html attached_assets dist/public/",
     "serve": "node server.js",
-    "test": "node --test assessment-store.test.js",
+    "test": "node --test assessment-store.test.js avaliador-rendering.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {

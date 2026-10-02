@@ -679,7 +679,7 @@ function renderClassificacaoList() {
                     data-saved-value="${escapeHtml(avaliacao.classification || '')}"
                     value="${escapeHtml(avaliacao.classification || '')}"
                     placeholder="Digite e pressione Enter para salvar"
-                    aria-label="Classificação da proposta ${escapeHtml(obterNumeroProposta(item, propostasOrdenadas))}">
+                    aria-label="Classificação da proposta ${escapeHtml(numeroProposta)}">
                 <span class="ranking-save-status" aria-live="polite">Enter salva · Esc cancela</span>
             </td>
         </tr>`).join('');
