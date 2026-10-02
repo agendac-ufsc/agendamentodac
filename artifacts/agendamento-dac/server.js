@@ -4243,6 +4243,14 @@ const CRITERIOS_DEFAULT = [
     { id: 'D', nome: 'Viabilidade Técnica', peso: 1 }
 ];
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
+const RUBRICA_NIVEL_CHAVES = [
+    '__nivel_avaliacao',
+    '__nivel_avaliacao_812',
+    '__nivel_avaliacao_813',
+    '__nivel_avaliacao_814',
+    '__nivel_avaliacao_815',
+    '__nivel_avaliacao_818'
+];
 function ehRubricaDeNiveis(criterios) {
     if (!Array.isArray(criterios) || criterios.length !== 3) return false;
     const pesos = criterios.map(c => Number(c?.peso));
@@ -4274,7 +4282,7 @@ app.post('/api/criteria', async (req, res) => {
 // ============================================================
 
 app.post('/api/save-assessment', async (req, res) => {
-    const { inscriptionId, evaluatorEmail, scoresJson } = req.body;
+    const { inscriptionId, evaluatorEmail, scoresJson, finalize } = req.body || {};
     if (!inscriptionId || !evaluatorEmail || !scoresJson || typeof scoresJson !== 'object' || Array.isArray(scoresJson)) {
         return res.status(400).json({ error: 'Dados incompletos.' });
     }
@@ -4288,16 +4296,44 @@ app.post('/api/save-assessment', async (req, res) => {
         const scoresAnteriores = idx >= 0 && avaliacoes[idx].scoresJson && typeof avaliacoes[idx].scoresJson === 'object'
             ? avaliacoes[idx].scoresJson
             : {};
+        const scoresAtualizados = { ...scoresAnteriores, ...scoresJson };
+        const criteriosRaw = await redis.get('criterios');
+        const criteriosAtivos = parseRedisValue(criteriosRaw) || CRITERIOS_DEFAULT;
+        const rubricaNiveis = ehRubricaDeNiveis(criteriosAtivos);
+        const chavesAvaliacao = rubricaNiveis
+            ? RUBRICA_NIVEL_CHAVES
+            : criteriosAtivos.map(criterio => criterio.id);
+        if (finalize === true) {
+            const niveisValidos = criteriosAtivos.map(criterio => Number(criterio.peso));
+            const incompletos = chavesAvaliacao.filter(chave => {
+                const valor = scoresAtualizados[chave];
+                if (valor === undefined || valor === null || String(valor).trim() === '') return true;
+                const nota = Number(valor);
+                if (!Number.isFinite(nota)) return true;
+                return rubricaNiveis
+                    ? !niveisValidos.includes(nota)
+                    : nota < 1 || nota > 10;
+            });
+            if (chavesAvaliacao.length === 0 || incompletos.length > 0) {
+                return res.status(400).json({ error: 'Salve todos os critérios antes de finalizar a avaliação.' });
+            }
+        }
+        const updatedAt = new Date().toISOString();
+        const finalized = finalize === true || (idx >= 0 && avaliacoes[idx].finalized === true);
         const entry = {
             ...(idx >= 0 ? avaliacoes[idx] : {}),
             inscriptionId,
             evaluatorEmail: emailNormalizado,
-            scoresJson: { ...scoresAnteriores, ...scoresJson },
-            updatedAt: new Date().toISOString()
+            scoresJson: scoresAtualizados,
+            finalized,
+            finalizedAt: finalized
+                ? ((idx >= 0 && avaliacoes[idx].finalizedAt) || updatedAt)
+                : null,
+            updatedAt
         };
         if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
         await redis.set(key, avaliacoes);
-        res.json({ success: true });
+        res.json({ success: true, finalized: entry.finalized, finalizedAt: entry.finalizedAt });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar avaliação.' });
     }
@@ -4362,7 +4398,8 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
             const id = p.id || p.email;
             if (!id) continue;
             const avRaw = redis ? await redis.get(`avaliacoes_${id}`) : null;
-            const avaliacoes = parseRedisValue(avRaw) || [];
+            const avaliacoesSalvas = parseRedisValue(avRaw) || [];
+            const avaliacoes = avaliacoesSalvas.filter(av => av?.finalized === true);
 
             const detalhesPorCriterio = {};
             criteriosRelatorio.forEach(c => {
