@@ -1,5 +1,4 @@
-t('avaliadores', lista);
-            return res.status(502).json({ error: 'Não foi possível enviar o e-mail com a senha. O avaliador não foi cadastrado.' });
+ return res.status(502).json({ error: 'Não foi possível enviar o e-mail com a senha. O avaliador não foi cadastrado.' });
         }
         res.json({ success: true, count: listaAtualizada.length, emailSent: true, evaluator: { id: novo.id, email: novo.email, nome: novo.nome } });
     } catch (e) {
