@@ -126,7 +126,7 @@
         .criteria-label{flex:1;font-size:14px;font-weight:600;color:#333}
         .criteria-weight{font-size:11px;color:#888;margin-top:2px}
         .rubric-picker{width:100%;position:relative}
-        .rubric-control-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:stretch}
+        .rubric-control-row{display:grid;grid-template-columns:minmax(0,1fr);gap:10px;align-items:stretch}
         .rubric-trigger{width:100%;min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;text-align:left;cursor:pointer;font:inherit;transition:.18s}
         .rubric-trigger:hover,.rubric-trigger:focus-visible{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12);outline:none}
         .rubric-trigger .rubric-trigger-copy{display:grid;gap:4px;min-width:0}
@@ -138,11 +138,12 @@
         .rubric-trigger.rubric-red{background:#fff1f2;border-color:#fda4af;color:#9f1239}
         .rubric-trigger.rubric-yellow{background:#fffbeb;border-color:#fcd34d;color:#92400e}
         .rubric-trigger.rubric-green{background:#f0fdf4;border-color:#86efac;color:#166534}
-        .rubric-actions{display:flex;align-items:stretch;gap:8px}
+        .rubric-actions{display:flex;align-items:stretch;gap:8px;width:100%;margin-top:8px}
         .btn-rubric-save,.btn-rubric-edit{border:1px solid #2563eb;border-radius:8px;padding:0 16px;background:#2563eb;color:#fff;font:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;transition:.18s}
-        .btn-rubric-save:hover,.btn-rubric-edit:hover{background:#1d4ed8;border-color:#1d4ed8}
+        .btn-rubric-save{width:100%;min-height:44px;border-color:#16a34a;background:#16a34a}
+        .btn-rubric-save:hover{background:#15803d;border-color:#15803d}
         .btn-rubric-edit{background:#fff;color:#2563eb}
-        .btn-rubric-edit:hover{color:#fff}
+        .btn-rubric-edit:hover{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
         .rubric-options{display:grid;gap:8px;margin-top:8px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc}
         .rubric-options[hidden]{display:none}
         .rubric-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1.5px solid transparent;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-size:13px;font-weight:700;transition:.16s}
@@ -1223,7 +1224,6 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
                         </span>
                         <span class="rubric-trigger-score">${selecionada ? `${escapeHtml(selecionada.peso)} pts` : '<i class="fas fa-chevron-down"></i>'}</span>
                     </button>
-                    <div class="rubric-actions">${acao}</div>
                 </div>
                 <div class="rubric-options" id="rubricOptions-${sufixo}" ${estado.opcoesAbertas ? '' : 'hidden'}>
                     ${opcoes.map(opcao => {
@@ -1234,6 +1234,7 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
                         </button>`;
                     }).join('')}
                 </div>
+                <div class="rubric-actions">${acao}</div>
             </div>
         </div>`;
     }
