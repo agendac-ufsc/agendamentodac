@@ -4306,7 +4306,7 @@ app.post('/api/save-assessment', async (req, res) => {
         if (finalize === true) {
             const niveisValidos = criteriosAtivos.map(criterio => Number(criterio.peso));
             const incompletos = chavesAvaliacao.filter(chave => {
-                const valor = scoresAtualizados[chave];
+                const valor = scoresJson[chave];
                 if (valor === undefined || valor === null || String(valor).trim() === '') return true;
                 const nota = Number(valor);
                 if (!Number.isFinite(nota)) return true;
@@ -4315,20 +4315,20 @@ app.post('/api/save-assessment', async (req, res) => {
                     : nota < 1 || nota > 10;
             });
             if (chavesAvaliacao.length === 0 || incompletos.length > 0) {
-                return res.status(400).json({ error: 'Salve todos os critérios antes de finalizar a avaliação.' });
+                return res.status(400).json({ error: 'O salvamento geral precisa incluir todos os critérios antes de finalizar a avaliação.' });
             }
         }
         const updatedAt = new Date().toISOString();
-        const finalized = finalize === true || (idx >= 0 && avaliacoes[idx].finalized === true);
+        // Salvar um critério mantém a avaliação em andamento; só o salvamento
+        // geral explícito pode concluí-la, mesmo quando ela já foi finalizada.
+        const finalized = finalize === true;
         const entry = {
             ...(idx >= 0 ? avaliacoes[idx] : {}),
             inscriptionId,
             evaluatorEmail: emailNormalizado,
             scoresJson: scoresAtualizados,
             finalized,
-            finalizedAt: finalized
-                ? ((idx >= 0 && avaliacoes[idx].finalizedAt) || updatedAt)
-                : null,
+            finalizedAt: finalized ? updatedAt : null,
             updatedAt
         };
         if (idx >= 0) avaliacoes[idx] = entry; else avaliacoes.push(entry);
