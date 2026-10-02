@@ -1,197 +1,4 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Painel do Avaliador - DAC</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;background:#f0f2f5;color:#333}
-
-        #loginOverlay{position:fixed;inset:0;background:linear-gradient(135deg,#2563eb,#1d4ed8);display:flex;align-items:center;justify-content:center;z-index:9999}
-        .login-box{background:#fff;border-radius:16px;padding:40px;width:100%;max-width:420px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-        .login-box h1{font-size:22px;color:#444;text-align:center;margin-bottom:6px}
-        .login-box p{font-size:13px;color:#888;text-align:center;margin-bottom:28px}
-        .form-field{margin-bottom:16px}
-        .form-field label{display:block;font-size:12px;font-weight:700;color:#555;margin-bottom:6px}
-        .form-field input{width:100%;padding:11px 14px;border:1.5px solid #ddd;border-radius:8px;font-size:14px;transition:.2s}
-        .form-field input:focus{outline:none;border-color:#2563eb}
-        .password-wrap{position:relative}
-        .password-wrap input{padding-right:42px}
-        .toggle-password{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;background:transparent;color:#888;cursor:pointer;border-radius:6px}
-        .toggle-password:hover,.toggle-password:focus{background:#eff6ff;color:#2563eb;outline:none}
-        .btn-login{width:100%;padding:13px;background:linear-gradient(135deg,#2563eb,#1d4ed8);color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;transition:.2s}
-        .btn-login:hover{opacity:.9}
-        .login-err{color:#d9534f;font-size:13px;text-align:center;margin-top:12px;display:none}
-
-        #appShell{display:none}
-        .topbar{background:#fff;border-bottom:1px solid #e5e7eb;padding:12px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.05)}
-        .topbar-left{display:flex;align-items:center;gap:12px}
-        .topbar-left h1{font-size:18px;color:#444;font-weight:700}
-        .role-badge{font-size:11px;padding:3px 10px;border-radius:20px;font-weight:700;background:#dbeafe;color:#1d4ed8}
-        .topbar-right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-        .btn-top{padding:8px 14px;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:flex;align-items:center;gap:6px;transition:.2s}
-        .btn-top:hover{opacity:.85}
-        .btn-refresh{background:#2563eb;color:#fff}
-        .btn-logout{background:#eee;color:#555;border:1px solid #ddd}
-
-        .content-wrap{padding:24px;max-width:1100px;margin:0 auto}
-        .filters-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px}
-        .search-wrap{position:relative;flex:1;min-width:200px;max-width:360px}
-        .search-wrap input{width:100%;padding:9px 12px 9px 36px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;outline:none}
-        .search-wrap input:focus{border-color:#2563eb}
-        .search-wrap i{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:#aaa;font-size:13px}
-        .filter-sel{padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;background:#fff;outline:none;cursor:pointer}
-        .filter-sel:focus{border-color:#2563eb}
-
-        .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden;transition:border-color .2s,box-shadow .2s}
-        .av-card.open{border-color:#93c5fd;box-shadow:0 4px 14px rgba(37,99,235,.09)}
-        .av-card-main{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px;cursor:pointer;transition:background .2s}
-        .av-card-main:hover{background:#f8fbff}
-        .av-info{min-width:0}
-        .av-info h4{font-size:14px;font-weight:700;margin-bottom:4px}
-        .av-info p{font-size:12px;color:#666}
-        .av-score{font-size:18px;font-weight:800;color:#2563eb}
-        .av-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end;flex-shrink:0}
-        .av-drawer{border-top:1px solid #dbeafe;background:#fbfdff;padding:22px 24px 24px;animation:drawerOpen .18s ease-out}
-        @keyframes drawerOpen{from{opacity:0;transform:translateY(-5px)}to{opacity:1;transform:translateY(0)}}
-        .drawer-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:18px}
-        .drawer-heading h3{font-size:16px;color:#1e3a8a;margin:0}
-        .drawer-heading p{font-size:12px;color:#64748b;margin-top:4px}
-        .drawer-loading{text-align:center;color:#2563eb;padding:24px;font-size:13px}
-        .drawer-grid{display:grid;grid-template-columns:160px 1fr;gap:8px 14px;font-size:13px}
-        .drawer-grid .lbl{font-weight:600;color:#555}
-        .drawer-grid .val{color:#222;word-break:break-word}
-        .drawer-grid .val a{color:#2563eb;text-decoration:none;word-break:break-all}
-        .drawer-grid .val a:hover{text-decoration:underline}
-        .drawer-section{margin-bottom:22px}
-        .drawer-section:last-child{margin-bottom:0}
-        .drawer-section h4{font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-        .drawer-criterion{background:linear-gradient(135deg,#1e3a8a,#2563eb);border-radius:9px;padding:14px 16px;margin-bottom:22px;box-shadow:0 4px 12px rgba(37,99,235,.16)}
-        .drawer-criterion-title{color:#fff;font-size:14px;font-weight:700;line-height:1.45;letter-spacing:.01em}
-        .drawer-event-list{margin:0;padding-left:18px;font-size:13px;color:#222}
-        .drawer-event-list li{margin-bottom:4px}
-        .drawer-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
-        .drawer-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
-        .drawer-document-title{font-size:13px;font-weight:800;color:#1d4ed8;line-height:1.3;margin-bottom:4px}
-        .drawer-document-title-dark{color:#111827}
-        .drawer-section h4.drawer-files-heading{margin-block:18px}
-        .drawer-link-pill:hover{background:#dbeafe}
-        .drawer-evaluation{border-top:1px solid #dbeafe;margin-top:24px;margin-bottom:34px;padding-top:20px}
-        .drawer-total-score{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;padding:16px 18px;border:1px solid #bfdbfe;border-radius:10px;background:#eff6ff;color:#1e3a8a;font-size:14px;font-weight:700}
-        .drawer-total-score strong{color:#1d4ed8;font-size:18px;white-space:nowrap}
-        .drawer-save{text-align:right;margin-top:18px}
-        .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
-        .av-status.done{background:#d1fae5;color:#065f46}
-        .local-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
-        .local-teatro{background:#ede9fe;color:#7c3aed}
-        .local-igrejinha{background:#dcfce7;color:#15803d}
-
-        .stars{display:flex;gap:4px;margin-top:6px}
-        .star{font-size:22px;cursor:pointer;color:#ddd;transition:.1s}
-        .star.on{color:#f59e0b}
-        .criteria-row{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid #f0f0f0}
-        .criteria-row:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
-        .criteria-label{flex:1;font-size:14px;font-weight:600;color:#333}
-        .criteria-weight{font-size:11px;color:#888;margin-top:2px}
-        .rubric-picker{width:100%;position:relative}
-        .rubric-control-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:stretch}
-        .rubric-trigger{width:100%;min-height:64px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 18px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#334155;text-align:left;cursor:pointer;font:inherit;transition:.18s}
-        .rubric-trigger:hover,.rubric-trigger:focus-visible{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12);outline:none}
-        .rubric-trigger .rubric-trigger-copy{display:grid;gap:4px;min-width:0}
-        .rubric-trigger .rubric-trigger-title{font-size:14px;font-weight:800;overflow-wrap:anywhere}
-        .rubric-trigger .rubric-trigger-hint{font-size:11px;color:#64748b;font-weight:500}
-        .rubric-trigger .rubric-trigger-score{flex-shrink:0;font-size:18px;font-weight:800;color:#1d4ed8}
-        .rubric-trigger.rubric-prompt{background:#e0f2fe;border-color:#93c5fd;color:#1e40af}
-        .rubric-trigger.rubric-prompt .rubric-trigger-hint{color:#475569}
-        .rubric-trigger.rubric-red{background:#fff1f2;border-color:#fda4af;color:#9f1239}
-        .rubric-trigger.rubric-yellow{background:#fffbeb;border-color:#fcd34d;color:#92400e}
-        .rubric-trigger.rubric-green{background:#f0fdf4;border-color:#86efac;color:#166534}
-        .rubric-actions{display:flex;align-items:stretch;gap:8px}
-        .btn-rubric-save,.btn-rubric-edit{border:1px solid #2563eb;border-radius:8px;padding:0 16px;background:#2563eb;color:#fff;font:inherit;font-size:13px;font-weight:800;cursor:pointer;white-space:nowrap;transition:.18s}
-        .btn-rubric-save:hover,.btn-rubric-edit:hover{background:#1d4ed8;border-color:#1d4ed8}
-        .btn-rubric-edit{background:#fff;color:#2563eb}
-        .btn-rubric-edit:hover{color:#fff}
-        .rubric-options{display:grid;gap:8px;margin-top:8px;padding:10px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc}
-        .rubric-options[hidden]{display:none}
-        .rubric-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1.5px solid transparent;border-radius:8px;text-align:left;cursor:pointer;font:inherit;font-size:13px;font-weight:700;transition:.16s}
-        .rubric-option:hover,.rubric-option:focus-visible{filter:brightness(.97);transform:translateY(-1px);outline:none}
-        .rubric-option.selected{box-shadow:0 0 0 3px rgba(37,99,235,.16);border-color:#2563eb}
-        .rubric-option-score{font-size:15px;font-weight:800;white-space:nowrap}
-        .rubric-red{background:#ffe4e6;color:#9f1239;border-color:#fda4af}
-        .rubric-yellow{background:#fef3c7;color:#92400e;border-color:#fcd34d}
-        .rubric-green{background:#dcfce7;color:#166534;border-color:#86efac}
-
-        .modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);align-items:center;justify-content:center;z-index:2000}
-        .modal.open{display:flex}
-        #modalAvaliadorDialog{z-index:4000}
-        .modal-box{background:#fff;border-radius:12px;padding:28px;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.2)}
-        .modal-confirm-box{width:90%;max-width:470px;border-top:4px solid #2563eb;padding:26px 28px}
-        .modal-confirm-box.modal-confirm-danger{border-top-color:#dc2626}
-        .modal-confirm-box.modal-confirm-success{border-top-color:#0f766e}
-        .modal-confirm-success .modal-confirm-icon{background:#ccfbf1;color:#0f766e}
-        .modal-confirm-success .btn-save-modal{background:#0f766e}
-        .modal-confirm-icon{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#dbeafe;color:#2563eb;font-size:20px;margin-bottom:12px}
-        .modal-confirm-danger .modal-confirm-icon{background:#fee2e2;color:#dc2626}
-        .modal-confirm-box h3{border:0;margin:0 0 10px;padding:0;color:#374151}
-        .modal-confirm-message{white-space:pre-line;font-size:14px;line-height:1.6;color:#4b5563;margin:0}
-        .modal-box h3{font-size:18px;margin-bottom:16px;color:#444;border-bottom:1px solid #eee;padding-bottom:12px}
-        .modal-footer{text-align:right;margin-top:20px;display:flex;gap:10px;justify-content:flex-end}
-        .btn-close-modal{padding:9px 20px;background:#eee;border:none;border-radius:7px;cursor:pointer;font-weight:600}
-        .btn-save-modal{padding:9px 20px;background:#2563eb;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:600}
-
-        .loading-msg{text-align:center;padding:60px;color:#2563eb;font-size:16px}
-        .empty-msg{text-align:center;padding:60px;color:#aaa;font-size:15px}
-        .error-msg{text-align:center;padding:40px;color:#d9534f;background:#fff5f5;border-radius:10px;border:1px solid #fcc}
-        .results-count{font-size:12px;color:#888;margin-bottom:12px}
-        .info-banner{background:#eff6ff;border:1px solid #bfdbfe;color:#1e40af;padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:18px}
-
-        .btn-details{padding:8px 14px;background:#fff;color:#2563eb;border:1.5px solid #2563eb;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.2s}
-        .btn-details:hover{background:#eff6ff}
-        .modal-box.wide{max-width:780px}
-        .det-section{margin-bottom:22px}
-        .det-section h4{font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
-        .det-grid{display:grid;grid-template-columns:160px 1fr;gap:8px 14px;font-size:13px}
-        .det-grid .lbl{font-weight:600;color:#555}
-        .det-grid .val{color:#222;word-break:break-word}
-        .det-grid .val a{color:#2563eb;text-decoration:none;word-break:break-all}
-        .det-grid .val a:hover{text-decoration:underline}
-        .det-event-list{margin:0;padding-left:18px;font-size:13px;color:#222}
-        .det-event-list li{margin-bottom:4px}
-        .det-empty{font-size:13px;color:#888;font-style:italic;padding:8px 0}
-        .det-status-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;margin-left:6px}
-        .det-status-completo{background:#d1fae5;color:#065f46}
-        .det-status-pendente{background:#fef3c7;color:#92400e}
-        .det-status-cancelado{background:#fee2e2;color:#991b1b}
-        .det-link-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:6px;color:#1d4ed8;text-decoration:none;font-size:12px;font-weight:600;margin:2px 4px 2px 0}
-        .det-link-pill:hover{background:#dbeafe}
-        @media(max-width:640px){.av-card-main{align-items:flex-start;flex-direction:column}.av-actions{width:100%;justify-content:flex-start}.av-drawer{padding:18px 16px}.drawer-grid{grid-template-columns:1fr;gap:3px 0}.drawer-grid .lbl{margin-top:8px}.rubric-control-row{grid-template-columns:1fr}.rubric-actions{justify-content:flex-end}.btn-rubric-save,.btn-rubric-edit{min-height:42px}}
-    </style>
-</head>
-<body>
-
-<!-- LOGIN -->
-<div id="loginOverlay">
-    <div class="login-box">
-        <h1>🎭 Painel do Avaliador</h1>
-        <p>DAC — UFSC</p>
-        <div class="form-field">
-            <label>Seu E-mail</label>
-            <input type="email" id="viewerEmail" placeholder="avaliador@exemplo.com" onkeydown="if(event.key==='Enter')doLogin()">
-        </div>
-        <div class="form-field">
-            <label>Senha</label>
-            <div class="password-wrap">
-                <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
-                <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('viewerPass', this)">
-                    <i class="fa-solid fa-eye"></i>
-                </button>
-            </div>
-        </div>
-        <button class="btn-login" onclick="doLogin()">Entrar</button>
-        <div class="login-err" id="loginErr"></div>
-        <p style="text-align:center;margin-top:18px;font-size:13px;color:#666">É administrador? <a href="/admin" style="color:#2563eb;font-weight:600;text-decoration:none">Acessar Painel Administrativo</a></p>
+>Acessar Painel Administrativo</a></p>
     </div>
 </div>
 
@@ -214,24 +21,59 @@
             <span id="infoBannerText">Carregando regras de avaliação...</span>
         </div>
 
-        <div class="filters-bar">
-            <div class="search-wrap">
-                <i class="fas fa-search"></i>
-                <input type="text" id="searchAvalia" placeholder="Buscar inscrição para avaliar..." oninput="renderAvaliacaoList()">
-            </div>
-            <select id="filterLocalAv" class="filter-sel" onchange="renderAvaliacaoList()">
-                <option value="">Todos os Locais</option>
-                <option value="Teatro">Teatro</option>
-                <option value="Igrejinha">Igrejinha</option>
-            </select>
-            <select id="filterStatusAv" class="filter-sel" onchange="renderAvaliacaoList()">
-                <option value="">Todos os Status</option>
-                <option value="pendente">Pendentes p/ mim</option>
-                <option value="avaliado">Já avaliei</option>
-            </select>
+        <div class="panel-tabs" role="tablist" aria-label="Seções do painel do avaliador">
+            <button type="button" class="panel-tab active" id="tabBtnAvaliacoes" role="tab" aria-selected="true" aria-controls="painelAvaliacoes" onclick="alternarAbaAvaliador('avaliacoes')">
+                <i class="fas fa-clipboard-check"></i> Avaliar inscrições
+            </button>
+            <button type="button" class="panel-tab" id="tabBtnClassificacao" role="tab" aria-selected="false" aria-controls="painelClassificacao" onclick="alternarAbaAvaliador('classificacao')">
+                <i class="fas fa-list-ol"></i> Minhas avaliações <span class="panel-tab-count" id="classificacaoTabCount">0</span>
+            </button>
         </div>
-        <div class="results-count" id="resultsCount"></div>
-        <div id="avaliacaoList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+
+        <section class="panel-section" id="painelAvaliacoes" role="tabpanel" aria-labelledby="tabBtnAvaliacoes">
+            <div class="filters-bar">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="searchAvalia" placeholder="Buscar inscrição para avaliar..." oninput="renderAvaliacaoList()">
+                </div>
+                <select id="filterLocalAv" class="filter-sel" onchange="renderAvaliacaoList()">
+                    <option value="">Todos os Locais</option>
+                    <option value="Teatro">Teatro</option>
+                    <option value="Igrejinha">Igrejinha</option>
+                </select>
+                <select id="filterStatusAv" class="filter-sel" onchange="renderAvaliacaoList()">
+                    <option value="">Todos os Status</option>
+                    <option value="pendente">Pendentes p/ mim</option>
+                    <option value="avaliado">Já avaliei</option>
+                </select>
+            </div>
+            <div class="results-count" id="resultsCount"></div>
+            <div id="avaliacaoList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+        </section>
+
+        <section class="panel-section" id="painelClassificacao" role="tabpanel" aria-labelledby="tabBtnClassificacao" hidden>
+            <div class="ranking-summary">
+                <div>
+                    <h2>Minhas avaliações concluídas</h2>
+                    <p><span id="classificacaoTotal">0</span> proposta(s) com todos os itens avaliados. Edite a classificação e pressione Enter para salvar.</p>
+                </div>
+            </div>
+            <div class="ranking-table-wrap">
+                <table class="ranking-table">
+                    <thead>
+                        <tr>
+                            <th>Número da Proposta</th>
+                            <th>Nome da Proposta</th>
+                            <th>Pontuação Final</th>
+                            <th>Classificação</th>
+                        </tr>
+                    </thead>
+                    <tbody id="classificacaoRows">
+                        <tr><td class="ranking-empty" colspan="4">As avaliações concluídas aparecerão aqui.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
     </div>
 </div>
 
@@ -243,7 +85,7 @@
         <div class="modal-confirm-icon" id="modalAvaliadorDialogIcon"><i class="fas fa-question"></i></div>
         <h3 id="modalAvaliadorDialogTitulo">Confirmar ação</h3>
         <p id="modalAvaliadorDialogMensagem" class="modal-confirm-message"></p>
-        <div class="modal-footer">
+        <div class="modal-footer" id="modalAvaliadorFooter">
             <button class="btn-close-modal" id="btnCancelarDialogAvaliador" type="button" onclick="cancelarDialogAvaliador()">Cancelar</button>
             <button class="btn-save-modal" id="btnConfirmarDialogAvaliador" type="button" onclick="confirmarDialogAvaliador()">Confirmar</button>
         </div>
@@ -260,6 +102,7 @@ let currentAvaliacaoIndex = null;
 let currentAvaliacaoScores = {};
 let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let openAvaliacaoIndex = null;
+let avaliadorTabAtiva = 'avaliacoes';
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
 const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
 const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
@@ -346,13 +189,12 @@ function logout() {
     location.reload();
 }
 
-function initApp() {
+async function initApp() {
     document.getElementById('loginOverlay').style.display = 'none';
     document.getElementById('appShell').style.display = 'block';
     document.getElementById('roleBadge').textContent = `Avaliador: ${viewerEmail}`;
-    loadCriteria();
-    loadConfig();
-    loadData();
+    await Promise.all([loadCriteria(), loadConfig()]);
+    await loadData();
 }
 
 async function loadConfig() {
@@ -408,11 +250,12 @@ function renderAvaliacaoList() {
         const id = p.id || p.email;
         const avs = scoresCache[id] || [];
         const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        const myAvCompleta = myAv ? avaliacaoCompleta(myAv.scoresJson || {}) : false;
         const matchQ = !q || (p.evento||'').toLowerCase().includes(q) || (p.nome||'').toLowerCase().includes(q);
         const matchLocal = !filterLocal || (p.localNome||'').toLowerCase().includes(filterLocal.toLowerCase());
         const matchStatus = !filterStatus
-            || (filterStatus === 'pendente' && !myAv)
-            || (filterStatus === 'avaliado' && !!myAv);
+            || (filterStatus === 'pendente' && !myAvCompleta)
+            || (filterStatus === 'avaliado' && myAvCompleta);
         return matchQ && matchLocal && matchStatus;
     });
 
@@ -421,6 +264,7 @@ function renderAvaliacaoList() {
 
     if (filtered.length === 0) {
         container.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada com esses filtros.</div>';
+        renderClassificacaoList();
         return;
     }
 
@@ -431,11 +275,12 @@ function renderAvaliacaoList() {
         const id = p.id || p.email;
         const avs = scoresCache[id] || [];
         const myAv = avs.find(a => (a.evaluatorEmail||'').toLowerCase() === viewerEmail.toLowerCase());
+        const myAvCompleta = myAv ? avaliacaoCompleta(myAv.scoresJson || {}) : false;
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const minhaPontuacao = myAv ? calcularPontuacaoObtida(myAv.scoresJson || {}) : null;
-        const statusBadge = myAv
+        const statusBadge = myAvCompleta
             ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
-            : `<span class="av-status">Pendente</span>`;
+            : `<span class="av-status">${myAv ? 'Em andamento' : 'Pendente'}</span>`;
         const aberta = openAvaliacaoIndex === idx;
         html += `
         <div class="av-card${aberta ? ' open' : ''}">
@@ -459,6 +304,113 @@ function renderAvaliacaoList() {
         </div>`;
     });
     container.innerHTML = html;
+    renderClassificacaoList();
+}
+
+function alternarAbaAvaliador(aba) {
+    const mostrarAvaliacoes = aba !== 'classificacao';
+    avaliadorTabAtiva = mostrarAvaliacoes ? 'avaliacoes' : 'classificacao';
+    document.getElementById('painelAvaliacoes').hidden = !mostrarAvaliacoes;
+    document.getElementById('painelClassificacao').hidden = mostrarAvaliacoes;
+    document.getElementById('tabBtnAvaliacoes').classList.toggle('active', mostrarAvaliacoes);
+    document.getElementById('tabBtnAvaliacoes').setAttribute('aria-selected', String(mostrarAvaliacoes));
+    document.getElementById('tabBtnClassificacao').classList.toggle('active', !mostrarAvaliacoes);
+    document.getElementById('tabBtnClassificacao').setAttribute('aria-selected', String(!mostrarAvaliacoes));
+    if (!mostrarAvaliacoes) renderClassificacaoList();
+}
+
+function obterChavesAvaliacao() {
+    const crit = criterios.length ? criterios : defaultCriterios();
+    return ehRubricaDeNiveis(crit) ? CHAVES_RUBRICA_NIVEIS : crit.map(c => c.id);
+}
+
+function criterioTemNotaValida(scores, chave) {
+    const valorSalvo = scores?.[chave];
+    if (valorSalvo === undefined || valorSalvo === null || String(valorSalvo).trim() === '') return false;
+    const nota = Number(valorSalvo);
+    if (!Number.isFinite(nota)) return false;
+    const crit = criterios.length ? criterios : defaultCriterios();
+    if (ehRubricaDeNiveis(crit)) return crit.some(opcao => Number(opcao.peso) === nota);
+    return nota >= 1 && nota <= 10;
+}
+
+function contarCriteriosAvaliados(scores = {}) {
+    return obterChavesAvaliacao().filter(chave => criterioTemNotaValida(scores, chave)).length;
+}
+
+function avaliacaoCompleta(scores = {}) {
+    const chaves = obterChavesAvaliacao();
+    return chaves.length > 0 && contarCriteriosAvaliados(scores) === chaves.length;
+}
+
+function obterPropostasEmOrdem() {
+    return [...allUnificados].sort((a, b) => {
+        const idA = Number(a?.primeiraEtapa?.id);
+        const idB = Number(b?.primeiraEtapa?.id);
+        if (Number.isFinite(idA) && Number.isFinite(idB)) return idA - idB;
+        return allUnificados.indexOf(b) - allUnificados.indexOf(a);
+    });
+}
+
+function obterNumeroProposta(item, propostasOrdenadas) {
+    const p = item?.primeiraEtapa || {};
+    const numeroExistente = p.numeroProposta ?? p.numeroInscricao ?? p.numeroDaProposta ?? p.proposalNumber;
+    if (numeroExistente !== undefined && numeroExistente !== null && String(numeroExistente).trim() !== '') {
+        return String(numeroExistente);
+    }
+    const indice = propostasOrdenadas.indexOf(item);
+    return indice >= 0 ? String(indice + 1) : '—';
+}
+
+function renderClassificacaoList() {
+    const tbody = document.getElementById('classificacaoRows');
+    if (!tbody) return;
+    const propostasOrdenadas = obterPropostasEmOrdem();
+    const avaliadas = propostasOrdenadas.map(item => {
+        const p = item?.primeiraEtapa;
+        if (!p) return null;
+        const id = p.id || p.email;
+        const avaliacao = (scoresCache[id] || []).find(
+            registro => (registro.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+        );
+        if (!avaliacao || !avaliacaoCompleta(avaliacao.scoresJson || {})) return null;
+        return { item, id, p, avaliacao, pontuacao: calcularPontuacaoObtida(avaliacao.scoresJson || {}) };
+    }).filter(Boolean);
+
+    document.getElementById('classificacaoTabCount').textContent = String(avaliadas.length);
+    document.getElementById('classificacaoTotal').textContent = String(avaliadas.length);
+    if (!avaliadas.length) {
+        tbody.innerHTML = '<tr><td class="ranking-empty" colspan="4">As avaliações concluídas aparecerão aqui.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = avaliadas.map(({ item, id, p, avaliacao, pontuacao }) => `
+        <tr>
+            <td class="proposal-number">${escapeHtml(obterNumeroProposta(item, propostasOrdenadas))}</td>
+            <td>${escapeHtml(p.evento || p.nome || 'Sem título')}</td>
+            <td class="proposal-score">${escapeHtml(formatarPontuacao(pontuacao))}</td>
+            <td class="ranking-classification-cell">
+                <input class="ranking-classification-input" type="text" maxlength="100"
+                    data-inscription-id="${escapeHtml(id)}"
+                    data-saved-value="${escapeHtml(avaliacao.classification || '')}"
+                    value="${escapeHtml(avaliacao.classification || '')}"
+                    placeholder="Digite e pressione Enter para salvar"
+                    aria-label="Classificação da proposta ${escapeHtml(obterNumeroProposta(item, propostasOrdenadas))}">
+                <span class="ranking-save-status" aria-live="polite">Enter salva · Esc cancela</span>
+            </td>
+        </tr>`).join('');
+
+    tbody.querySelectorAll('.ranking-classification-input').forEach(input => {
+        input.addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                salvarClassificacao(input);
+            } else if (event.key === 'Escape') {
+                input.value = input.dataset.savedValue || '';
+                input.blur();
+            }
+        });
+    });
 }
 
 function calcularPontuacaoObtida(scores = {}) {
@@ -856,7 +808,12 @@ function renderDocumentosRestantesDrawer(item) {
 
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
-    const pontuacaoObtida = calcularPontuacaoObtida(existingScores);
+    const indiceItem = allUnificados.indexOf(item);
+    const scoresEmEdicao = currentAvaliacaoIndex === indiceItem ? currentAvaliacaoScores : existingScores;
+    const itensAvaliados = contarCriteriosAvaliados(scoresEmEdicao);
+    const totalItens = obterChavesAvaliacao().length;
+    const avaliacaoCompletaAgora = avaliacaoCompleta(scoresEmEdicao);
+    const pontuacaoObtida = calcularPontuacaoObtida(scoresEmEdicao);
     const dadosInscricao = obterDadosInscricaoDrawer(item);
     const dadosComplementares = obterDadosComplementaresDrawer(item);
     const dadosDestaque = obterDadosDestaqueDrawer(item);
@@ -945,6 +902,12 @@ function renderDrawerContent(item, existingScores = {}) {
             <span><i class="fas fa-trophy"></i> Pontuação obtida</span>
             <strong>${escapeHtml(formatarPontuacao(pontuacaoObtida))} / ${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
         </div>
+        <div class="drawer-save drawer-save-complete">
+            <span class="drawer-save-progress">${avaliacaoCompletaAgora ? 'Todos os itens foram avaliados.' : `${itensAvaliados} de ${totalItens} itens avaliados — complete todos para salvar.`}</span>
+            <button type="button" class="btn-save-modal" onclick="salvarAvaliacao()" ${avaliacaoCompletaAgora ? '' : 'disabled'}>
+                <i class="fas fa-save"></i> Salvar avaliação
+            </button>
+        </div>
         </div>`;
     return html;
 }
@@ -952,9 +915,6 @@ function renderDrawerContent(item, existingScores = {}) {
 function renderEvaluationBlock(existingScores, criterionKey) {
     return `<div class="drawer-evaluation">
         ${renderCriteriaRows(existingScores, criterionKey)}
-        ${!ehRubricaDeNiveis() && criterionKey === RUBRICA_NIVEL_ID ? `<div class="drawer-save">
-            <button class="btn-save-modal" onclick="salvarAvaliacao()"><i class="fas fa-save"></i> Salvar Avaliação</button>
-        </div>` : ''}
     </div>`;
 }
 
@@ -974,13 +934,11 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
         const classeSelecionada = selecionada ? classeRubrica(selecionada.peso) : 'rubric-prompt';
         const titulo = selecionada?.nome || 'Clique aqui para avaliar';
         const dica = selecionada
-            ? (temAlteracao ? 'Escolha o nível e clique em Salvar' : (temValorSalvo ? 'Avaliação salva' : 'Clique para alterar o nível'))
+            ? (temAlteracao ? 'Nível alterado — salve a avaliação completa ao final' : (temValorSalvo ? 'Nível selecionado' : 'Selecione os demais itens e salve ao final'))
             : 'Clique para abrir as três opções';
-        const acao = temAlteracao
-            ? `<button type="button" class="btn-rubric-save" onclick="salvarAvaliacao('${escapeAttr(criterionKey)}')"><i class="fas fa-save"></i> Salvar</button>`
-            : (temValorSalvo && !estado.editando
-                ? `<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica('${escapeAttr(criterionKey)}')"><i class="fas fa-pen"></i> Editar</button>`
-                : '');
+        const acao = temValorSalvo && !estado.editando
+            ? `<button type="button" class="btn-rubric-edit" onclick="iniciarEdicaoRubrica('${escapeAttr(criterionKey)}')"><i class="fas fa-pen"></i> Editar</button>`
+            : '';
         return `<div class="criteria-row" style="display:block">
             <div class="criteria-label" style="margin-bottom:10px">Avaliação do critério</div>
             <div class="rubric-picker">
@@ -1007,7 +965,8 @@ function renderCriteriaRows(existingScores = {}, criterionKey = RUBRICA_NIVEL_ID
         </div>`;
     }
     return crit.map(c => {
-        const nota = parseInt(existingScores[c.id] ?? 0);
+        const notaAtual = currentAvaliacaoScores?.[c.id];
+        const nota = parseInt(notaAtual ?? existingScores[c.id] ?? 0, 10);
         let stars = '';
         for (let s = 1; s <= 10; s++) {
             stars += `<span class="star ${s<=nota?'on':''}" onclick="setStar('${c.id}',${s})" data-v="${s}">★</span>`;
@@ -1142,13 +1101,10 @@ async function openAvaliacao(idx) {
 
 function setStar(criterioId, valor) {
     currentAvaliacaoScores[criterioId] = valor;
-    const stars = document.querySelectorAll(`#stars-${criterioId} .star`);
-    stars.forEach(s => s.classList.toggle('on', parseInt(s.dataset.v) <= valor));
-    const label = document.getElementById(`starLabel-${criterioId}`);
-    if (label) label.textContent = `${valor}/10`;
+    renderAvaliacaoList();
 }
 
-async function salvarAvaliacao(criterionKey = null) {
+async function salvarAvaliacao() {
     if (currentAvaliacaoIndex === null) return;
     const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
     const id = p.id || p.email;
@@ -1162,32 +1118,14 @@ async function salvarAvaliacao(criterionKey = null) {
         return;
     }
     const crit = criterios.length ? criterios : defaultCriterios();
-    if (ehRubricaDeNiveis(crit)) {
-        const chavesRubrica = CHAVES_RUBRICA_NIVEIS;
-        const chaveDoItem = chavesRubrica.includes(criterionKey)
-            ? criterionKey
-            : chavesRubrica.find(chave =>
-                currentAvaliacaoScores[chave] !== undefined && currentAvaliacaoScores[chave] !== null
-            );
-        if (!chaveDoItem || currentAvaliacaoScores[chaveDoItem] === undefined || currentAvaliacaoScores[chaveDoItem] === null) {
-            await showAvaliadorDialog('Escolha um dos três níveis de avaliação para este item antes de salvar.', {
-                title: 'Avaliação incompleta',
-                confirmLabel: 'OK',
-                hideCancel: true,
-                danger: true
-            });
-            return;
-        }
-    }
-    const faltando = ehRubricaDeNiveis(crit)
-        ? []
-        : crit.filter(c => currentAvaliacaoScores[c.id] === undefined || currentAvaliacaoScores[c.id] === null);
+    const chaves = ehRubricaDeNiveis(crit) ? CHAVES_RUBRICA_NIVEIS : crit.map(c => c.id);
+    const faltando = chaves.filter(chave => !criterioTemNotaValida(currentAvaliacaoScores, chave));
     if (faltando.length > 0) {
-        const confirmar = await showAvaliadorDialog(
-            `Você ainda não deu nota a ${faltando.length} critério(s). Salvar mesmo assim?`,
-            { title: 'Confirmar salvamento', confirmLabel: 'Salvar avaliação' }
+        await showAvaliadorDialog(
+            `Ainda faltam ${faltando.length} item(ns). Avalie todos os critérios antes de salvar.`,
+            { title: 'Avaliação incompleta', confirmLabel: 'OK', hideCancel: true, danger: true }
         );
-        if (!confirmar) return;
+        return;
     }
     try {
         const r = await fetch('/api/save-assessment', {
@@ -1197,16 +1135,18 @@ async function salvarAvaliacao(criterionKey = null) {
         const d = await r.json();
         if (d.success) {
             // Atualizar a pontuação exibida imediatamente após o salvamento.
+            const avaliacoesAtuais = Array.isArray(scoresCache[id]) ? [...scoresCache[id]] : [];
+            const indiceMinhaAvaliacao = avaliacoesAtuais.findIndex(
+                avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+            );
+            const avaliacaoAnterior = indiceMinhaAvaliacao >= 0 ? avaliacoesAtuais[indiceMinhaAvaliacao] : {};
             const avaliacaoSalva = {
+                ...avaliacaoAnterior,
                 inscriptionId: id,
                 evaluatorEmail: viewerEmail,
                 scoresJson: { ...currentAvaliacaoScores },
                 updatedAt: new Date().toISOString()
             };
-            const avaliacoesAtuais = Array.isArray(scoresCache[id]) ? [...scoresCache[id]] : [];
-            const indiceMinhaAvaliacao = avaliacoesAtuais.findIndex(
-                avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
-            );
             if (indiceMinhaAvaliacao >= 0) {
                 avaliacoesAtuais[indiceMinhaAvaliacao] = avaliacaoSalva;
             } else {
@@ -1244,6 +1184,57 @@ async function salvarAvaliacao(criterionKey = null) {
     }
 }
 
+async function salvarClassificacao(input) {
+    const id = input?.dataset?.inscriptionId;
+    const classificacao = String(input?.value || '').trim();
+    const status = input?.parentElement?.querySelector('.ranking-save-status');
+    if (!id) return;
+    if (classificacao === String(input.dataset.savedValue || '')) {
+        if (status) {
+            status.textContent = 'Sem alterações.';
+            status.className = 'ranking-save-status';
+        }
+        return;
+    }
+
+    input.disabled = true;
+    if (status) {
+        status.textContent = 'Salvando...';
+        status.className = 'ranking-save-status';
+    }
+    try {
+        const response = await fetch('/api/save-assessment-classification', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ inscriptionId: id, evaluatorEmail: viewerEmail, classification: classificacao })
+        });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível salvar a classificação.');
+
+        const avaliacoes = Array.isArray(scoresCache[id]) ? [...scoresCache[id]] : [];
+        const indice = avaliacoes.findIndex(
+            avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
+        );
+        if (indice >= 0) {
+            avaliacoes[indice] = { ...avaliacoes[indice], classification: classificacao };
+            scoresCache[id] = avaliacoes;
+        }
+        input.dataset.savedValue = classificacao;
+        input.value = classificacao;
+        if (status) {
+            status.textContent = 'Salvo';
+            status.className = 'ranking-save-status saved';
+        }
+    } catch (error) {
+        if (status) {
+            status.textContent = error.message || 'Erro ao salvar. Tente novamente.';
+            status.className = 'ranking-save-status error';
+        }
+    } finally {
+        input.disabled = false;
+    }
+}
+
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 let avaliadorDialogResolver = null;
@@ -1272,6 +1263,7 @@ function showAvaliadorDialog(message, options = {}) {
         const messageEl = document.getElementById('modalAvaliadorDialogMensagem');
         const confirmButton = document.getElementById('btnConfirmarDialogAvaliador');
         const cancelButton = document.getElementById('btnCancelarDialogAvaliador');
+        const footer = document.getElementById('modalAvaliadorFooter');
         avaliadorDialogResolver = resolve;
         box.classList.toggle('modal-confirm-danger', Boolean(options.danger));
         box.classList.toggle('modal-confirm-success', Boolean(options.success));
@@ -1284,6 +1276,7 @@ function showAvaliadorDialog(message, options = {}) {
         messageEl.textContent = message;
         confirmButton.innerHTML = options.confirmLabel || 'Confirmar';
         cancelButton.style.display = options.hideCancel ? 'none' : '';
+        footer.classList.toggle('modal-footer-single', Boolean(options.hideCancel));
         openModal('modalAvaliadorDialog');
         setTimeout(() => (options.hideCancel ? confirmButton : cancelButton).focus(), 0);
     });
