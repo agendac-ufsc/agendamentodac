@@ -649,6 +649,15 @@ function centralizarEtapaAvaliacao(criterionKey) {
     });
 }
 
+function centralizarOpcoesRubrica(criterionKey) {
+    const sufixo = obterSufixoRubrica(criterionKey);
+    requestAnimationFrame(() => {
+        const opcoes = document.getElementById(`rubricOptions-${sufixo}`);
+        if (!opcoes || opcoes.hidden) return;
+        opcoes.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+    });
+}
+
 function obterPropostasEmOrdem() {
     return [...allUnificados].sort((a, b) => {
         const idA = Number(a?.primeiraEtapa?.id);
@@ -1438,6 +1447,7 @@ function toggleRubricaOpcoes(criterionKey = RUBRICA_NIVEL_ID) {
     }
     estado.opcoesAbertas = abrindo;
     renderAvaliacaoList();
+    if (abrindo) centralizarOpcoesRubrica(criterionKey);
 }
 
 function iniciarEdicaoRubrica(criterionKey = RUBRICA_NIVEL_ID) {
@@ -1446,6 +1456,7 @@ function iniciarEdicaoRubrica(criterionKey = RUBRICA_NIVEL_ID) {
     estado.editando = true;
     estado.opcoesAbertas = true;
     renderAvaliacaoList();
+    centralizarOpcoesRubrica(criterionKey);
 }
 
 function setRubricaNivel(criterionKey, criterioId, valor, nome) {
