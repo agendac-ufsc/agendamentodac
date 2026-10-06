@@ -6,6 +6,44 @@ const vm = require('node:vm');
 
 const html = fs.readFileSync(path.join(__dirname, 'avaliador.html'), 'utf8');
 const renderFunction = html.match(/function renderClassificacaoList\(\)\s*\{[\s\S]*?\n\}/);
+const sequenceFunctionNames = [
+    'criterioBloqueado',
+    'obterPrimeiroCriterioPendente',
+    'renderEtapaAvaliacao',
+    'centralizarEtapaAvaliacao'
+];
+
+function extractFunction(name) {
+    const functionSource = html.match(new RegExp(`function ${name}\\([\\s\\S]*?\\n\\}`));
+    assert.ok(functionSource, `${name}() deve existir no painel`);
+    return functionSource[0];
+}
+
+function createSequentialEvaluationFlow(scoresSalvos = {}) {
+    const keys = [
+        '__nivel_avaliacao',
+        '__nivel_avaliacao_812',
+        '__nivel_avaliacao_813',
+        '__nivel_avaliacao_814',
+        '__nivel_avaliacao_815',
+        '__nivel_avaliacao_818'
+    ];
+    const nodes = {};
+    const context = {
+        CHAVES_RUBRICA_NIVEIS: keys,
+        ehRubricaDeNiveis: () => true,
+        criterioTemNotaValida: (scores, key) => [0, 1, 2].includes(Number(scores?.[key])),
+        obterSufixoRubrica: key => key === keys[0] ? '811' : key.replace('__nivel_avaliacao_', ''),
+        obterScoresSalvosAvaliadorAtual: () => scoresSalvos,
+        requestAnimationFrame: callback => callback(),
+        document: {
+            getElementById: id => nodes[id] || null
+        }
+    };
+    const source = sequenceFunctionNames.map(extractFunction).join('\n');
+    const functions = vm.runInNewContext(`${source}\n({ criterioBloqueado, obterPrimeiroCriterioPendente, renderEtapaAvaliacao, centralizarEtapaAvaliacao })`, context);
+    return { functions, keys, nodes };
+}
 
 function renderClassificacoes({ viewerEmail, scoresCache, myAssessmentsCache = [], proposals }) {
     const nodes = {
@@ -105,4 +143,48 @@ test('mostra avaliações dos outros mesmo quando o avaliador atual ainda não a
     assert.match(nodes.classificacaoRows.innerHTML, /class="proposal-score">\s*12/);
     assert.match(nodes.classificacaoRows.innerHTML, /disponível após sua avaliação/);
     assert.doesNotMatch(nodes.classificacaoRows.innerHTML, /ranking-classification-input/);
+});
+
+test('libera critérios de avaliação em sequência somente após salvar o anterior', () => {
+    const { functions, keys } = createSequentialEvaluationFlow();
+
+    assert.equal(functions.criterioBloqueado(keys[0], {}), false);
+    assert.equal(functions.criterioBloqueado(keys[1], {}), true);
+    assert.equal(functions.obterPrimeiroCriterioPendente({}), keys[0]);
+
+    const firstScoreSaved = { [keys[0]]: 0 };
+    assert.equal(functions.criterioBloqueado(keys[1], firstScoreSaved), false);
+    assert.equal(functions.criterioBloqueado(keys[2], firstScoreSaved), true);
+    assert.equal(functions.obterPrimeiroCriterioPendente(firstScoreSaved), keys[1]);
+
+    const secondScoreSaved = { ...firstScoreSaved, [keys[1]]: 1 };
+    assert.equal(functions.criterioBloqueado(keys[2], secondScoreSaved), false);
+    assert.equal(functions.criterioBloqueado(keys[3], secondScoreSaved), true);
+    assert.equal(functions.obterPrimeiroCriterioPendente(secondScoreSaved), keys[2]);
+});
+
+test('mostra visual bloqueado e impede interação até o critério anterior ser salvo', () => {
+    const { functions, keys } = createSequentialEvaluationFlow();
+    const htmlBloqueado = functions.renderEtapaAvaliacao({}, keys[2], '<button>Avaliar</button>');
+    const htmlLiberado = functions.renderEtapaAvaliacao({ [keys[0]]: 2, [keys[1]]: 1 }, keys[2], '<button>Avaliar</button>');
+
+    assert.match(htmlBloqueado, /class="drawer-criterion-step is-locked"/);
+    assert.match(htmlBloqueado, /aria-disabled="true" inert/);
+    assert.match(htmlBloqueado, /Salve o critério anterior para liberar este item/);
+    assert.match(htmlLiberado, /class="drawer-criterion-step"/);
+    assert.match(htmlLiberado, /aria-disabled="false"/);
+    assert.doesNotMatch(htmlLiberado, /\sinert/);
+});
+
+test('centraliza o próximo critério liberado após salvá-lo', () => {
+    const scoresSalvos = { '__nivel_avaliacao': 2 };
+    const { functions, keys, nodes } = createSequentialEvaluationFlow(scoresSalvos);
+    const etapa = { scrollIntoView: options => { etapa.scrollOptions = options; } };
+    nodes['criterion-step-812'] = etapa;
+
+    functions.centralizarEtapaAvaliacao(keys[1]);
+
+    assert.equal(etapa.scrollOptions.behavior, 'smooth');
+    assert.equal(etapa.scrollOptions.block, 'center');
+    assert.equal(etapa.scrollOptions.inline, 'nearest');
 });
