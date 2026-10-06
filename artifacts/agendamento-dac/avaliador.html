@@ -110,6 +110,11 @@
         .ranking-table .proposal-number,.ranking-table .proposal-score{text-align:center;font-weight:800;white-space:nowrap}
         .ranking-score-meta{display:block;margin-top:3px;color:#64748b;font-size:10px;font-weight:600;white-space:normal}
         .ranking-classification-cell{min-width:210px}
+        .ranking-delete-cell{text-align:center;width:62px}
+        .ranking-delete-heading[hidden]{display:none}
+        .ranking-delete-button{width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #fecaca;border-radius:7px;background:#fff;color:#dc2626;cursor:pointer;transition:background .15s,border-color .15s}
+        .ranking-delete-button:hover,.ranking-delete-button:focus-visible{background:#fef2f2;border-color:#f87171;outline:none}
+        .ranking-delete-button:disabled{opacity:.55;cursor:wait}
         .ranking-classification-input{width:100%;min-width:180px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:6px;font:inherit;background:#fff}
         .ranking-classification-input:focus{outline:3px solid rgba(37,99,235,.14);border-color:#2563eb}
         .ranking-save-status{display:block;min-height:15px;margin-top:4px;color:#64748b;font-size:10px}
@@ -296,6 +301,7 @@
                             <th>Nome da Proposta</th>
                             <th>Pontuação final (soma)</th>
                             <th>Classificação</th>
+                            <th class="ranking-delete-heading" id="rankingDeleteHeading" hidden>Ação</th>
                         </tr>
                     </thead>
                     <tbody id="classificacaoRows">
@@ -334,6 +340,7 @@ let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let myAssessmentsCache = null; // fallback persistente das avaliações do avaliador atual
 let openAvaliacaoIndex = null;
 let avaliadorTabAtiva = 'avaliacoes';
+let viewerCanDeleteInscricoes = false;
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
 const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
 const RUBRICA_NIVEL_ID_813 = '__nivel_avaliacao_813';
@@ -362,17 +369,39 @@ const DOCUMENTOS_ITEM_813 = [
 ];
 const rubricaEstados = {};
 
-// Restaurar sessão
+function limparSessaoAvaliador() {
+    localStorage.removeItem('dac_role');
+    localStorage.removeItem('dac_viewer_email');
+    localStorage.removeItem('dac_viewer_nome');
+    localStorage.removeItem('dac_ts');
+    viewerEmail = '';
+    viewerNome = '';
+    viewerCanDeleteInscricoes = false;
+}
+
+// Restaurar a sessão consultando o servidor; o navegador não decide a permissão.
 (function restore(){
     const role = localStorage.getItem('dac_role');
     const email = localStorage.getItem('dac_viewer_email');
     const ts = parseInt(localStorage.getItem('dac_ts')||'0', 10);
     const SESSION_MS = 8 * 3600 * 1000;
-    if (role === 'viewer' && email && (Date.now() - ts) < SESSION_MS) {
-        viewerEmail = email;
-        viewerNome = localStorage.getItem('dac_viewer_nome') || email;
-        initApp();
+    if (role !== 'viewer' || !email || (Date.now() - ts) >= SESSION_MS) {
+        if (role === 'viewer') limparSessaoAvaliador();
+        return;
     }
+    fetch('/api/auth/viewer/session', { cache: 'no-store' })
+        .then(async response => {
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) throw new Error(data.error || 'Sessão inválida.');
+            viewerEmail = data.email;
+            viewerNome = data.nome || data.email;
+            viewerCanDeleteInscricoes = data.podeExcluirInscricoes === true;
+            localStorage.setItem('dac_viewer_email', data.email);
+            localStorage.setItem('dac_viewer_nome', viewerNome);
+            localStorage.setItem('dac_ts', Date.now());
+            initApp();
+        })
+        .catch(() => limparSessaoAvaliador());
 })();
 
 function togglePasswordVisibility(inputId, button) {
@@ -397,6 +426,7 @@ async function doLogin() {
         if (d.success) {
             viewerEmail = d.email;
             viewerNome = d.nome || d.email;
+            viewerCanDeleteInscricoes = d.podeExcluirInscricoes === true;
             localStorage.setItem('dac_role', 'viewer');
             localStorage.setItem('dac_viewer_email', d.email);
             localStorage.setItem('dac_viewer_nome', viewerNome);
@@ -412,11 +442,11 @@ async function doLogin() {
     }
 }
 
-function logout() {
-    localStorage.removeItem('dac_role');
-    localStorage.removeItem('dac_viewer_email');
-    localStorage.removeItem('dac_viewer_nome');
-    localStorage.removeItem('dac_ts');
+async function logout() {
+    try {
+        await fetch('/api/auth/viewer/logout', { method: 'POST' });
+    } catch (e) {}
+    limparSessaoAvaliador();
     location.reload();
 }
 
@@ -680,6 +710,8 @@ function obterNumeroProposta(item, propostasOrdenadas) {
 function renderClassificacaoList() {
     const tbody = document.getElementById('classificacaoRows');
     if (!tbody) return;
+    const deleteHeading = document.getElementById('rankingDeleteHeading');
+    if (deleteHeading) deleteHeading.hidden = !viewerCanDeleteInscricoes;
     const propostasOrdenadas = obterPropostasEmOrdem();
     const propostasPorId = new Map();
     const avaliacoesPorInscricao = new Map();
@@ -740,7 +772,7 @@ function renderClassificacaoList() {
     document.getElementById('classificacaoTabCount').textContent = String(avaliadas.length);
     document.getElementById('classificacaoTotal').textContent = String(avaliadas.length);
     if (!avaliadas.length) {
-        tbody.innerHTML = '<tr><td class="ranking-empty" colspan="4">As avaliações finalizadas aparecerão aqui.</td></tr>';
+        tbody.innerHTML = `<tr><td class="ranking-empty" colspan="${viewerCanDeleteInscricoes ? 5 : 4}">As avaliações finalizadas aparecerão aqui.</td></tr>`;
         return;
     }
 
@@ -753,6 +785,7 @@ function renderClassificacaoList() {
             ? `${quantidadeAvaliacoes} finalizadas (mínimo ${totalNecessario})`
             : `${quantidadeAvaliacoes}/${totalNecessario} avaliações finalizadas`;
         const classificacao = avaliacaoDoUsuario?.classification || '';
+        const nomeProposta = p.evento || p.nome || `Inscrição ${id}`;
         const campoClassificacao = avaliacaoDoUsuario
             ? `<input class="ranking-classification-input" type="text" maxlength="100"
                     data-inscription-id="${escapeHtml(id)}"
@@ -762,18 +795,40 @@ function renderClassificacaoList() {
                     aria-label="Classificação da proposta ${escapeHtml(numeroProposta)}">
                 <span class="ranking-save-status" aria-live="polite">Enter salva · Esc cancela</span>`
             : '<span class="ranking-save-status" title="A classificação pode ser editada após sua própria avaliação.">— · disponível após sua avaliação</span>';
+        const acaoExcluir = viewerCanDeleteInscricoes
+            ? `<td class="ranking-delete-cell">
+                    <button type="button" class="ranking-delete-button"
+                        data-inscription-id="${escapeAttr(id)}"
+                        data-proposal-name="${escapeAttr(nomeProposta)}"
+                        aria-label="Excluir a inscrição ${escapeAttr(nomeProposta)}"
+                        title="Excluir inscrição">
+                        <i class="fas fa-trash" aria-hidden="true"></i>
+                    </button>
+                </td>`
+            : '';
         return `
         <tr>
             <td class="proposal-number">${escapeHtml(numeroProposta)}</td>
-            <td>${escapeHtml(p.evento || p.nome || `Inscrição ${id}`)}</td>
+            <td>${escapeHtml(nomeProposta)}</td>
             <td class="proposal-score">
                 ${escapeHtml(formatarPontuacao(pontuacao))}
                 <small class="ranking-score-meta">${escapeHtml(statusAvaliacoes)}</small>
             </td>
             <td class="ranking-classification-cell">${campoClassificacao}</td>
+            ${acaoExcluir}
         </tr>`;
     }).join('');
 
+    tbody.querySelectorAll('.ranking-delete-button').forEach(button => {
+        button.addEventListener('click', event => {
+            event.stopPropagation();
+            excluirInscricaoAvaliacao(
+                button.dataset.inscriptionId,
+                button.dataset.proposalName,
+                button
+            );
+        });
+    });
     tbody.querySelectorAll('.ranking-classification-input').forEach(input => {
         input.addEventListener('keydown', event => {
             if (event.key === 'Enter') {
@@ -785,6 +840,71 @@ function renderClassificacaoList() {
             }
         });
     });
+}
+
+async function excluirInscricaoAvaliacao(id, nomeProposta, button) {
+    if (!viewerCanDeleteInscricoes || !id) return;
+    const confirmado = await showAvaliadorDialog(
+        `Excluir "${nomeProposta || 'esta inscrição'}"? A inscrição, as avaliações associadas e os eventos correspondentes do calendário serão removidos. Esta ação não pode ser desfeita.`,
+        {
+            title: 'Confirmar exclusão',
+            danger: true,
+            confirmLabel: '<i class="fas fa-trash"></i> Excluir inscrição'
+        }
+    );
+    if (!confirmado) return;
+
+    const labelOriginal = button?.innerHTML || '<i class="fas fa-trash"></i>';
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin" aria-hidden="true"></i>';
+    }
+
+    try {
+        const response = await fetch(`/api/admin/inscricoes/${encodeURIComponent(id)}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+            limparSessaoAvaliador();
+            throw new Error('Sua sessão expirou. Entre novamente no painel para continuar.');
+        }
+        if (response.status === 403) {
+            viewerCanDeleteInscricoes = false;
+            renderClassificacaoList();
+            throw new Error(data.error || 'Sua permissão para excluir inscrições foi revogada.');
+        }
+        if (!response.ok || !data.success) {
+            throw new Error(data.error || `Falha ao excluir a inscrição (HTTP ${response.status}).`);
+        }
+
+        await loadData();
+        const mensagem = data.falhaAoRemoverAvaliacoes
+            ? 'A inscrição foi removida, mas algumas avaliações associadas não puderam ser limpas.'
+            : data.eventosFalhos
+                ? 'A inscrição e as avaliações foram removidas, mas alguns eventos do calendário não puderam ser excluídos.'
+                : 'A inscrição e as avaliações associadas foram excluídas.';
+        await showAvaliadorDialog(mensagem, {
+            title: data.falhaAoRemoverAvaliacoes || data.eventosFalhos ? 'Exclusão parcial' : 'Exclusão concluída',
+            danger: Boolean(data.falhaAoRemoverAvaliacoes || data.eventosFalhos),
+            success: !data.falhaAoRemoverAvaliacoes && !data.eventosFalhos,
+            confirmLabel: 'OK',
+            hideCancel: true
+        });
+    } catch (error) {
+        await showAvaliadorDialog(error.message || 'Não foi possível excluir a inscrição.', {
+            title: 'Não foi possível excluir',
+            danger: true,
+            confirmLabel: 'OK',
+            hideCancel: true
+        });
+        if (error.message.includes('Sua sessão expirou')) location.reload();
+    } finally {
+        if (button?.isConnected) {
+            button.disabled = false;
+            button.innerHTML = labelOriginal;
+        }
+    }
 }
 
 function calcularPontuacaoObtida(scores = {}) {
@@ -862,7 +982,7 @@ function renderValueAsHtml(v) {
 }
 
 function escapeAttr(s) {
-    return String(s||'').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    return escapeHtml(s).replace(/`/g, '&#96;');
 }
 
 function formatarValorDrawer(valor) {

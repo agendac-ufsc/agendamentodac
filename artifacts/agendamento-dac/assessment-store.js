@@ -121,6 +121,32 @@ function createAssessmentStore(redis) {
         return normalizedRecord;
     }
 
+    async function deleteByInscription(inscriptionId) {
+        const id = String(inscriptionId || '').trim();
+        if (!id) return 0;
+
+        // Migrate legacy records first so both storage formats are removed and
+        // the evaluator indexes can be updated consistently.
+        const records = await getByInscription(id);
+        const indexedEmails = await redis.smembers(inscriptionIndexKey(id));
+        const emails = [...new Set([
+            ...records.map(record => normalizeEvaluatorEmail(record?.evaluatorEmail)),
+            ...(Array.isArray(indexedEmails) ? indexedEmails.map(normalizeEvaluatorEmail) : [])
+        ].filter(Boolean))];
+
+        const transaction = redis.multi();
+        for (const email of emails) {
+            transaction
+                .del(recordKey(id, email))
+                .srem(evaluatorIndexKey(email), id);
+        }
+        transaction
+            .del(inscriptionIndexKey(id))
+            .del(legacyKey(id));
+        await transaction.exec();
+        return records.length;
+    }
+
     async function migrateLegacyAssessmentsForEvaluator(email) {
         const evaluatorEmail = normalizeEvaluatorEmail(email);
         if (parseStoredValue(await redis.get(migrationKey(evaluatorEmail)))) return;
@@ -187,7 +213,7 @@ function createAssessmentStore(redis) {
         return records.filter(Boolean);
     }
 
-    return { getByInscription, getByEvaluator, save };
+    return { getByInscription, getByEvaluator, save, deleteByInscription };
 }
 
 module.exports = { createAssessmentStore };
