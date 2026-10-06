@@ -10,7 +10,8 @@ const sequenceFunctionNames = [
     'criterioBloqueado',
     'obterPrimeiroCriterioPendente',
     'renderEtapaAvaliacao',
-    'centralizarEtapaAvaliacao'
+    'centralizarEtapaAvaliacao',
+    'centralizarOpcoesRubrica'
 ];
 
 function extractFunction(name) {
@@ -41,7 +42,7 @@ function createSequentialEvaluationFlow(scoresSalvos = {}) {
         }
     };
     const source = sequenceFunctionNames.map(extractFunction).join('\n');
-    const functions = vm.runInNewContext(`${source}\n({ criterioBloqueado, obterPrimeiroCriterioPendente, renderEtapaAvaliacao, centralizarEtapaAvaliacao })`, context);
+    const functions = vm.runInNewContext(`${source}\n({ criterioBloqueado, obterPrimeiroCriterioPendente, renderEtapaAvaliacao, centralizarEtapaAvaliacao, centralizarOpcoesRubrica })`, context);
     return { functions, keys, nodes };
 }
 
@@ -187,4 +188,21 @@ test('centraliza o próximo critério liberado após salvá-lo', () => {
     assert.equal(etapa.scrollOptions.behavior, 'smooth');
     assert.equal(etapa.scrollOptions.block, 'center');
     assert.equal(etapa.scrollOptions.inline, 'nearest');
+});
+
+test('centraliza as três opções no viewport quando a gaveta é aberta', () => {
+    const { functions, keys, nodes } = createSequentialEvaluationFlow();
+    const opcoes = { hidden: false, scrollIntoView: options => { opcoes.scrollOptions = options; } };
+    nodes['rubricOptions-812'] = opcoes;
+
+    functions.centralizarOpcoesRubrica(keys[1]);
+
+    assert.equal(opcoes.scrollOptions.behavior, 'smooth');
+    assert.equal(opcoes.scrollOptions.block, 'center');
+    assert.equal(opcoes.scrollOptions.inline, 'nearest');
+
+    const toggleFunction = extractFunction('toggleRubricaOpcoes');
+    const editFunction = extractFunction('iniciarEdicaoRubrica');
+    assert.match(toggleFunction, /if \(abrindo\) centralizarOpcoesRubrica\(criterionKey\)/);
+    assert.match(editFunction, /centralizarOpcoesRubrica\(criterionKey\)/);
 });
