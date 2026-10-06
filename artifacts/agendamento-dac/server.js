@@ -21,6 +21,14 @@ const { put: putBlob, get: getBlob, del: deleteBlob } = require('@vercel/blob');
 const { randomUUID, randomInt } = require('crypto');
 const { Readable } = require('stream');
 const { createAssessmentStore } = require('./assessment-store');
+const {
+    EVALUATOR_SESSION_TTL_SECONDS,
+    authenticateEvaluatorSession,
+    canDeleteInscricoes,
+    createEvaluatorSession,
+    normalizeEvaluatorEmail,
+    revokeEvaluatorSession
+} = require('./evaluator-auth');
 
 const app = express();
 app.use(cors());
@@ -110,6 +118,61 @@ try {
 }
 
 const assessmentStore = redis ? createAssessmentStore(redis) : null;
+const EVALUATOR_SESSION_COOKIE = 'dac_evaluator_session';
+
+function getEvaluatorCookieOptions(req) {
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+    return {
+        httpOnly: true,
+        secure: req.secure || forwardedProto === 'https',
+        sameSite: 'strict',
+        path: '/api'
+    };
+}
+
+function getEvaluatorSessionCookie(req) {
+    const cookies = String(req.headers.cookie || '').split(';');
+    for (const cookie of cookies) {
+        const separator = cookie.indexOf('=');
+        if (separator < 0 || cookie.slice(0, separator).trim() !== EVALUATOR_SESSION_COOKIE) continue;
+        try {
+            return decodeURIComponent(cookie.slice(separator + 1).trim());
+        } catch {
+            return '';
+        }
+    }
+    return '';
+}
+
+function isSameOriginRequest(req) {
+    const origin = String(req.headers.origin || '').trim();
+    if (!origin) return true;
+    try {
+        const originHost = new URL(origin).host.toLowerCase();
+        const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+            .split(',')[0]
+            .trim()
+            .toLowerCase();
+        return Boolean(requestHost) && originHost === requestHost;
+    } catch {
+        return false;
+    }
+}
+
+async function findEvaluatorSession(req) {
+    if (!redis) return { status: 'unavailable', evaluator: null };
+    const token = getEvaluatorSessionCookie(req);
+    if (!token) return { status: 'unauthenticated', evaluator: null };
+
+    const evaluators = parseRedisValue(await redis.get('avaliadores')) || [];
+    const session = await authenticateEvaluatorSession(redis, token, evaluators);
+    return session.authenticated
+        ? { status: 'authenticated', evaluator: session.evaluator, token }
+        : { status: 'unauthenticated', evaluator: null };
+}
 
 const parseRedisValue = (data) => {
     if (!data) return null;
@@ -316,7 +379,17 @@ const deleteAgendamentoById = async (id) => {
         const formsId = `forms_${emailNorm || 'noemail'}_${nomeEvento}`;
         await addToBlacklist(formsId).catch(() => {});
         await addToBlacklist(agendamentoAExcluir.id).catch(() => {});
-        return { success: true, eventosFalhos };
+        let avaliacoesRemovidas = 0;
+        let falhaAoRemoverAvaliacoes = false;
+        if (assessmentStore) {
+            try {
+                avaliacoesRemovidas = await assessmentStore.deleteByInscription(id);
+            } catch (error) {
+                falhaAoRemoverAvaliacoes = true;
+                console.error(`⚠️ [Avaliações] Não foi possível limpar a inscrição ${id}:`, error.message);
+            }
+        }
+        return { success: true, eventosFalhos, avaliacoesRemovidas, falhaAoRemoverAvaliacoes };
     } catch (error) {
         console.error('❌ [Redis] Erro ao deletar agendamento:', error.message);
     }
@@ -3840,7 +3913,19 @@ async function excluirAgendamentoPorId(req, res) {
         const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
         const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
         if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
-            return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
+            const session = await findEvaluatorSession(req);
+            if (session.status === 'unavailable') {
+                return res.status(503).json({ success: false, error: 'Armazenamento de sessões indisponível.' });
+            }
+            if (session.status !== 'authenticated') {
+                return res.status(401).json({ success: false, error: 'Sessão de avaliador inválida ou expirada.' });
+            }
+            if (!isSameOriginRequest(req)) {
+                return res.status(403).json({ success: false, error: 'Origem da solicitação não autorizada.' });
+            }
+            if (!canDeleteInscricoes(session.evaluator)) {
+                return res.status(403).json({ success: false, error: 'Este avaliador não tem permissão para excluir inscrições.' });
+            }
         }
 
         const agendamentos = await getAgendamentos();
@@ -3854,16 +3939,34 @@ async function excluirAgendamentoPorId(req, res) {
             res.json({
                 success: resultado !== false,
                 eventosFalhos: resultado?.eventosFalhos || 0,
+                falhaAoRemoverAvaliacoes: Boolean(resultado?.falhaAoRemoverAvaliacoes),
                 message: resultado?.eventosFalhos
                     ? 'Inscrição removida, mas alguns eventos não puderam ser excluídos do Google Calendar.'
-                    : undefined
+                    : resultado?.falhaAoRemoverAvaliacoes
+                        ? 'Inscrição removida, mas as avaliações associadas não puderam ser limpas.'
+                        : undefined
             });
         } else {
             // Registro não encontrado no Redis (Forms-only ou legado):
             // adicionar à blacklist para que não reapareça via Sheets
             console.log(`⚠️ [Exclusão] Registro não encontrado no Redis — adicionando à blacklist: ${id}`);
             await addToBlacklist(id);
-            res.json({ success: true, message: 'Registro ocultado da visualização' });
+            let falhaAoRemoverAvaliacoes = false;
+            if (assessmentStore) {
+                try {
+                    await assessmentStore.deleteByInscription(id);
+                } catch (error) {
+                    falhaAoRemoverAvaliacoes = true;
+                    console.error(`⚠️ [Avaliações] Não foi possível limpar a inscrição ${id}:`, error.message);
+                }
+            }
+            res.json({
+                success: true,
+                falhaAoRemoverAvaliacoes,
+                message: falhaAoRemoverAvaliacoes
+                    ? 'Registro ocultado, mas as avaliações associadas não puderam ser limpas.'
+                    : 'Registro ocultado da visualização'
+            });
         }
     } catch (error) {
         console.error('❌ Erro ao deletar agendamento:', error.message);
@@ -4125,18 +4228,63 @@ app.post('/api/auth/viewer', async (req, res) => {
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
         const avaliadores = parseRedisValue(raw) || [];
-        const emailNormalizado = String(email).trim().toLowerCase();
+        const emailNormalizado = normalizeEvaluatorEmail(email);
         const av = avaliadores.find(a => String(a.email || '').trim().toLowerCase() === emailNormalizado);
         if (!av) return res.status(403).json({ success: false, message: 'E-mail não encontrado na lista de avaliadores.' });
         const senhaCorreta = String(av.senha || '');
         if (!senhaCorreta) return res.status(403).json({ success: false, message: 'Este avaliador ainda não possui senha individual. Solicite ao administrador que remova e cadastre o e-mail novamente.' });
         if (String(password) === senhaCorreta) {
-            res.json({ success: true, email: av.email, nome: av.nome || av.email });
+            const sessionToken = await createEvaluatorSession(redis, emailNormalizado, av.id);
+            res.cookie(EVALUATOR_SESSION_COOKIE, sessionToken, {
+                ...getEvaluatorCookieOptions(req),
+                maxAge: EVALUATOR_SESSION_TTL_SECONDS * 1000
+            });
+            res.json({
+                success: true,
+                email: av.email,
+                nome: av.nome || av.email,
+                podeExcluirInscricoes: canDeleteInscricoes(av)
+            });
         } else {
             res.status(403).json({ success: false, message: 'Senha incorreta.' });
         }
     } catch (e) {
         res.status(500).json({ error: 'Erro interno.' });
+    }
+});
+
+app.get('/api/auth/viewer/session', async (req, res) => {
+    try {
+        const session = await findEvaluatorSession(req);
+        if (session.status === 'unavailable') {
+            return res.status(503).json({ error: 'Armazenamento de sessões indisponível.' });
+        }
+        if (session.status !== 'authenticated') {
+            res.clearCookie(EVALUATOR_SESSION_COOKIE, getEvaluatorCookieOptions(req));
+            return res.status(401).json({ error: 'Sessão de avaliador inválida ou expirada.' });
+        }
+        const evaluator = session.evaluator;
+        res.json({
+            success: true,
+            email: evaluator.email,
+            nome: evaluator.nome || evaluator.email,
+            podeExcluirInscricoes: canDeleteInscricoes(evaluator)
+        });
+    } catch (error) {
+        console.error('❌ Erro ao validar sessão do avaliador:', error.message);
+        res.status(500).json({ error: 'Não foi possível validar a sessão do avaliador.' });
+    }
+});
+
+app.post('/api/auth/viewer/logout', async (req, res) => {
+    try {
+        await revokeEvaluatorSession(redis, getEvaluatorSessionCookie(req));
+        res.clearCookie(EVALUATOR_SESSION_COOKIE, getEvaluatorCookieOptions(req));
+        res.json({ success: true });
+    } catch (error) {
+        console.error('❌ Erro ao encerrar sessão do avaliador:', error.message);
+        res.clearCookie(EVALUATOR_SESSION_COOKIE, getEvaluatorCookieOptions(req));
+        res.status(500).json({ success: false, error: 'Não foi possível encerrar a sessão do avaliador.' });
     }
 });
 // ============================================================
@@ -4147,7 +4295,12 @@ app.get('/api/evaluators', async (req, res) => {
     try {
         const raw = redis ? await redis.get('avaliadores') : null;
         const lista = parseRedisValue(raw) || [];
-        res.json(lista.map(({ id, email, nome }) => ({ id, email, nome })));
+        res.json(lista.map(({ id, email, nome, podeExcluirInscricoes }) => ({
+            id,
+            email,
+            nome,
+            podeExcluirInscricoes: podeExcluirInscricoes === true
+        })));
     } catch (e) {
         res.status(500).json({ error: 'Erro ao buscar avaliadores.' });
     }
@@ -4167,7 +4320,13 @@ app.post('/api/evaluators', async (req, res) => {
         }
         const senha = gerarSenhaAvaliador();
         const nomeFinal = nome || email;
-        const novo = { id: `av_${Date.now()}_${randomInt(100000, 1000000)}`, email, nome: nomeFinal, senha };
+        const novo = {
+            id: `av_${Date.now()}_${randomInt(100000, 1000000)}`,
+            email,
+            nome: nomeFinal,
+            senha,
+            podeExcluirInscricoes: false
+        };
         const listaAtualizada = [...lista, novo];
         await redis.set('avaliadores', listaAtualizada);
         const origem = obterOrigemPublicaTermo(req);
@@ -4199,6 +4358,50 @@ app.post('/api/evaluators', async (req, res) => {
     } catch (e) {
         console.error('❌ Erro ao cadastrar avaliador:', e.message);
         res.status(500).json({ error: 'Erro ao cadastrar avaliador.' });
+    }
+});
+
+app.patch('/api/evaluators', async (req, res) => {
+    const id = String(req.body?.id || '').trim();
+    const senhaFornecida = String(req.body?.password || '');
+    const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+    if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
+        return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
+    }
+    if (!id) return res.status(400).json({ success: false, error: 'Identificador do avaliador obrigatório.' });
+    if (typeof req.body?.podeExcluirInscricoes !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'Informe se o avaliador pode excluir inscrições.' });
+    }
+    if (!redis) return res.status(503).json({ success: false, error: 'Armazenamento de avaliadores indisponível.' });
+
+    try {
+        const lista = parseRedisValue(await redis.get('avaliadores')) || [];
+        const indice = lista.findIndex(avaliador => String(avaliador?.id || '') === id);
+        if (indice < 0) {
+            return res.status(404).json({ success: false, error: 'Avaliador não encontrado.' });
+        }
+
+        const avaliadorAtualizado = {
+            ...lista[indice],
+            podeExcluirInscricoes: req.body.podeExcluirInscricoes
+        };
+        lista[indice] = avaliadorAtualizado;
+        await redis.set('avaliadores', lista);
+        console.info(
+            `[Avaliações] Permissão de exclusão ${avaliadorAtualizado.podeExcluirInscricoes ? 'ativada' : 'revogada'} para ${avaliadorAtualizado.email}.`
+        );
+        res.json({
+            success: true,
+            evaluator: {
+                id: avaliadorAtualizado.id,
+                email: avaliadorAtualizado.email,
+                nome: avaliadorAtualizado.nome,
+                podeExcluirInscricoes: avaliadorAtualizado.podeExcluirInscricoes
+            }
+        });
+    } catch (error) {
+        console.error('❌ Erro ao atualizar permissão do avaliador:', error.message);
+        res.status(500).json({ success: false, error: 'Não foi possível atualizar a permissão do avaliador.' });
     }
 });
 

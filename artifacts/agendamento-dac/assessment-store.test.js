@@ -32,6 +32,11 @@ class MemoryRedis {
         return [...(this.sets.get(key) || [])];
     }
 
+    async del(key) {
+        const existed = this.values.delete(key) || this.sets.delete(key);
+        return existed ? 1 : 0;
+    }
+
     multi() {
         const operations = [];
         const transaction = {
@@ -46,6 +51,26 @@ class MemoryRedis {
                     members.forEach(member => set.add(String(member)));
                     this.sets.set(key, set);
                     return set.size - before;
+                });
+                return transaction;
+            },
+            srem: (key, ...members) => {
+                operations.push(async () => {
+                    const set = this.sets.get(key) || new Set();
+                    const before = set.size;
+                    members.forEach(member => set.delete(String(member)));
+                    this.sets.set(key, set);
+                    return before - set.size;
+                });
+                return transaction;
+            },
+            del: (...keys) => {
+                operations.push(async () => {
+                    let deleted = 0;
+                    keys.forEach(key => {
+                        if (this.values.delete(key) || this.sets.delete(key)) deleted += 1;
+                    });
+                    return deleted;
                 });
                 return transaction;
             },
@@ -103,4 +128,36 @@ test('migra avaliações antigas do array por inscrição para o índice persist
     const persisted = await afterRestart.getByEvaluator('LEGADO@EXEMPLO.ORG');
     assert.equal(persisted.length, 1);
     assert.equal(persisted[0].finalized, true);
+});
+
+test('exclui todas as avaliações de uma inscrição sem afetar as demais do avaliador', async () => {
+    const redis = new MemoryRedis();
+    const store = createAssessmentStore(redis);
+
+    await store.save({
+        inscriptionId: 'remover-42',
+        evaluatorEmail: 'primeiro@exemplo.org',
+        scoresJson: { A: 2 },
+        finalized: true
+    });
+    await store.save({
+        inscriptionId: 'remover-42',
+        evaluatorEmail: 'segundo@exemplo.org',
+        scoresJson: { A: 1 },
+        finalized: true
+    });
+    await store.save({
+        inscriptionId: 'manter-99',
+        evaluatorEmail: 'primeiro@exemplo.org',
+        scoresJson: { A: 0 },
+        finalized: true
+    });
+
+    assert.equal(await store.deleteByInscription('remover-42'), 2);
+    assert.deepEqual(await store.getByInscription('remover-42'), []);
+    assert.deepEqual(
+        (await store.getByEvaluator('primeiro@exemplo.org')).map(record => record.inscriptionId),
+        ['manter-99']
+    );
+    assert.deepEqual(await store.getByEvaluator('segundo@exemplo.org'), []);
 });

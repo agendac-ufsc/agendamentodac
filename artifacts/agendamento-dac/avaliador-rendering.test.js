@@ -46,15 +46,23 @@ function createSequentialEvaluationFlow(scoresSalvos = {}) {
     return { functions, keys, nodes };
 }
 
-function renderClassificacoes({ viewerEmail, scoresCache, myAssessmentsCache = [], proposals }) {
+function renderClassificacoes({
+    viewerEmail,
+    scoresCache,
+    myAssessmentsCache = [],
+    proposals,
+    viewerCanDeleteInscricoes = false
+}) {
     const nodes = {
         classificacaoRows: { innerHTML: '', querySelectorAll: () => [] },
         classificacaoTabCount: { textContent: '' },
-        classificacaoTotal: { textContent: '' }
+        classificacaoTotal: { textContent: '' },
+        rankingDeleteHeading: { hidden: true }
     };
     const context = {
         document: { getElementById: id => nodes[id] || null },
         viewerEmail,
+        viewerCanDeleteInscricoes,
         scoresCache,
         myAssessmentsCache,
         allUnificados: proposals,
@@ -64,6 +72,7 @@ function renderClassificacoes({ viewerEmail, scoresCache, myAssessmentsCache = [
         obterNumeroProposta: () => '42',
         calcularPontuacaoObtida: scores => Number(scores?.points || 0),
         escapeHtml: valor => String(valor ?? ''),
+        escapeAttr: valor => String(valor ?? '').replace(/"/g, '&quot;'),
         formatarPontuacao: valor => String(valor)
     };
 
@@ -144,6 +153,31 @@ test('mostra avaliações dos outros mesmo quando o avaliador atual ainda não a
     assert.match(nodes.classificacaoRows.innerHTML, /class="proposal-score">\s*12/);
     assert.match(nodes.classificacaoRows.innerHTML, /disponível após sua avaliação/);
     assert.doesNotMatch(nodes.classificacaoRows.innerHTML, /ranking-classification-input/);
+});
+
+test('a lixeira da classificação só aparece para avaliador autorizado', () => {
+    const common = {
+        viewerEmail: 'avaliadora@exemplo.invalid',
+        proposals: [proposal],
+        scoresCache: {
+            'proposal-42': [{
+                evaluatorEmail: 'outro@exemplo.invalid',
+                inscriptionId: 'proposal-42',
+                finalized: true,
+                complete: true,
+                scoresJson: { points: 12 }
+            }]
+        }
+    };
+
+    const semPermissao = renderClassificacoes(common);
+    assert.doesNotMatch(semPermissao.classificacaoRows.innerHTML, /ranking-delete-button/);
+    assert.equal(semPermissao.rankingDeleteHeading.hidden, true);
+
+    const autorizado = renderClassificacoes({ ...common, viewerCanDeleteInscricoes: true });
+    assert.match(autorizado.classificacaoRows.innerHTML, /ranking-delete-button/);
+    assert.match(autorizado.classificacaoRows.innerHTML, /data-inscription-id="proposal-42"/);
+    assert.equal(autorizado.rankingDeleteHeading.hidden, false);
 });
 
 test('libera critérios de avaliação em sequência somente após salvar o anterior', () => {
