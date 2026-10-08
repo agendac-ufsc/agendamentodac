@@ -5782,13 +5782,13 @@ app.post('/api/enviar-links-termo', async (req, res) => {
             <div style="padding:24px">
                 <p style="font-size:15px">Olá, <strong>${escapeHtml(nome || 'Proponente')}</strong>,</p>
                 <p style="font-size:14px;color:#555;line-height:1.7">
-                    Informamos que sua proposta inscrita no <strong>Edital nº 002/2026/DAC/SeCArtE/UFSC</strong> foi homologada.
+                    Informamos que sua proposta inscrita no <strong>Edital nº 002/2026/DAC/SeCArtE/UFSC</strong> foi <strong>aprovada</strong>.
                 </p>
                 <p style="font-size:14px;color:#555;line-height:1.7">
                     Conforme previsto no item <strong>13.1.1 do Edital</strong>, encaminhamos, abaixo, o link para acesso ao <strong>Termo de Autorização para Ocupação dos Espaços do DAC</strong>.
                 </p>
                 <p style="font-size:14px;color:#555;line-height:1.7">
-                    Solicitamos, por gentileza, que os dados referentes à reserva sejam conferidos e, após a leitura dos termos e condições para utilização do espaço, que seja assinalada a opção de ciência do Termo, a fim de que possamos dar continuidade ao processo de reserva.
+                    Solicitamos, por gentileza, que os dados referentes à reserva sejam conferidos e, após a leitura dos termos e condições para utilização do espaço, que seja assinalada a opção de ciência do Termo, para que possamos dar continuidade ao processo de reserva.
                 </p>
                 <p style="font-size:14px;color:#555;line-height:1.7;margin-bottom:20px">
                     Permanecemos à disposição para quaisquer esclarecimentos.<br><br>
@@ -5815,11 +5815,11 @@ app.post('/api/enviar-links-termo', async (req, res) => {
         const textContent = [
             `Olá, ${nome || 'Proponente'},`,
             '',
-            'Informamos que sua proposta inscrita no Edital nº 002/2026/DAC/SeCArtE/UFSC foi homologada.',
+            'Informamos que sua proposta inscrita no Edital nº 002/2026/DAC/SeCArtE/UFSC foi aprovada.',
             '',
             'Conforme previsto no item 13.1.1 do Edital, encaminhamos, abaixo, o link para acesso ao Termo de Autorização para Ocupação dos Espaços do DAC.',
             '',
-            'Solicitamos, por gentileza, que os dados referentes à reserva sejam conferidos e, após a leitura dos termos e condições para utilização do espaço, que seja assinalada a opção de ciência do Termo, a fim de que possamos dar continuidade ao processo de reserva.',
+            'Solicitamos, por gentileza, que os dados referentes à reserva sejam conferidos e, após a leitura dos termos e condições para utilização do espaço, que seja assinalada a opção de ciência do Termo, para que possamos dar continuidade ao processo de reserva.',
             '',
             'Permanecemos à disposição para quaisquer esclarecimentos.',
             '',
