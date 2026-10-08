@@ -5877,7 +5877,14 @@ app.post('/api/enviar-links-termo', async (req, res) => {
                 console.error(`⚠️ Termo Digital enviado para ${emailDestino}, mas a notificação ao DAC falhou:`, adminError.response?.data || adminError.message);
             }
             enviados++;
-            detalhes.push({ email: emailDestino, id, nome, evento, status: 'enviado', dacEmailSent });
+            const termoLinkEnviadoEm = new Date().toISOString();
+            const statusAtualizado = id
+                ? await updateAgendamento(id, { termoLinkEnviadoEm })
+                : false;
+            if (!statusAtualizado) {
+                console.warn(`⚠️ Link do termo enviado, mas o estado não foi salvo para a inscrição ${id || '(sem ID)'}.`);
+            }
+            detalhes.push({ email: emailDestino, id, nome, evento, status: 'enviado', dacEmailSent, statusAtualizado });
             console.log(`✅ Link do termo aceito pelo Brevo para ${emailDestino} (inscrição ${id}) — messageId: ${respostaBrevo.data?.messageId || 'não informado'}; notificação administrativa: ${dacEmailSent ? 'enviada' : 'falhou'}`);
         } catch (e) {
             erros++;
