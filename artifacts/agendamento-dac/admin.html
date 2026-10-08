@@ -1326,17 +1326,24 @@ function renderTabela() {
         const termoClick = `abrirEditorTermo(${originalIndex})`;
         const dadosProponenteColor = '#6b7280';
         const dadosProponenteTitle = 'Ver contato do proponente';
+        const registroAtividades = p.registroAtividades || {};
+        const registroAtividadesCompleto = registroAtividades.concluido === true;
+        const registroAtividadesEnviado = registroAtividades.enviado === true || Boolean(registroAtividades.enviadoEm);
         const divulgacaoInstitucional = p.divulgacaoInstitucional || {};
         const divulgacaoEnviada = divulgacaoInstitucional.enviado === true;
         const divulgacaoBloqueada = !termoAssinado;
         const divulgacaoColor = divulgacaoBloqueada
             ? '#cbd5e1'
-            : (divulgacaoEnviada ? '#16a34a' : '#2563eb');
+            : (registroAtividadesCompleto
+                ? '#16a34a'
+                : (divulgacaoEnviada ? '#2563eb' : '#60a5fa'));
         const divulgacaoTitle = divulgacaoBloqueada
             ? 'Aguardando termo de autorização completo'
-            : (divulgacaoEnviada
-                ? 'Divulgação institucional enviada — abrir para reenviar'
-                : 'Enviar divulgação institucional ao proponente');
+            : (registroAtividadesCompleto
+                ? 'Divulgação enviada e registro de atividades recebido — abrir para reenviar'
+                : (divulgacaoEnviada
+                    ? 'Divulgação enviada — aguardando retorno do Registro de atividades; abrir para reenviar'
+                    : 'Divulgação liberada — enviar manualmente ou aguardar o envio automático'));
         const divulgacaoClick = divulgacaoBloqueada
             ? ''
             : `abrirDivulgacao(${originalIndex})`;
@@ -1345,17 +1352,19 @@ function renderTabela() {
         const documentosBtn = p.id
             ? `<button class="btn-action" title="Documentos (${documentosInscricao.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:${documentosColor}"><i class="fas fa-folder-open"></i>${documentosInscricao.length ? ` <small>${documentosInscricao.length}</small>` : ''}</button>`
             : '';
-        const registroAtividades = p.registroAtividades || {};
-        const registroAtividadesCompleto = registroAtividades.concluido === true;
         const registroAtividadesBloqueado = !divulgacaoEnviada;
         const registroAtividadesColor = registroAtividadesBloqueado
             ? '#cbd5e1'
-            : (registroAtividadesCompleto ? '#16a34a' : '#764ba2');
+            : (registroAtividadesCompleto
+                ? '#16a34a'
+                : (registroAtividadesEnviado ? '#764ba2' : '#a78bfa'));
         const registroAtividadesTitle = registroAtividadesBloqueado
             ? 'Aguardando envio da divulgação institucional'
             : (registroAtividadesCompleto
                 ? 'Visualizar registro de atividades preenchido'
-                : 'Abrir registro de atividades e enviar ao proponente');
+                : (registroAtividadesEnviado
+                    ? 'Registro de atividades enviado — aguardando preenchimento do proponente'
+                    : 'Registro de atividades liberado — aguardando envio automático'));
         const registroAtividadesIcon = registroAtividadesCompleto ? 'fa-clipboard-check' : 'fa-clipboard-list';
 
         let stClass = 'st-pendente', stText = 'Pendente';
