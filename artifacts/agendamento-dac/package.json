@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "build": "mkdir -p dist/public && cp -R *.html attached_assets dist/public/",
+    "build": "mkdir -p dist/public && cp -R *.html attached_assets dist/public/ && node build-upload-client.cjs",
     "serve": "node server.js",
     "test": "node --test assessment-store.test.js avaliador-rendering.test.js evaluator-auth.test.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"

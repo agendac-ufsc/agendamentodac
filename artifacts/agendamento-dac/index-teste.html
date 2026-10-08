@@ -390,6 +390,57 @@
             font-size: 14px;
             line-height: 1.55;
         }
+        .document-upload-progress {
+            max-width: 560px;
+            margin: 14px auto 0;
+            padding: 0 4px;
+            text-align: left;
+        }
+        .document-upload-progress-summary {
+            margin: 0 0 8px;
+            color: #555;
+            font-size: 13px;
+            font-weight: 600;
+        }
+        .document-upload-progress-item {
+            margin-top: 10px;
+        }
+        .document-upload-progress-label {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 5px;
+            color: #4b5563;
+            font-size: 12px;
+        }
+        .document-upload-progress-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .document-upload-progress-status {
+            flex: 0 0 auto;
+            color: #667085;
+        }
+        .document-upload-progress-track {
+            height: 6px;
+            overflow: hidden;
+            border-radius: 999px;
+            background: #e8eaf3;
+        }
+        .document-upload-progress-fill {
+            width: 0;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width .15s ease;
+        }
+        .document-upload-progress-item[data-state="complete"] .document-upload-progress-fill {
+            background: #2f9e60;
+        }
+        .document-upload-progress-item[data-state="error"] .document-upload-progress-fill {
+            background: #d14d4d;
+        }
         @keyframes processing-spin {
             to { transform: rotate(360deg); }
         }
@@ -1409,6 +1460,10 @@
         <div class="processing-message">
             Isso pode levar alguns instantes. Aguarde, por favor: a confirmação aparecerá automaticamente assim que o processamento for concluído.
         </div>
+        <div id="documentUploadProgress" class="document-upload-progress" hidden>
+            <p id="documentUploadProgressSummary" class="document-upload-progress-summary"></p>
+            <div id="documentUploadProgressItems"></div>
+        </div>
     </div>
 
     <div class="full-page-step" id="inscricaoValidadaSection">
@@ -1542,6 +1597,7 @@
         </form>
     </div>
 
+    <script src="/upload-client.js"></script>
     <script>
         const stepNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
         const steps = ['evento', 'ensaio', 'montagem', 'desmontagem'];
@@ -1563,7 +1619,10 @@
         let mensagemBotoesDesativados = 'As inscrições estão encerradas no momento.';
         let tipoPessoaTesteAtual = null;
         let inscricaoTesteId = null;
+        let inscricaoTesteUploadCapability = null;
         let finalizacaoInscricaoEmAndamento = false;
+        const inscricaoTesteUploadsConcluidos = new Map();
+        let linhasProgressoUploadTeste = new Map();
 
         steps.forEach(s => {
             selections[s] = { date: null, start: null, end: null };
@@ -2215,6 +2274,7 @@
                 const result = await res.json().catch(() => ({}));
                 if (res.ok) {
                     inscricaoTesteId = result.id || inscricaoTesteId;
+                    inscricaoTesteUploadCapability = result.uploadCapability || inscricaoTesteUploadCapability;
                     msg.innerHTML = '<button type="button" onclick="continuarAposSalvarTeste()">Continuar</button>';
                     msg.className = 'message continue-message';
                     submitBtn.style.display = 'none';
@@ -2617,8 +2677,138 @@
                 ['testeOutrosLinksProposta', 'Outros documentos', 'Proposta']
             ];
             return campos.flatMap(([campo, categoria, grupo]) =>
-                Array.from(document.getElementById(campo)?.files || []).map(file => ({ file, campo, categoria: `${grupo} — ${categoria}` }))
+                Array.from(document.getElementById(campo)?.files || []).map((file, index) => ({
+                    file,
+                    campo,
+                    categoria: `${grupo} — ${categoria}`,
+                    chave: `${campo}:${index}:${file.name}:${file.size}:${file.lastModified}`
+                }))
             );
+        }
+
+        function prepararProgressoUploadTeste(arquivos) {
+            const painel = document.getElementById('documentUploadProgress');
+            const lista = document.getElementById('documentUploadProgressItems');
+            const resumo = document.getElementById('documentUploadProgressSummary');
+            lista.replaceChildren();
+            linhasProgressoUploadTeste = new Map();
+            painel.hidden = arquivos.length === 0;
+            if (!arquivos.length) return;
+
+            resumo.textContent = `Enviando ${arquivos.length} documento${arquivos.length === 1 ? '' : 's'} diretamente ao armazenamento seguro…`;
+            arquivos.forEach(({ file, chave }) => {
+                const item = document.createElement('div');
+                item.className = 'document-upload-progress-item';
+                item.dataset.state = inscricaoTesteUploadsConcluidos.has(chave) ? 'complete' : 'pending';
+
+                const label = document.createElement('div');
+                label.className = 'document-upload-progress-label';
+                const nome = document.createElement('span');
+                nome.className = 'document-upload-progress-name';
+                nome.textContent = file.name;
+                const status = document.createElement('span');
+                status.className = 'document-upload-progress-status';
+                status.textContent = inscricaoTesteUploadsConcluidos.has(chave) ? 'Enviado · 100%' : 'Aguardando envio';
+                label.append(nome, status);
+
+                const track = document.createElement('div');
+                track.className = 'document-upload-progress-track';
+                track.setAttribute('role', 'progressbar');
+                track.setAttribute('aria-label', `Envio de ${file.name}`);
+                track.setAttribute('aria-valuemin', '0');
+                track.setAttribute('aria-valuemax', '100');
+                track.setAttribute('aria-valuenow', inscricaoTesteUploadsConcluidos.has(chave) ? '100' : '0');
+                const fill = document.createElement('div');
+                fill.className = 'document-upload-progress-fill';
+                fill.style.width = inscricaoTesteUploadsConcluidos.has(chave) ? '100%' : '0%';
+                track.appendChild(fill);
+                item.append(label, track);
+                lista.appendChild(item);
+                linhasProgressoUploadTeste.set(chave, { item, status, track, fill });
+            });
+        }
+
+        function atualizarProgressoUploadTeste(chave, percentual, estado = 'uploading', texto) {
+            const linha = linhasProgressoUploadTeste.get(chave);
+            if (!linha) return;
+            const valor = Math.max(0, Math.min(100, Math.round(Number(percentual) || 0)));
+            linha.item.dataset.state = estado;
+            linha.fill.style.width = `${valor}%`;
+            linha.track.setAttribute('aria-valuenow', String(valor));
+            linha.status.textContent = texto || (
+                estado === 'complete' ? 'Enviado · 100%'
+                    : estado === 'error' ? 'Falha no envio'
+                        : estado === 'pending' ? 'Aguardando envio'
+                            : `${valor}%`
+            );
+        }
+
+        function tipoMimeArquivoInscricao(file) {
+            if (file.type && file.type !== 'application/octet-stream') return file.type;
+            const extensao = String(file.name || '').toLowerCase().match(/\.[^.]+$/)?.[0] || '';
+            const mimePorExtensao = {
+                '.pdf': 'application/pdf',
+                '.doc': 'application/msword',
+                '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                '.ppt': 'application/vnd.ms-powerpoint',
+                '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                '.jpg': 'image/jpeg',
+                '.jpeg': 'image/jpeg',
+                '.png': 'image/png',
+                '.gif': 'image/gif',
+                '.webp': 'image/webp',
+                '.bmp': 'image/bmp',
+                '.tif': 'image/tiff',
+                '.tiff': 'image/tiff',
+                '.heic': 'image/heic',
+                '.heif': 'image/heif',
+                '.avif': 'image/avif',
+                '.svg': 'image/svg+xml'
+            };
+            return mimePorExtensao[extensao] || 'application/octet-stream';
+        }
+
+        async function enviarArquivoInscricaoTeste(item) {
+            const { file, campo, categoria, chave } = item;
+            if (!inscricaoTesteUploadCapability) {
+                throw new Error('A autorização para enviar os documentos expirou. Volte ao início e recomece a inscrição.');
+            }
+            if (!window.DacUploadClient?.upload) {
+                throw new Error('O componente de envio de documentos não carregou. Atualize a página e tente novamente.');
+            }
+
+            atualizarProgressoUploadTeste(chave, 0, 'uploading', 'Autorizando envio…');
+            const nomeSeguro = String(file.name || 'arquivo')
+                .normalize('NFKC')
+                .replace(/[^a-zA-Z0-9._-]+/g, '_')
+                .slice(-150) || 'arquivo';
+            const identificadorArquivo = window.crypto?.randomUUID
+                ? window.crypto.randomUUID()
+                : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const pathname = `inscricoes/${encodeURIComponent(inscricaoTesteId)}/${identificadorArquivo}-${nomeSeguro}`;
+            const mimeType = tipoMimeArquivoInscricao(file);
+            const blob = await window.DacUploadClient.upload(pathname, file, {
+                access: 'private',
+                handleUploadUrl: '/api/documentos-teste/upload-token',
+                clientPayload: JSON.stringify({
+                    id: inscricaoTesteId,
+                    uploadCapability: inscricaoTesteUploadCapability,
+                    campo,
+                    categoria,
+                    nome: file.name,
+                    mimeType,
+                    tamanho: file.size
+                }),
+                contentType: mimeType,
+                multipart: file.size > 50 * 1024 * 1024,
+                onUploadProgress: progresso => {
+                    atualizarProgressoUploadTeste(chave, progresso.percentage, 'uploading');
+                }
+            });
+            const documento = { pathname: blob.pathname, campo, categoria, nome: file.name };
+            inscricaoTesteUploadsConcluidos.set(chave, documento);
+            atualizarProgressoUploadTeste(chave, 100, 'complete');
+            return documento;
         }
 
         async function concluirInscricaoFinalTeste(projetoDac = '') {
@@ -2633,20 +2823,31 @@
             if (finalizacaoInscricaoEmAndamento) return;
             finalizacaoInscricaoEmAndamento = true;
             const telaAnterior = projetoDac ? 'projetosDacSection' : 'taxaLocacaoSection';
+            const arquivos = coletarArquivosFinaisInscricaoTeste();
             mostrarTelaTeste('inscricaoProcessandoSection');
+            prepararProgressoUploadTeste(arquivos);
             try {
-                const arquivos = coletarArquivosFinaisInscricaoTeste();
                 if (arquivos.length) {
-                    const formData = new FormData();
-                    formData.append('id', dados.id);
-                    formData.append('metadata', JSON.stringify(arquivos.map(({ campo, categoria }) => ({ campo, categoria }))));
-                    arquivos.forEach(({ file }) => formData.append('arquivos', file));
-                    const uploadRes = await fetch('/api/documentos-teste/upload', { method: 'POST', body: formData });
-                    const uploadResult = await uploadRes.json().catch(() => ({}));
-                    if (!uploadRes.ok || !uploadResult.success) {
-                        throw new Error(uploadResult.error || 'Não foi possível enviar os documentos.');
+                    const documentosEnviados = [];
+                    for (const item of arquivos) {
+                        const documento = inscricaoTesteUploadsConcluidos.get(item.chave)
+                            || await enviarArquivoInscricaoTeste(item);
+                        documentosEnviados.push(documento);
                     }
-                    dados.documentos = uploadResult.documentos || [];
+                    document.getElementById('documentUploadProgressSummary').textContent = 'Documentos enviados. Vinculando-os à inscrição…';
+                    const registroRes = await fetch('/api/documentos-teste/registrar', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            id: dados.id,
+                            uploadCapability: inscricaoTesteUploadCapability,
+                            documentos: documentosEnviados
+                        })
+                    });
+                    const registro = await registroRes.json().catch(() => ({}));
+                    if (!registroRes.ok || !registro.success) {
+                        throw new Error(registro.error || 'Não foi possível registrar os documentos enviados.');
+                    }
                 }
                 const res = await fetch('/api/finalizar-inscricao-teste', {
                     method: 'POST',
@@ -2853,6 +3054,11 @@
             currentStepContext = null;
             tipoPessoaTesteAtual = null;
             inscricaoTesteId = null;
+            inscricaoTesteUploadCapability = null;
+            inscricaoTesteUploadsConcluidos.clear();
+            linhasProgressoUploadTeste.clear();
+            document.getElementById('documentUploadProgress').hidden = true;
+            document.getElementById('documentUploadProgressItems').replaceChildren();
             dataInicioEdital = null;
             globalCurrentMonth = new Date();
 

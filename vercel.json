@@ -12,6 +12,14 @@
       "dest": "/api/cron/verificar-atividades.js"
     },
     {
+      "src": "^/api/documentos-teste/upload-token$",
+      "dest": "/api/documentos-teste/upload.js"
+    },
+    {
+      "src": "^/api/documentos-teste/registrar$",
+      "dest": "/api/documentos-teste/upload.js"
+    },
+    {
       "src": "^/api/documentos-teste/upload$",
       "dest": "/api/documentos-teste/upload.js"
     },

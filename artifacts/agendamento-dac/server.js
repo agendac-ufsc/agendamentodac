@@ -17,8 +17,9 @@ const { google } = require('googleapis');
 const { Redis } = require('@upstash/redis');
 const multer = require('multer');
 const AdmZip = require('adm-zip');
-const { put: putBlob, get: getBlob, del: deleteBlob } = require('@vercel/blob');
-const { randomUUID, randomInt } = require('crypto');
+const { put: putBlob, get: getBlob, head: headBlob, del: deleteBlob } = require('@vercel/blob');
+const { handleUpload } = require('@vercel/blob/client');
+const { createHmac, randomUUID, randomInt, timingSafeEqual } = require('crypto');
 const { Readable } = require('stream');
 const { createAssessmentStore } = require('./assessment-store');
 const {
@@ -35,6 +36,7 @@ app.use(cors());
 // O termo assinado é enviado como PDF em base64; manter margem suficiente para o anexo.
 app.use(express.json({ limit: '10mb' }));
 app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
+app.use(express.static(path.join(__dirname, 'dist/public'), { index: false }));
 app.use(express.static(path.join(__dirname), { index: false }));
 
 // O token precisa ser o Read-Write Token criado na loja do Vercel Blob.
@@ -53,6 +55,65 @@ if (!blobStorageReady) {
     }
 }
 const blobOptions = options => ({ ...options, token: blobReadWriteToken });
+const regrasDocumentosTeste = {
+    testeCurriculoPessoaFisica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeDocumentoPessoaFisica: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024, tipos: 'portfolio' },
+    testeContratoPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+    testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+    testeComprovanteVinculoUfsc: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+    testeFichaTecnicaProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
+    testeLinksVideoProposta: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeOutrosLinksProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' }
+};
+const tiposMimePortfolio = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+];
+const extensoesPortfolio = /\.(?:pdf|doc|docx|ppt|pptx)$/i;
+const nomeArquivoSeguro = value => String(value || 'arquivo')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .slice(-150) || 'arquivo';
+function tiposPermitidosDocumentoTeste(regra) {
+    if (regra.tipos === 'pdf') return ['application/pdf'];
+    if (regra.tipos === 'portfolio') return tiposMimePortfolio;
+    return ['application/pdf', 'image/*'];
+}
+function tipoDocumentoTesteValido(regra, mimeType, nome) {
+    const mime = String(mimeType || '').toLowerCase();
+    const nomeNormalizado = String(nome || '').toLowerCase();
+    const ehPdf = mime === 'application/pdf' || /\.pdf$/i.test(nomeNormalizado);
+    if (regra.tipos === 'pdf') return ehPdf;
+    if (regra.tipos === 'portfolio') {
+        return ehPdf || tiposMimePortfolio.includes(mime) || extensoesPortfolio.test(nomeNormalizado);
+    }
+    return ehPdf || mime.startsWith('image/') || /\.(?:jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif|svg)$/i.test(nomeNormalizado);
+}
+function criarComprovanteUploadInscricao(id) {
+    if (!blobStorageReady || !id) return '';
+    return createHmac('sha256', blobReadWriteToken)
+        .update(`dac-inscricao-document-upload:${String(id)}`)
+        .digest('hex');
+}
+function validarComprovanteUploadInscricao(id, comprovante) {
+    if (!blobStorageReady || !id || !/^[a-f0-9]{64}$/i.test(String(comprovante || ''))) return false;
+    const esperado = Buffer.from(criarComprovanteUploadInscricao(id), 'hex');
+    const recebido = Buffer.from(String(comprovante), 'hex');
+    return esperado.length === recebido.length && timingSafeEqual(esperado, recebido);
+}
+function pathnameDocumentoDaInscricaoValido(pathname, id) {
+    const partes = String(pathname || '').split('/');
+    return partes.length === 3
+        && partes[0] === 'inscricoes'
+        && partes[1] === String(id)
+        && Boolean(partes[2])
+        && partes[2] !== '.'
+        && partes[2] !== '..';
+}
 const uploadDocumentosTeste = multer({
     storage: multer.memoryStorage(),
     limits: { files: 30, fileSize: 100 * 1024 * 1024 }
@@ -2152,7 +2213,12 @@ app.post('/api/agendar', async (req, res) => {
         });
 
         if (modoTeste === true) {
-            return res.json({ success: true, id: idAgendamento, rascunho: true });
+            return res.json({
+                success: true,
+                id: idAgendamento,
+                rascunho: true,
+                uploadCapability: criarComprovanteUploadInscricao(idAgendamento)
+            });
         }
 
         // Nesta rota é criada apenas a primeira etapa. Nenhum e-mail é enviado
@@ -2347,15 +2413,165 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
     }
 });
 
-// Upload privado dos documentos do modo unificado. Os bytes ficam no
-// Vercel Blob; o Redis guarda apenas os metadados e a URL do blob.
+// Emite um token de curta duração, restrito ao caminho e ao tipo de arquivo
+// da inscrição. O navegador envia os bytes diretamente ao Blob privado.
+app.post('/api/documentos-teste/upload-token', async (req, res) => {
+    if (!blobStorageReady) {
+        return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
+    }
+    try {
+        const result = await handleUpload({
+            body: req.body,
+            request: req,
+            token: blobReadWriteToken,
+            onBeforeGenerateToken: async (pathname, clientPayload) => {
+                let dados;
+                try {
+                    dados = JSON.parse(clientPayload || '{}');
+                } catch {
+                    throw new Error('Dados do arquivo inválidos.');
+                }
+
+                const id = String(dados.id || '');
+                const campo = String(dados.campo || '');
+                const nome = String(dados.nome || '');
+                const mimeType = String(dados.mimeType || '');
+                const tamanho = Number(dados.tamanho);
+                const regra = regrasDocumentosTeste[campo];
+                if (!validarComprovanteUploadInscricao(id, dados.uploadCapability)) {
+                    throw new Error('A autorização desta inscrição é inválida.');
+                }
+                if (!regra || !pathnameDocumentoDaInscricaoValido(pathname, id)) {
+                    throw new Error('O caminho de destino não é permitido.');
+                }
+                if (!nome || !Number.isFinite(tamanho) || tamanho <= 0 || tamanho > regra.bytes) {
+                    throw new Error('O arquivo excede o limite permitido.');
+                }
+                if (!tipoDocumentoTesteValido(regra, mimeType, nome)) {
+                    throw new Error('O formato do arquivo não é permitido para este campo.');
+                }
+
+                const agendamento = (await getAgendamentos()).find(item => String(item.id) === id);
+                if (!agendamento || agendamento.inscricaoTeste !== true || agendamento.inscricaoTesteConcluida === true) {
+                    throw new Error('Inscrição do modo unificado não encontrada ou já concluída.');
+                }
+
+                return {
+                    allowedContentTypes: tiposPermitidosDocumentoTeste(regra),
+                    maximumSizeInBytes: regra.bytes,
+                    validUntil: Date.now() + 60 * 60 * 1000,
+                    addRandomSuffix: false
+                };
+            }
+        });
+        return res.status(200).json(result);
+    } catch (error) {
+        console.error('❌ [/api/documentos-teste/upload-token] erro:', error.message);
+        return res.status(400).json({ error: 'Não foi possível autorizar o envio do documento.' });
+    }
+});
+
+// Confere a existência e os metadados reais dos blobs antes de associá-los
+// ao rascunho; o navegador nunca escolhe a URL privada gravada no Redis.
+app.post('/api/documentos-teste/registrar', async (req, res) => {
+    const id = String(req.body?.id || '');
+    if (!id) return res.status(400).json({ error: 'ID da inscrição não informado.' });
+    if (!validarComprovanteUploadInscricao(id, req.body?.uploadCapability)) {
+        return res.status(403).json({ error: 'A autorização desta inscrição é inválida.' });
+    }
+    if (!blobStorageReady) {
+        return res.status(503).json({ error: 'O armazenamento de documentos ainda não está configurado.' });
+    }
+
+    const documentosRecebidos = req.body?.documentos;
+    if (!Array.isArray(documentosRecebidos) || documentosRecebidos.length < 1 || documentosRecebidos.length > 30) {
+        return res.status(400).json({ error: 'A lista de documentos enviados é inválida.' });
+    }
+
+    try {
+        const agendamento = (await getAgendamentos()).find(item => String(item.id) === id);
+        if (!agendamento || agendamento.inscricaoTeste !== true || agendamento.inscricaoTesteConcluida === true) {
+            return res.status(404).json({ error: 'Inscrição do modo unificado não encontrada ou já concluída.' });
+        }
+
+        const documentosAtuais = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
+        const caminhosExistentes = new Set(documentosAtuais.map(item => item.pathname).filter(Boolean));
+        const caminhosRecebidos = new Set();
+        const quantidades = {};
+        documentosAtuais.forEach(documento => {
+            if (documento?.campo && regrasDocumentosTeste[documento.campo]) {
+                quantidades[documento.campo] = (quantidades[documento.campo] || 0) + 1;
+            }
+        });
+        const documentosNovos = [];
+
+        for (const item of documentosRecebidos) {
+            const campo = String(item?.campo || '');
+            const pathname = String(item?.pathname || '');
+            const nome = String(item?.nome || '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255);
+            const regra = regrasDocumentosTeste[campo];
+            if (!regra || !pathnameDocumentoDaInscricaoValido(pathname, id) || !nome) {
+                return res.status(400).json({ error: 'Os metadados de um documento não são válidos.' });
+            }
+            if (caminhosExistentes.has(pathname) || caminhosRecebidos.has(pathname)) continue;
+
+            quantidades[campo] = (quantidades[campo] || 0) + 1;
+            if (quantidades[campo] > regra.max) {
+                return res.status(400).json({ error: 'A quantidade de arquivos excede o limite deste campo.' });
+            }
+
+            let blob;
+            try {
+                blob = await headBlob(pathname, blobOptions({ access: 'private' }));
+            } catch {
+                return res.status(400).json({ error: 'Um dos arquivos ainda não foi encontrado no armazenamento. Tente enviá-lo novamente.' });
+            }
+            if (blob.pathname !== pathname
+                || blob.size <= 0
+                || blob.size > regra.bytes
+                || !tipoDocumentoTesteValido(regra, blob.contentType, nome)) {
+                return res.status(400).json({ error: 'Um dos arquivos não corresponde aos limites e formatos aceitos.' });
+            }
+
+            caminhosRecebidos.add(pathname);
+            documentosNovos.push({
+                id: randomUUID(),
+                pathname: blob.pathname,
+                blobUrl: blob.url,
+                nome,
+                mimeType: blob.contentType,
+                tamanho: blob.size,
+                campo,
+                categoria: String(item.categoria || 'Documentos').trim().slice(0, 120) || 'Documentos',
+                enviadoEm: new Date().toISOString()
+            });
+        }
+
+        if (documentosNovos.length) {
+            const documentosAtualizados = [...documentosAtuais, ...documentosNovos];
+            const documentosSalvos = await updateAgendamento(id, { documentos: documentosAtualizados });
+            if (!documentosSalvos) {
+                return res.status(500).json({ error: 'Os arquivos foram enviados, mas não foi possível vinculá-los à inscrição. Tente novamente.' });
+            }
+        }
+        return res.json({ success: true, documentos: documentosNovos });
+    } catch (error) {
+        console.error('❌ [/api/documentos-teste/registrar] erro:', error.message);
+        return res.status(500).json({ error: 'Não foi possível registrar os documentos enviados.' });
+    }
+});
+
+// Compatibilidade com clientes anteriores; também exige a prova da inscrição.
 app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos', 30), async (req, res) => {
     const id = String(req.body?.id || '');
     if (!id) return res.status(400).json({ error: 'ID da inscrição não informado.' });
+    if (!validarComprovanteUploadInscricao(id, req.body?.uploadCapability)) {
+        return res.status(403).json({ error: 'A autorização desta inscrição é inválida.' });
+    }
     try {
         const agendamentos = await getAgendamentos();
         const agendamento = agendamentos.find(item => String(item.id) === id);
-        if (!agendamento || agendamento.inscricaoTeste !== true) {
+        if (!agendamento || agendamento.inscricaoTeste !== true || agendamento.inscricaoTesteConcluida === true) {
             return res.status(404).json({ error: 'Inscrição do modo unificado não encontrada.' });
         }
         if (!blobStorageReady) {
@@ -2370,33 +2586,23 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
         if (!Array.isArray(metadata) || metadata.length !== (req.files || []).length) {
             return res.status(400).json({ error: 'A lista de documentos não corresponde aos arquivos enviados.' });
         }
-        const regrasDocumentos = {
-            testeCurriculoPessoaFisica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-            testeDocumentoPessoaFisica: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-            testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024, tipos: 'pdf-imagem' },
-            testeContratoPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-            testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-            testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-            testeComprovanteVinculoUfsc: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-            testeFichaTecnicaProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-            testeLinksVideoProposta: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-            testeOutrosLinksProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' }
-        };
+        const documentosAtuais = Array.isArray(agendamento.documentos) ? agendamento.documentos : [];
         const quantidades = {};
-        const ehPdf = file => file.mimetype === 'application/pdf' || /\.pdf$/i.test(file.originalname || '');
-        const ehImagem = file => String(file.mimetype || '').startsWith('image/');
+        documentosAtuais.forEach(documento => {
+            if (documento?.campo && regrasDocumentosTeste[documento.campo]) {
+                quantidades[documento.campo] = (quantidades[documento.campo] || 0) + 1;
+            }
+        });
         for (let index = 0; index < (req.files || []).length; index++) {
             const file = req.files[index];
             const campo = String(metadata[index]?.campo || '');
-            const regra = regrasDocumentos[campo];
+            const regra = regrasDocumentosTeste[campo];
             if (!regra) return res.status(400).json({ error: 'Campo de documento não permitido.' });
             quantidades[campo] = (quantidades[campo] || 0) + 1;
             if (quantidades[campo] > regra.max || file.size > regra.bytes) {
                 return res.status(400).json({ error: `Limite excedido para ${metadata[index]?.categoria || 'este documento'}.` });
             }
-            const tipoValido = regra.tipos === 'pdf'
-                ? ehPdf(file)
-                : ehPdf(file) || ehImagem(file);
+            const tipoValido = tipoDocumentoTesteValido(regra, file.mimetype, file.originalname);
             if (!tipoValido) {
                 return res.status(400).json({ error: `Formato inválido para ${metadata[index]?.categoria || 'este documento'}.` });
             }
@@ -2405,8 +2611,7 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
         for (let index = 0; index < (req.files || []).length; index++) {
             const file = req.files[index];
             const info = metadata[index] || {};
-            const nomeSeguro = String(file.originalname || 'arquivo')
-                .replace(/[^a-zA-Z0-9._-]+/g, '_').slice(-150);
+            const nomeSeguro = nomeArquivoSeguro(file.originalname);
             const pathname = `inscricoes/${id}/${randomUUID()}-${nomeSeguro}`;
             const uploaded = await putBlob(pathname, file.buffer, blobOptions({
                 access: 'private',
@@ -2427,7 +2632,7 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
             });
         }
         if (arquivos.length) {
-            const documentosAtualizados = [...(Array.isArray(agendamento.documentos) ? agendamento.documentos : []), ...arquivos];
+            const documentosAtualizados = [...documentosAtuais, ...arquivos];
             const documentosSalvos = await updateAgendamento(id, { documentos: documentosAtualizados });
             if (!documentosSalvos) {
                 await Promise.all(arquivos.map(documento =>
