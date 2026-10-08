@@ -56,16 +56,16 @@ if (!blobStorageReady) {
 }
 const blobOptions = options => ({ ...options, token: blobReadWriteToken });
 const regrasDocumentosTeste = {
-    testeCurriculoPessoaFisica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testeDocumentoPessoaFisica: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeCurriculoPessoaFisica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeDocumentoPessoaFisica: { max: 5, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
     testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024, tipos: 'portfolio' },
-    testeContratoPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-    testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-    testeComprovanteVinculoUfsc: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-    testeFichaTecnicaProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf' },
-    testeLinksVideoProposta: { max: 5, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testeOutrosLinksProposta: { max: 1, bytes: 10 * 1024 * 1024, tipos: 'pdf-imagem' }
+    testeContratoPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
+    testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
+    testeComprovanteVinculoUfsc: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
+    testeFichaTecnicaProposta: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
+    testeLinksVideoProposta: { max: 5, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
+    testeOutrosLinksProposta: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' }
 };
 const tiposMimePortfolio = [
     'application/pdf',
