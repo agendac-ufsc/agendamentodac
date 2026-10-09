@@ -55,44 +55,23 @@ if (!blobStorageReady) {
     }
 }
 const blobOptions = options => ({ ...options, token: blobReadWriteToken });
+// Os documentos da inscrição podem estar em qualquer formato; estes limites
+// controlam somente a quantidade e o tamanho dos arquivos por campo.
 const regrasDocumentosTeste = {
-    testeCurriculoPessoaFisica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testeDocumentoPessoaFisica: { max: 5, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024, tipos: 'portfolio' },
-    testeContratoPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
-    testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
-    testeComprovanteVinculoUfsc: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
-    testeFichaTecnicaProposta: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf' },
-    testeLinksVideoProposta: { max: 5, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' },
-    testeOutrosLinksProposta: { max: 1, bytes: 50 * 1024 * 1024, tipos: 'pdf-imagem' }
+    testeCurriculoPessoaFisica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeDocumentoPessoaFisica: { max: 5, bytes: 50 * 1024 * 1024 },
+    testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024 },
+    testeContratoPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeComprovanteVinculoUfsc: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeFichaTecnicaProposta: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeLinksVideoProposta: { max: 5, bytes: 50 * 1024 * 1024 },
+    testeOutrosLinksProposta: { max: 1, bytes: 50 * 1024 * 1024 }
 };
-const tiposMimePortfolio = [
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-powerpoint',
-    'application/vnd.openxmlformats-officedocument.presentationml.presentation'
-];
-const extensoesPortfolio = /\.(?:pdf|doc|docx|ppt|pptx)$/i;
 const nomeArquivoSeguro = value => String(value || 'arquivo')
     .replace(/[^a-zA-Z0-9._-]+/g, '_')
     .slice(-150) || 'arquivo';
-function tiposPermitidosDocumentoTeste(regra) {
-    if (regra.tipos === 'pdf') return ['application/pdf'];
-    if (regra.tipos === 'portfolio') return tiposMimePortfolio;
-    return ['application/pdf', 'image/*'];
-}
-function tipoDocumentoTesteValido(regra, mimeType, nome) {
-    const mime = String(mimeType || '').toLowerCase();
-    const nomeNormalizado = String(nome || '').toLowerCase();
-    const ehPdf = mime === 'application/pdf' || /\.pdf$/i.test(nomeNormalizado);
-    if (regra.tipos === 'pdf') return ehPdf;
-    if (regra.tipos === 'portfolio') {
-        return ehPdf || tiposMimePortfolio.includes(mime) || extensoesPortfolio.test(nomeNormalizado);
-    }
-    return ehPdf || mime.startsWith('image/') || /\.(?:jpe?g|png|gif|webp|bmp|tiff?|heic|heif|avif|svg)$/i.test(nomeNormalizado);
-}
 function criarComprovanteUploadInscricao(id) {
     if (!blobStorageReady || !id) return '';
     return createHmac('sha256', blobReadWriteToken)
@@ -2435,7 +2414,6 @@ app.post('/api/documentos-teste/upload-token', async (req, res) => {
                 const id = String(dados.id || '');
                 const campo = String(dados.campo || '');
                 const nome = String(dados.nome || '');
-                const mimeType = String(dados.mimeType || '');
                 const tamanho = Number(dados.tamanho);
                 const regra = regrasDocumentosTeste[campo];
                 if (!validarComprovanteUploadInscricao(id, dados.uploadCapability)) {
@@ -2447,17 +2425,12 @@ app.post('/api/documentos-teste/upload-token', async (req, res) => {
                 if (!nome || !Number.isFinite(tamanho) || tamanho <= 0 || tamanho > regra.bytes) {
                     throw new Error('O arquivo excede o limite permitido.');
                 }
-                if (!tipoDocumentoTesteValido(regra, mimeType, nome)) {
-                    throw new Error('O formato do arquivo não é permitido para este campo.');
-                }
-
                 const agendamento = (await getAgendamentos()).find(item => String(item.id) === id);
                 if (!agendamento || agendamento.inscricaoTeste !== true || agendamento.inscricaoTesteConcluida === true) {
                     throw new Error('Inscrição do modo unificado não encontrada ou já concluída.');
                 }
 
                 return {
-                    allowedContentTypes: tiposPermitidosDocumentoTeste(regra),
                     maximumSizeInBytes: regra.bytes,
                     validUntil: Date.now() + 60 * 60 * 1000,
                     addRandomSuffix: false
@@ -2528,9 +2501,8 @@ app.post('/api/documentos-teste/registrar', async (req, res) => {
             }
             if (blob.pathname !== pathname
                 || blob.size <= 0
-                || blob.size > regra.bytes
-                || !tipoDocumentoTesteValido(regra, blob.contentType, nome)) {
-                return res.status(400).json({ error: 'Um dos arquivos não corresponde aos limites e formatos aceitos.' });
+                || blob.size > regra.bytes) {
+                return res.status(400).json({ error: 'Um dos arquivos não corresponde aos limites aceitos para este campo.' });
             }
 
             caminhosRecebidos.add(pathname);
@@ -2601,10 +2573,6 @@ app.post('/api/documentos-teste/upload', uploadDocumentosTeste.array('arquivos',
             quantidades[campo] = (quantidades[campo] || 0) + 1;
             if (quantidades[campo] > regra.max || file.size > regra.bytes) {
                 return res.status(400).json({ error: `Limite excedido para ${metadata[index]?.categoria || 'este documento'}.` });
-            }
-            const tipoValido = tipoDocumentoTesteValido(regra, file.mimetype, file.originalname);
-            if (!tipoValido) {
-                return res.status(400).json({ error: `Formato inválido para ${metadata[index]?.categoria || 'este documento'}.` });
             }
         }
         const arquivos = [];
