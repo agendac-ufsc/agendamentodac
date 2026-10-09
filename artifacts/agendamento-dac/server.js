@@ -2242,7 +2242,7 @@ function criarHtmlComprovanteInscricaoTeste(dados) {
         </div>
         <div style="padding:28px 30px">
             <p style="font-size:15px">Olá, <strong>${escapeHtml(dados.nome)}</strong>!</p>
-            <p style="font-size:14px;line-height:1.6">Sua inscrição foi registrada e validada com sucesso. Este e-mail serve como comprovante da inscrição.</p>
+            <p style="font-size:14px;line-height:1.6">Sua inscrição foi concluída com sucesso. A proposta será submetida à avaliação da Comissão de Avaliação. Você receberá, em breve, um e-mail com o resultado da análise.</p>
             <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:20px 0">${camposHtml}</div>
             <p style="font-size:14px;font-weight:600;margin:0 0 8px">Cronograma solicitado</p>
             <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -3798,7 +3798,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
                                 </div>
                                 <div style="padding:28px 30px">
                                     <p style="font-size:15px;margin-top:0">Olá, <strong>${escapeHtml(p.nome || 'Proponente')}</strong>!</p>
-                                    <p style="font-size:14px;line-height:1.6">Sua inscrição foi concluída com sucesso. A proposta será submetida à avaliação da Comissão de Avaliação. Você receberá, em breve, um e-mail com o resultado da análise.</p>
+                                    <p style="font-size:14px;line-height:1.6">As duas etapas da sua inscrição foram preenchidas. Sua inscrição foi registrada e encaminhada para análise da equipe do DAC.</p>
                                     <div style="background:#f8f9fb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 18px;margin:0 0 20px">
                                         <p style="margin:0 0 6px;font-size:13px"><strong>Evento:</strong> ${escapeHtml(p.evento || 'N/A')}</p>
                                         <p style="margin:0;font-size:13px"><strong>Local:</strong> ${escapeHtml(localNomeResolvido)}</p>
