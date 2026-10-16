@@ -970,6 +970,18 @@ let documentosInscricaoIndex = null;
 let documentosInscricaoId = null;
 let limparBuscaDepoisDosCriterios = false;
 
+const CORES_ETAPAS_PROCESSO = Object.freeze({
+    naoEnviada: '#dc2626',
+    aguardandoRetorno: '#d97706',
+    concluida: '#16a34a'
+});
+
+function corEtapaProcesso(enviada, concluida) {
+    if (concluida) return CORES_ETAPAS_PROCESSO.concluida;
+    if (enviada) return CORES_ETAPAS_PROCESSO.aguardandoRetorno;
+    return CORES_ETAPAS_PROCESSO.naoEnviada;
+}
+
 // O fluxo manual/legado permanece no código para emergência, mas seu ícone
 // fica oculto enquanto o envio automático estiver ativo.
 // Palavra-chave de reativação: REATIVAR_AVIAO_ROXO_ATIVIDADES
@@ -1313,10 +1325,13 @@ function renderTabela() {
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const localBadge = `<span class="local-badge ${isIgrejinha?'local-igrejinha':'local-teatro'}"><i class="fas fa-${isIgrejinha?'church':'theater-masks'}"></i> ${p.localNome||'Teatro'}</span>`;
         const termoAssinado = p.termoAssinado === true || p.termoAssinado === 'true';
-        const termoColor = termoAssinado ? '#16a34a' : '#f59e0b';
+        const termoLinkEnviado = Boolean(p.termoLinkEnviadoEm);
+        const termoColor = corEtapaProcesso(termoLinkEnviado, termoAssinado);
         const termoTitle = termoAssinado
             ? 'Visualizar dados do termo concluído'
-            : 'Abrir termo incompleto e enviar link ao proponente';
+            : (termoLinkEnviado
+                ? 'Link do termo enviado — aguardando preenchimento e assinatura do proponente'
+                : 'Link do termo não enviado ou sem histórico de envio — abrir para enviar');
         const termoEditLink = termoAssinado && userRole === 'admin'
             ? `<button class="termo-editar-link" onclick="abrirEditorTermo(${originalIndex})" title="Editar dados do termo concluído"><i class="fas fa-edit"></i> editar termo</button>`
             : '';
@@ -1332,18 +1347,15 @@ function renderTabela() {
         const divulgacaoInstitucional = p.divulgacaoInstitucional || {};
         const divulgacaoEnviada = divulgacaoInstitucional.enviado === true;
         const divulgacaoBloqueada = !termoAssinado;
-        const divulgacaoColor = divulgacaoBloqueada
-            ? '#cbd5e1'
-            : (registroAtividadesCompleto
-                ? '#16a34a'
-                : (divulgacaoEnviada ? '#2563eb' : '#60a5fa'));
-        const divulgacaoTitle = divulgacaoBloqueada
-            ? 'Aguardando termo de autorização completo'
-            : (registroAtividadesCompleto
-                ? 'Divulgação enviada e registro de atividades recebido — abrir para reenviar'
-                : (divulgacaoEnviada
-                    ? 'Divulgação enviada — aguardando retorno do Registro de atividades; abrir para reenviar'
-                    : 'Divulgação liberada — enviar manualmente ou aguardar o envio automático'));
+        const divulgacaoCompleta = divulgacaoEnviada && registroAtividadesCompleto;
+        const divulgacaoColor = corEtapaProcesso(divulgacaoEnviada, divulgacaoCompleta);
+        const divulgacaoTitle = divulgacaoCompleta
+            ? 'Divulgação enviada e registro de atividades recebido — abrir para reenviar'
+            : (divulgacaoEnviada
+                ? 'Divulgação enviada — aguardando retorno do Registro de atividades; abrir para reenviar'
+                : (divulgacaoBloqueada
+                    ? 'Divulgação não enviada — aguardando termo de autorização completo'
+                    : 'Divulgação não enviada — enviar manualmente ou aguardar o envio automático'));
         const divulgacaoClick = divulgacaoBloqueada
             ? ''
             : `abrirDivulgacao(${originalIndex})`;
@@ -1353,18 +1365,14 @@ function renderTabela() {
             ? `<button class="btn-action" title="Documentos (${documentosInscricao.length})" aria-label="Documentos da inscrição" onclick="abrirDocumentos(${originalIndex})" style="color:${documentosColor}"><i class="fas fa-folder-open"></i>${documentosInscricao.length ? ` <small>${documentosInscricao.length}</small>` : ''}</button>`
             : '';
         const registroAtividadesBloqueado = !divulgacaoEnviada;
-        const registroAtividadesColor = registroAtividadesBloqueado
-            ? '#cbd5e1'
-            : (registroAtividadesCompleto
-                ? '#16a34a'
-                : (registroAtividadesEnviado ? '#764ba2' : '#a78bfa'));
-        const registroAtividadesTitle = registroAtividadesBloqueado
-            ? 'Aguardando envio da divulgação institucional'
-            : (registroAtividadesCompleto
-                ? 'Visualizar registro de atividades preenchido'
-                : (registroAtividadesEnviado
-                    ? 'Registro de atividades enviado — aguardando preenchimento do proponente'
-                    : 'Registro de atividades liberado — aguardando envio automático'));
+        const registroAtividadesColor = corEtapaProcesso(registroAtividadesEnviado, registroAtividadesCompleto);
+        const registroAtividadesTitle = registroAtividadesCompleto
+            ? 'Visualizar registro de atividades preenchido'
+            : (registroAtividadesEnviado
+                ? 'Registro de atividades enviado — aguardando preenchimento do proponente'
+                : (registroAtividadesBloqueado
+                    ? 'Registro de atividades não enviado — aguardando divulgação institucional'
+                    : 'Registro de atividades não enviado — aguardando envio automático'));
         const registroAtividadesIcon = registroAtividadesCompleto ? 'fa-clipboard-check' : 'fa-clipboard-list';
 
         let stClass = 'st-pendente', stText = 'Pendente';
@@ -1379,8 +1387,8 @@ function renderTabela() {
         ` : '';
         const etapasProcesso = userRole === 'admin' ? `
             <button class="btn-action" title="${termoTitle}" aria-label="${termoTitle}" onclick="${termoClick}" style="color:${termoColor}"><i class="fas fa-file-signature"></i></button>
-            <button class="btn-action" title="${divulgacaoTitle}" aria-label="${divulgacaoTitle}" ${divulgacaoBloqueada ? 'disabled' : ''} ${divulgacaoClick ? `onclick="${divulgacaoClick}"` : ''} style="color:${divulgacaoColor};${divulgacaoBloqueada ? 'opacity:.45;cursor:not-allowed' : ''}"><i class="fas fa-bullhorn"></i></button>
-            <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" ${registroAtividadesBloqueado ? 'disabled' : ''} ${registroAtividadesBloqueado ? '' : `onclick="abrirRegistroAtividades(${originalIndex})"`} style="color:${registroAtividadesColor};${registroAtividadesBloqueado ? 'opacity:.45;cursor:not-allowed' : ''}"><i class="fas ${registroAtividadesIcon}"></i></button>
+            <button class="btn-action" title="${divulgacaoTitle}" aria-label="${divulgacaoTitle}" ${divulgacaoBloqueada ? 'disabled' : ''} ${divulgacaoClick ? `onclick="${divulgacaoClick}"` : ''} style="color:${divulgacaoColor};opacity:1;${divulgacaoBloqueada ? 'cursor:not-allowed' : ''}"><i class="fas fa-bullhorn"></i></button>
+            <button class="btn-action" title="${registroAtividadesTitle}" aria-label="${registroAtividadesTitle}" ${registroAtividadesBloqueado ? 'disabled' : ''} ${registroAtividadesBloqueado ? '' : `onclick="abrirRegistroAtividades(${originalIndex})"`} style="color:${registroAtividadesColor};opacity:1;${registroAtividadesBloqueado ? 'cursor:not-allowed' : ''}"><i class="fas ${registroAtividadesIcon}"></i></button>
              ${ENVIO_MANUAL_LEGADO_ATIVIDADES_HABILITADO ? `<button class="btn-action" title="Enviar link do Registro de atividades ao proponente" aria-label="Enviar link do Registro de atividades ao proponente" onclick="enviarLinkRegistroAtividades(${originalIndex}, this)" style="color:#764ba2"><i class="fas fa-paper-plane"></i></button>` : ''}
         ` : '';
 
@@ -1558,8 +1566,11 @@ async function enviarLinkTermoPendente() {
         if (!r.ok || !data.success || data.enviados !== 1) {
             throw new Error(data.error || 'O link não foi enviado.');
         }
-        status.style.color = '#15803d';
-        status.textContent = `Link enviado para ${p.email}.`;
+        status.style.color = data.detalhes?.[0]?.statusAtualizado === false ? '#d97706' : '#15803d';
+        status.textContent = data.detalhes?.[0]?.statusAtualizado === false
+            ? `Link enviado para ${p.email}, mas o painel não conseguiu salvar o estado do envio.`
+            : `Link enviado para ${p.email}.`;
+        await loadData(true);
     } catch (e) {
         status.style.color = '#b91c1c';
         status.textContent = e.message;
@@ -1847,8 +1858,11 @@ async function reenviarTermoParaProponente() {
                 : detalhe?.msg;
             throw new Error(data.error || motivo || 'Não foi possível reenviar o link.');
         }
-        status.style.color = '#15803d';
-        status.textContent = `Link reenviado para ${p.email}.`;
+        status.style.color = data.detalhes?.[0]?.statusAtualizado === false ? '#d97706' : '#15803d';
+        status.textContent = data.detalhes?.[0]?.statusAtualizado === false
+            ? `Link reenviado para ${p.email}, mas o painel não conseguiu salvar o estado do envio.`
+            : `Link reenviado para ${p.email}.`;
+        await loadData(true);
     } catch (e) {
         status.style.color = '#b91c1c';
         status.textContent = e.message;
@@ -2413,6 +2427,8 @@ async function enviarLinksTermoMassa() {
         const enviados = d.detalhes.filter(x => x.status === 'enviado');
         const erros = d.detalhes.filter(x => x.status === 'erro');
         const naoEncontrados = d.detalhes.filter(x => x.status === 'nao_encontrado');
+        const enviadosSemStatus = enviados.filter(x => x.statusAtualizado === false);
+        if (enviados.length) await loadData(true);
 
         const itemRow = (icon, cor, texto) =>
             `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;font-size:13px">
@@ -2431,6 +2447,9 @@ async function enviarLinksTermoMassa() {
         if (enviados.length) {
             html += `<p style="font-size:12px;font-weight:700;color:#065f46;margin:10px 0 4px">ENVIADOS COM SUCESSO:</p>`;
             enviados.forEach(x => { html += itemRow('fas fa-check-circle', '#16a34a', `${escapeHtml(x.nome || x.email)} — <span style="color:#888">${escapeHtml(x.evento || '')}</span> &lt;${escapeHtml(x.email)}&gt;`); });
+        }
+        if (enviadosSemStatus.length) {
+            html += `<p style="font-size:12px;color:#92400e;margin:10px 0 4px">${enviadosSemStatus.length} link(s) enviado(s), mas o estado não pôde ser atualizado no painel.</p>`;
         }
         if (naoEncontrados.length) {
             html += `<p style="font-size:12px;font-weight:700;color:#991b1b;margin:14px 0 4px">NÃO ENCONTRADOS NO SISTEMA:</p>`;
