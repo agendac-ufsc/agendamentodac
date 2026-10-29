@@ -62,6 +62,26 @@
       "dest": "/api/admin-documents.js"
     },
     {
+      "src": "^/api/admin/arquivadas$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivadas/[^/]+/termo[.]pdf$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivamento/previa$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivamento/aplicar$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivamento/automatico$",
+      "dest": "/api/[...path].js"
+    },
+    {
       "src": "^/api/registro-atividades$",
       "dest": "/api/registro-atividades.js"
     },
