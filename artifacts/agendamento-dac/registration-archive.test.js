@@ -16,6 +16,7 @@ function inscricao(overrides = {}) {
         email: 'pessoa@example.org',
         telefone: '48999990000',
         evento: 'Mostra de Música',
+        legacyId: 'forms_pessoa_mostra_1',
         localNome: 'Teatro Carmen Fossari',
         calendarId: 'cal-teatro',
         timestamp: '2026-01-01T10:00:00.000Z',
@@ -87,7 +88,7 @@ test('usa limite estrito de mais de 30 dias e entende fim de evento de dia intei
     );
 });
 
-test('registro arquivado conserva resumo, cronograma e PDF do termo sem documentos ou dados extensos', () => {
+test('resumo arquivado preserva o original e não copia documentos ou dados extensos', () => {
     const source = inscricao({
         documentos: [{ blobUrl: 'https://example.org/private', tamanho: 1000 }],
         segundaEtapaTeste: { cpf: '00000000000' },
@@ -101,11 +102,14 @@ test('registro arquivado conserva resumo, cronograma e PDF do termo sem document
             storedAt: '2026-08-05T12:00:00.000Z'
         }
     });
+    const original = JSON.parse(JSON.stringify(source));
     const prova = avaliarElegibilidadeArquivo(source, [evento()], agora);
     const archived = criarRegistroArquivado(source, prova, agora);
 
+    assert.deepEqual(source, original);
     assert.equal(archived.eventName, source.evento);
     assert.equal(archived.applicantEmail, source.email);
+    assert.equal(archived.legacyId, source.legacyId);
     assert.equal(archived.termoPdf.fileName, 'termo.pdf');
     assert.equal('documentos' in archived, false);
     assert.equal('segundaEtapaTeste' in archived, false);

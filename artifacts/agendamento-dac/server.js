@@ -1228,7 +1228,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
     const [inscricoes, arquivadas] = await Promise.all([getAgendamentos(), getArchiveRecords()]);
     const idsJaArquivados = new Set(arquivadas
         .filter(item => item?.archiveStatus === 'archived')
-        .map(item => String(item.id)));
+        .flatMap(item => [item.id, item.legacyId].filter(Boolean).map(String)));
     const calendarIds = [...new Set(inscricoes.map(obterCalendarIdInscricao).filter(Boolean))];
     const eventosPorCalendario = new Map();
     await Promise.all(calendarIds.map(async calendarId => {
@@ -1239,7 +1239,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
     const bloqueadas = [];
     for (const inscricao of inscricoes) {
         const id = String(inscricao?.id || '');
-        if (!id || idsJaArquivados.has(id)) continue;
+        if (!id || idsJaArquivados.has(id) || idsJaArquivados.has(String(inscricao?.legacyId || ''))) continue;
         const calendarId = obterCalendarIdInscricao(inscricao);
         if (!calendarId) continue;
         const prova = avaliarElegibilidadeArquivo(
@@ -1250,27 +1250,14 @@ async function criarPreviaArquivamento(agora = new Date()) {
         if (!prova.elegivel) continue;
 
         const documentos = Array.isArray(inscricao.documentos) ? inscricao.documentos : [];
-        const documentosSemReferenciaSegura = documentos.filter(documento =>
-            !documento?.blobUrl
-            || !pathnameDocumentoDaInscricaoValido(documento.pathname, id)
-        );
         const termoPdfValido = Boolean(
             inscricao.termoPdf?.blobUrl
             && String(inscricao.termoPdf.pathname || '').startsWith('termos/assinados/')
         );
-        let motivoBloqueio = '';
-        if (inscricao.termoAssinado === true && !termoPdfValido) {
-            motivoBloqueio = 'Termo assinado sem PDF preservado no sistema.';
-        } else if (documentosSemReferenciaSegura.length > 0) {
-            motivoBloqueio = 'Há arquivos sem referência segura para exclusão.';
-        } else if (documentos.length > 0
-            && inscricao.inscricaoTeste !== true
-            && inscricao.inscricaoTesteConcluida !== true) {
-            motivoBloqueio = 'Inscrição legada; os documentos não serão apagados automaticamente.';
-        }
 
         const candidato = {
             id,
+            legacyId: String(inscricao.legacyId || ''),
             applicantName: String(inscricao.nome || ''),
             eventName: String(inscricao.evento || ''),
             venue: String(inscricao.localNome || inscricao.local || ''),
@@ -1283,11 +1270,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
             _proof: prova,
             _documents: documentos
         };
-        if (motivoBloqueio) {
-            bloqueadas.push({ ...candidato, reason: motivoBloqueio });
-        } else {
-            elegiveis.push(candidato);
-        }
+        elegiveis.push(candidato);
     }
 
     return {
@@ -1300,7 +1283,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
 }
 
 function registroArquivadoPublico(registro) {
-    const { termoPdf, documentCleanup, cleanupFailures, ...publico } = registro;
+    const { termoPdf, ...publico } = registro;
     return {
         ...publico,
         termPdfAvailable: Boolean(termoPdf?.blobUrl),
@@ -1311,56 +1294,6 @@ function registroArquivadoPublico(registro) {
 async function atualizarInscricoesArquivadas(registros) {
     if (!redis) throw new Error('Armazenamento de arquivos indisponível.');
     await redis.set(INSCRICOES_ARQUIVADAS_KEY, registros);
-}
-
-async function substituirInscricoesPorRegistrosMinimos(inscricoes) {
-    if (!redis || !Array.isArray(inscricoes) || inscricoes.length === 0) return 0;
-    const script = redis.createScript(`
-        local raw = redis.call('GET', KEYS[1])
-        if not raw then return 0 end
-        local rows = cjson.decode(raw)
-        local replacements = {}
-        for i = 1, #ARGV, 2 do
-            replacements[ARGV[i]] = cjson.decode(ARGV[i + 1])
-        end
-        local changed = 0
-        for i = 1, #rows do
-            local id = rows[i] and rows[i].id
-            if id and replacements[tostring(id)] then
-                rows[i] = replacements[tostring(id)]
-                changed = changed + 1
-            end
-        end
-        redis.call('SET', KEYS[1], cjson.encode(rows))
-        return changed
-    `);
-    const args = [];
-    for (const inscricao of inscricoes) {
-        const id = String(inscricao.id);
-        const termo = inscricao.termoPdf || null;
-        const minimo = {
-            id,
-            nome: inscricao.nome || '',
-            email: inscricao.email || '',
-            telefone: inscricao.telefone || '',
-            evento: inscricao.evento || '',
-            local: inscricao.local || '',
-            localNome: inscricao.localNome || '',
-            calendarId: inscricao.calendarId || '',
-            calendarSynced: true,
-            etapas: inscricao.etapas?.evento ? { evento: inscricao.etapas.evento } : {},
-            timestamp: inscricao.timestamp || inscricao.createdAt || '',
-            inscricaoTeste: inscricao.inscricaoTeste === true,
-            inscricaoTesteConcluida: inscricao.inscricaoTesteConcluida === true,
-            legacyId: inscricao.legacyId || '',
-            arquivado: true,
-            termoAssinado: inscricao.termoAssinado === true,
-            termoAssinadoEm: inscricao.termoAssinadoEm || '',
-            ...(termo ? { termoPdf: termo } : {})
-        };
-        args.push(id, JSON.stringify(minimo));
-    }
-    return script.exec([AGENDAMENTOS_KEY], args);
 }
 
 async function executarArquivamento(idsSolicitados = null, limite = 50) {
@@ -1375,75 +1308,39 @@ async function executarArquivamento(idsSolicitados = null, limite = 50) {
 
     try {
         const previa = await criarPreviaArquivamento();
-        const permitidos = idsSolicitados === null
+        const idsSet = idsSolicitados === null ? null : new Set(idsSolicitados.map(String));
+        const permitidos = idsSet === null
             ? previa.eligible.slice(0, limite)
-            : previa.eligible.filter(item => new Set(idsSolicitados.map(String)).has(item.id));
-        const naoElegiveis = idsSolicitados === null
+            : previa.eligible.filter(item => idsSet.has(item.id));
+        const naoElegiveis = idsSet === null
             ? []
-            : idsSolicitados.map(String).filter(id => !permitidos.some(item => item.id === id));
+            : [...idsSet].filter(id => !permitidos.some(item => item.id === id));
         let arquivadas = await getArchiveRecords();
         const resultados = [];
-        const registrosMinimos = [];
 
         for (const candidato of permitidos) {
             const inscricao = candidato._source;
             const registroBase = criarRegistroArquivado(inscricao, candidato._proof, new Date());
             const documentos = candidato._documents.map(documento => ({
-                pathname: documento.pathname,
-                blobUrl: documento.blobUrl,
-                fileName: documento.nome || 'documento',
+                fileName: String(documento.nome || 'documento'),
                 size: Number(documento.tamanho) || 0
             }));
-            const pendente = {
-                ...registroBase,
-                archiveStatus: 'cleanup_pending',
-                documentCleanup: documentos
-            };
-            const idxExistente = arquivadas.findIndex(item => String(item.id) === candidato.id);
-            if (idxExistente >= 0) arquivadas[idxExistente] = pendente;
-            else arquivadas.push(pendente);
-            await atualizarInscricoesArquivadas(arquivadas);
-
-            const exclusoes = await Promise.allSettled(documentos.map(documento =>
-                deleteBlob(documento.blobUrl, blobOptions())
-            ));
-            const falhas = exclusoes
-                .map((resultado, index) => resultado.status === 'rejected' ? documentos[index] : null)
-                .filter(Boolean);
-            if (falhas.length > 0) {
-                arquivadas = await getArchiveRecords();
-                const idxPendente = arquivadas.findIndex(item => String(item.id) === candidato.id);
-                if (idxPendente >= 0) {
-                    arquivadas[idxPendente] = {
-                        ...arquivadas[idxPendente],
-                        cleanupFailures: falhas.map(item => item.fileName)
-                    };
-                    await atualizarInscricoesArquivadas(arquivadas);
-                }
-                resultados.push({ id: candidato.id, archived: false, reason: 'Falha ao excluir um ou mais arquivos.' });
-                continue;
-            }
-
-            registrosMinimos.push(inscricao);
             const concluido = {
                 ...registroBase,
                 archiveStatus: 'archived',
-                documentsDeletedCount: documentos.length,
-                documentsDeletedBytes: documentos.reduce((total, item) => total + item.size, 0)
+                preservedFileCount: documentos.length,
+                preservedFileBytes: documentos.reduce((total, item) => total + item.size, 0)
             };
-            arquivadas = await getArchiveRecords();
-            const idxConcluido = arquivadas.findIndex(item => String(item.id) === candidato.id);
-            if (idxConcluido >= 0) arquivadas[idxConcluido] = concluido;
+            const idxExistente = arquivadas.findIndex(item =>
+                String(item.id) === candidato.id
+                || (candidato.legacyId && String(item.legacyId || '') === candidato.legacyId)
+            );
+            if (idxExistente >= 0) arquivadas[idxExistente] = concluido;
             else arquivadas.push(concluido);
             await atualizarInscricoesArquivadas(arquivadas);
-            await addToBlacklist(candidato.id);
-            if (inscricao.legacyId) await addToBlacklist(String(inscricao.legacyId));
-            resultados.push({ id: candidato.id, archived: true, deletedFiles: documentos.length });
+            resultados.push({ id: candidato.id, archived: true, preservedFiles: documentos.length });
         }
 
-        if (registrosMinimos.length) {
-            await substituirInscricoesPorRegistrosMinimos(registrosMinimos);
-        }
         return {
             success: naoElegiveis.length === 0 && resultados.every(item => item.archived),
             processed: resultados.length,
@@ -4454,12 +4351,10 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         // Filtrar registros que estao na Blacklist
         const blacklist = await getBlacklist();
         const arquivadas = await getArchiveRecords();
-        const ocultas = new Set([
-            ...blacklist.map(String),
-            ...arquivadas
-                .filter(item => item?.archiveStatus === 'archived')
-                .map(item => String(item.id))
-        ]);
+        const idsArquivados = arquivadas
+            .filter(item => item?.archiveStatus === 'archived')
+            .flatMap(item => [item.id, item.legacyId].filter(Boolean).map(String));
+        const ocultas = new Set([...blacklist.map(String), ...idsArquivados]);
         const unificadosFiltrados = unificados.filter(u => {
             const id = u.primeiraEtapa.id;
             // Aceita também o ID antigo para não reexibir registros legados

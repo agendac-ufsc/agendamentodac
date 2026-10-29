@@ -306,7 +306,7 @@
             <div class="card-header">
                 <div>
                     <h3 style="font-size:16px;color:#444;margin:0 0 5px">Arquivo de inscrições</h3>
-                    <p style="font-size:12px;color:#777;margin:0">Eventos confirmados no calendário há mais de 30 dias. A ficha PDF é gerada a partir do resumo; o termo assinado fica preservado como PDF privado.</p>
+                    <p style="font-size:12px;color:#777;margin:0">Inscrições com evento confirmado no calendário há mais de 30 dias. Os dados e arquivos originais permanecem intactos; a ficha PDF é gerada a partir do resumo.</p>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                     <button class="btn-top btn-purple" onclick="previewArchiveCandidates()"><i class="fas fa-clipboard-check"></i> Ver elegíveis</button>
@@ -1352,20 +1352,20 @@ async function previewArchiveCandidates() {
         if (data.eligible.length) {
             eligible.innerHTML = `
                 <h5 style="font-size:13px;margin:8px 0">Elegíveis para arquivar</h5>
-                <div class="table-wrap"><table><thead><tr><th><input type="checkbox" checked onchange="toggleArchivePreviewSelection(this.checked)" aria-label="Selecionar todas"></th><th>Evento / Proponente</th><th>Fim do evento</th><th>Arquivos a excluir</th><th>Termo</th></tr></thead>
+                <div class="table-wrap"><table><thead><tr><th><input type="checkbox" checked onchange="toggleArchivePreviewSelection(this.checked)" aria-label="Selecionar todas"></th><th>Evento / Proponente</th><th>Fim do evento</th><th>Arquivos que serão mantidos</th><th>Termo</th></tr></thead>
                 <tbody>${data.eligible.map(item => `<tr>
                     <td><input type="checkbox" class="archive-preview-checkbox" value="${escapeHtml(item.id)}" checked aria-label="Selecionar inscrição"></td>
                     <td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br>${escapeHtml(item.applicantName || '')}</td>
                     <td>${formatArchiveDate(item.lastEventEnd)}</td>
                     <td>${Number(item.documentCount) || 0} arquivo(s) · ${formatArchiveBytes(item.documentBytes)}</td>
-                    <td>${item.termPdfAvailable ? 'PDF preservado' : 'Sem termo assinado'}</td>
+                    <td>${item.termPdfAvailable ? 'PDF preservado' : item.termoAssinado ? 'Assinado; PDF não armazenado aqui' : 'Sem termo assinado'}</td>
                 </tr>`).join('')}</tbody></table></div>`;
             apply.disabled = false;
         } else {
             eligible.innerHTML = '<p style="font-size:12px;color:#777">Nenhuma inscrição pronta para arquivamento.</p>';
         }
         if (data.blocked.length) {
-            blocked.innerHTML = `<h5 style="font-size:13px;margin:8px 0">Bloqueadas — nenhum arquivo será apagado</h5>
+            blocked.innerHTML = `<h5 style="font-size:13px;margin:8px 0">Não elegíveis para mover</h5>
                 <div class="table-wrap"><table><thead><tr><th>Evento / Proponente</th><th>Motivo</th></tr></thead><tbody>
                 ${data.blocked.map(item => `<tr><td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br>${escapeHtml(item.applicantName || '')}</td><td>${escapeHtml(item.reason)}</td></tr>`).join('')}
                 </tbody></table></div>`;
@@ -1387,14 +1387,12 @@ async function applyArchivePreview() {
     const ids = [...document.querySelectorAll('.archive-preview-checkbox:checked')].map(input => input.value);
     if (!ids.length) return alert('Selecione ao menos uma inscrição.');
     const selecionadas = archivePreview.eligible.filter(item => ids.includes(String(item.id)));
-    const totalArquivos = selecionadas.reduce((total, item) => total + (Number(item.documentCount) || 0), 0);
-    const totalBytes = selecionadas.reduce((total, item) => total + (Number(item.documentBytes) || 0), 0);
     const mensagem = `Arquivar ${ids.length} inscrição(ões)?\n\n` +
         `• Serão removidas da aba Inscrições.\n` +
-        `• ${totalArquivos} arquivo(s) enviados serão apagados permanentemente (${formatArchiveBytes(totalBytes)}).\n` +
-        `• A ficha resumida e os PDFs de termos já preservados continuarão no Arquivo.\n` +
+        `• Os registros e arquivos originais serão mantidos sem alteração.\n` +
+        `• O Arquivo mostrará apenas o resumo e os PDFs disponíveis.\n` +
         `• Os eventos do Google Calendar não serão alterados.\n\n` +
-        'Esta ação não pode ser desfeita. Continuar?';
+        'Continuar?';
     if (!confirm(mensagem)) return;
 
     const apply = document.getElementById('btnApplyArchive');
@@ -1418,7 +1416,7 @@ async function applyArchivePreview() {
 
 async function setAutomaticArchive(enabled) {
     const toggle = document.getElementById('archiveAutoToggle');
-    if (enabled && !confirm('Ativar verificação diária às 06h de Brasília? O sistema arquivará inscrições com vínculo exato no calendário após 30 dias e apagará os documentos pesados dessas inscrições. Termos assinados sem PDF preservado serão bloqueados.')) {
+    if (enabled && !confirm('Ativar verificação diária às 06h de Brasília? O sistema moverá para o Arquivo as inscrições com vínculo exato no calendário após 30 dias. Os registros e arquivos originais serão preservados.')) {
         toggle.checked = false;
         return;
     }

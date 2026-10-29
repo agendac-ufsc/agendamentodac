@@ -115,6 +115,7 @@ function criarRegistroArquivado(inscricao, prova, arquivadoEm = new Date()) {
         eventName: String(inscricao.evento || ''),
         venue: String(inscricao.localNome || inscricao.local || ''),
         calendarId: String(inscricao.calendarId || ''),
+        legacyId: String(inscricao.legacyId || ''),
         lastEventEnd: prova.ultimoEventoEm,
         calendarEvents: prova.eventos,
         termoAssinado: inscricao.termoAssinado === true,
