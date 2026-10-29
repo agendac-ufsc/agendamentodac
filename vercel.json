@@ -6,7 +6,17 @@
       "includeFiles": "artifacts/agendamento-dac/index*.html"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/arquivar-inscricoes",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "routes": [
+    {
+      "src": "^/api/cron/arquivar-inscricoes$",
+      "dest": "/api/cron/arquivar-inscricoes.js"
+    },
     {
       "src": "^/api/cron/verificar-atividades$",
       "dest": "/api/cron/verificar-atividades.js"
@@ -50,6 +60,26 @@
     {
       "src": "^/api/admin/documentos/[^/]+/[^/]+$",
       "dest": "/api/admin-documents.js"
+    },
+    {
+      "src": "^/api/admin/arquivadas$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivadas/[^/]+/termo[.]pdf$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivamento/previa$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivamento/aplicar$",
+      "dest": "/api/[...path].js"
+    },
+    {
+      "src": "^/api/admin/arquivamento/automatico$",
+      "dest": "/api/[...path].js"
     },
     {
       "src": "^/api/registro-atividades$",

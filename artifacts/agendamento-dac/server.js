@@ -30,6 +30,8 @@ const {
     normalizeEvaluatorEmail,
     revokeEvaluatorSession
 } = require('./evaluator-auth');
+const { ADMIN_SESSION_TTL_SECONDS, createAdminSessionToken, verifyAdminSessionToken } = require('./admin-session');
+const { ARCHIVE_RETENTION_DAYS, avaliarElegibilidadeArquivo, criarRegistroArquivado } = require('./registration-archive');
 
 const app = express();
 app.use(cors());
@@ -159,6 +161,16 @@ try {
 
 const assessmentStore = redis ? createAssessmentStore(redis) : null;
 const EVALUATOR_SESSION_COOKIE = 'dac_evaluator_session';
+const ADMIN_SESSION_COOKIE = 'dac_admin_session';
+const INSCRICOES_ARQUIVADAS_KEY = 'inscricoes_arquivadas_v1';
+const ARQUIVAMENTO_AUTOMATICO_KEY = 'inscricoes_arquivamento_automatico_ativo';
+const ARQUIVAMENTO_LOCK_KEY = 'inscricoes_arquivamento_lock';
+
+function obterSenhaAdminConfigurada() {
+    return String(process.env.ADMIN_PASSWORD || '')
+        .replace(/^["']|["']$/g, '')
+        .trim();
+}
 
 function getEvaluatorCookieOptions(req) {
     const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
@@ -187,6 +199,20 @@ function getEvaluatorSessionCookie(req) {
     return '';
 }
 
+function getAdminSessionCookie(req) {
+    const cookies = String(req.headers.cookie || '').split(';');
+    for (const cookie of cookies) {
+        const separator = cookie.indexOf('=');
+        if (separator < 0 || cookie.slice(0, separator).trim() !== ADMIN_SESSION_COOKIE) continue;
+        try {
+            return decodeURIComponent(cookie.slice(separator + 1).trim());
+        } catch {
+            return '';
+        }
+    }
+    return '';
+}
+
 function isSameOriginRequest(req) {
     const origin = String(req.headers.origin || '').trim();
     if (!origin) return true;
@@ -200,6 +226,20 @@ function isSameOriginRequest(req) {
     } catch {
         return false;
     }
+}
+
+function requireAdminSession(req, res, next) {
+    const password = obterSenhaAdminConfigurada();
+    if (!password) {
+        return res.status(503).json({ error: 'A senha administrativa não está configurada no ambiente de produção.' });
+    }
+    if (!isSameOriginRequest(req)) {
+        return res.status(403).json({ error: 'Origem da solicitação não autorizada.' });
+    }
+    if (!verifyAdminSessionToken(password, getAdminSessionCookie(req))) {
+        return res.status(401).json({ error: 'Sessão administrativa inválida ou expirada. Entre novamente.' });
+    }
+    next();
 }
 
 async function findEvaluatorSession(req) {
@@ -1135,6 +1175,187 @@ const clearBlacklist = async () => {
         return false;
     }
 };
+
+async function getArchiveRecords() {
+    if (!redis) return [];
+    const values = parseRedisValue(await redis.get(INSCRICOES_ARQUIVADAS_KEY));
+    return Array.isArray(values) ? values : [];
+}
+
+function obterCalendarIdInscricao(inscricao) {
+    const calendarId = String(inscricao?.calendarId || '').trim();
+    const knownIds = Object.values(CALENDAR_IDS);
+    if (knownIds.includes(calendarId)) return calendarId;
+    const local = String(inscricao?.local || '').toLowerCase();
+    if (CALENDAR_IDS[local]) return CALENDAR_IDS[local];
+    const localNome = String(inscricao?.localNome || '').toLowerCase();
+    if (localNome.includes('igrej')) return CALENDAR_IDS.igrejinha;
+    if (localNome.includes('teatro')) return CALENDAR_IDS.teatro;
+    return '';
+}
+
+async function listarEventosSistemaCalendario(calendarId, agora) {
+    const eventos = [];
+    let pageToken;
+    let pages = 0;
+    do {
+        const response = await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId,
+            timeMin: '2000-01-01T00:00:00.000Z',
+            timeMax: agora.toISOString(),
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 2500,
+            privateExtendedProperty: 'dac_source=sistema',
+            ...(pageToken ? { pageToken } : {})
+        });
+        eventos.push(...(response.data.items || []));
+        pageToken = response.data.nextPageToken;
+        pages++;
+        if (pageToken && pages >= 10) {
+            throw new Error('O calendário excedeu o limite seguro de paginação para o arquivo.');
+        }
+    } while (pageToken);
+    return eventos;
+}
+
+async function criarPreviaArquivamento(agora = new Date()) {
+    if (!redis) throw new Error('Armazenamento das inscrições indisponível.');
+    if (!googleAuthClient) await initGoogleAuth();
+    if (!googleAuthClient) throw new Error('Autenticação do Google Calendar indisponível.');
+
+    const [inscricoes, arquivadas] = await Promise.all([getAgendamentos(), getArchiveRecords()]);
+    const idsJaArquivados = new Set(arquivadas
+        .filter(item => item?.archiveStatus === 'archived')
+        .flatMap(item => [item.id, item.legacyId].filter(Boolean).map(String)));
+    const calendarIds = [...new Set(inscricoes.map(obterCalendarIdInscricao).filter(Boolean))];
+    const eventosPorCalendario = new Map();
+    await Promise.all(calendarIds.map(async calendarId => {
+        eventosPorCalendario.set(calendarId, await listarEventosSistemaCalendario(calendarId, agora));
+    }));
+
+    const elegiveis = [];
+    const bloqueadas = [];
+    for (const inscricao of inscricoes) {
+        const id = String(inscricao?.id || '');
+        if (!id || idsJaArquivados.has(id) || idsJaArquivados.has(String(inscricao?.legacyId || ''))) continue;
+        const calendarId = obterCalendarIdInscricao(inscricao);
+        if (!calendarId) continue;
+        const prova = avaliarElegibilidadeArquivo(
+            inscricao,
+            eventosPorCalendario.get(calendarId) || [],
+            agora
+        );
+        if (!prova.elegivel) continue;
+
+        const documentos = Array.isArray(inscricao.documentos) ? inscricao.documentos : [];
+        const termoPdfValido = Boolean(
+            inscricao.termoPdf?.blobUrl
+            && String(inscricao.termoPdf.pathname || '').startsWith('termos/assinados/')
+        );
+
+        const candidato = {
+            id,
+            legacyId: String(inscricao.legacyId || ''),
+            applicantName: String(inscricao.nome || ''),
+            eventName: String(inscricao.evento || ''),
+            venue: String(inscricao.localNome || inscricao.local || ''),
+            lastEventEnd: prova.ultimoEventoEm,
+            calendarId,
+            documentCount: documentos.length,
+            documentBytes: documentos.reduce((total, documento) => total + (Number(documento?.tamanho) || 0), 0),
+            termPdfAvailable: termoPdfValido,
+            _source: inscricao,
+            _proof: prova,
+            _documents: documentos
+        };
+        elegiveis.push(candidato);
+    }
+
+    return {
+        checkedAt: agora.toISOString(),
+        retentionDays: ARCHIVE_RETENTION_DAYS,
+        scannedCount: inscricoes.length,
+        eligible: elegiveis,
+        blocked: bloqueadas
+    };
+}
+
+function registroArquivadoPublico(registro) {
+    const { termoPdf, ...publico } = registro;
+    return {
+        ...publico,
+        termPdfAvailable: Boolean(termoPdf?.blobUrl),
+        termPdfName: termoPdf?.fileName || null
+    };
+}
+
+async function atualizarInscricoesArquivadas(registros) {
+    if (!redis) throw new Error('Armazenamento de arquivos indisponível.');
+    await redis.set(INSCRICOES_ARQUIVADAS_KEY, registros);
+}
+
+async function executarArquivamento(idsSolicitados = null, limite = 50) {
+    if (!redis) throw new Error('Armazenamento das inscrições indisponível.');
+    const lockToken = randomUUID();
+    const locked = await redis.set(ARQUIVAMENTO_LOCK_KEY, lockToken, { nx: true, ex: 180 });
+    if (!locked) {
+        const error = new Error('Outro processo de arquivamento já está em andamento.');
+        error.statusCode = 409;
+        throw error;
+    }
+
+    try {
+        const previa = await criarPreviaArquivamento();
+        const idsSet = idsSolicitados === null ? null : new Set(idsSolicitados.map(String));
+        const permitidos = idsSet === null
+            ? previa.eligible.slice(0, limite)
+            : previa.eligible.filter(item => idsSet.has(item.id));
+        const naoElegiveis = idsSet === null
+            ? []
+            : [...idsSet].filter(id => !permitidos.some(item => item.id === id));
+        let arquivadas = await getArchiveRecords();
+        const resultados = [];
+
+        for (const candidato of permitidos) {
+            const inscricao = candidato._source;
+            const registroBase = criarRegistroArquivado(inscricao, candidato._proof, new Date());
+            const documentos = candidato._documents.map(documento => ({
+                fileName: String(documento.nome || 'documento'),
+                size: Number(documento.tamanho) || 0
+            }));
+            const concluido = {
+                ...registroBase,
+                archiveStatus: 'archived',
+                preservedFileCount: documentos.length,
+                preservedFileBytes: documentos.reduce((total, item) => total + item.size, 0)
+            };
+            const idxExistente = arquivadas.findIndex(item =>
+                String(item.id) === candidato.id
+                || (candidato.legacyId && String(item.legacyId || '') === candidato.legacyId)
+            );
+            if (idxExistente >= 0) arquivadas[idxExistente] = concluido;
+            else arquivadas.push(concluido);
+            await atualizarInscricoesArquivadas(arquivadas);
+            resultados.push({ id: candidato.id, archived: true, preservedFiles: documentos.length });
+        }
+
+        return {
+            success: naoElegiveis.length === 0 && resultados.every(item => item.archived),
+            processed: resultados.length,
+            archived: resultados.filter(item => item.archived).length,
+            failed: resultados.filter(item => !item.archived).length,
+            rejectedIds: naoElegiveis,
+            results: resultados
+        };
+    } finally {
+        const lockAtual = await redis.get(ARQUIVAMENTO_LOCK_KEY).catch(() => null);
+        if (String(lockAtual || '') === lockToken) {
+            await redis.del(ARQUIVAMENTO_LOCK_KEY).catch(() => null);
+        }
+    }
+}
 
 const BREVO_DEFAULT_SENDER = 'agendac.ufsc@gmail.com';
 const BREVO_SENDER_NAME = 'DAC - UFSC';
@@ -2091,6 +2312,38 @@ app.get('/api/cron/verificar-atividades', async (req, res) => {
     } catch (error) {
         console.error('❌ [Cron] Falha ao verificar envios automáticos de atividades:', error.message);
         return res.status(500).json({ error: 'Falha ao verificar envios automáticos.' });
+    }
+});
+
+app.get('/api/cron/arquivar-inscricoes', async (req, res) => {
+    const autorizacao = String(req.headers.authorization || '');
+    const cronSecret = limparConfiguracaoBrevo(process.env.CRON_SECRET);
+    if (!cronSecret || autorizacao !== `Bearer ${cronSecret}`) {
+        return res.status(401).json({ error: 'Não autorizado' });
+    }
+    if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
+
+    try {
+        const ativo = parseRedisValue(await redis.get(ARQUIVAMENTO_AUTOMATICO_KEY)) === true;
+        if (!ativo) return res.json({ success: true, skipped: true, reason: 'Arquivamento automático desativado.' });
+
+        const resultado = await executarArquivamento(null, 20);
+        await redis.set('inscricoes_arquivamento_ultima_execucao', {
+            at: new Date().toISOString(),
+            trigger: 'cron',
+            processed: resultado.processed,
+            archived: resultado.archived,
+            failed: resultado.failed
+        });
+        return res.json({
+            success: resultado.failed === 0,
+            processed: resultado.processed,
+            archived: resultado.archived,
+            failed: resultado.failed
+        });
+    } catch (error) {
+        console.error('❌ [Cron] Falha no arquivamento automático:', error.message);
+        return res.status(error.statusCode || 500).json({ error: 'Falha ao arquivar inscrições.' });
     }
 });
 
@@ -3383,7 +3636,8 @@ async function buscarDadosInscricaoForms(id) {
             local: localNome.toLowerCase().includes('igrej') ? 'igrejinha' : 'teatro',
             etapas, calendarDates,
             termoAssinado: termo.termoAssinado === true,
-            termoDados: termo.termoDados || null
+            termoDados: termo.termoDados || null,
+            termoPdf: termo.termoPdf || null
         };
     } catch (e) {
         console.error('[/api/agendamento/:id] erro ao buscar inscrição Forms:', e.message);
@@ -3580,6 +3834,121 @@ app.get('/api/agendamento/:id', async (req, res) => {
     } catch (e) {
         console.error('[/api/agendamento/:id] erro:', e);
         res.status(500).json({ error: 'Erro ao buscar inscrição' });
+    }
+});
+
+app.get('/api/admin/arquivadas', requireAdminSession, async (req, res) => {
+    try {
+        if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
+        const [arquivadas, automatico, ultimaExecucao] = await Promise.all([
+            getArchiveRecords(),
+            redis.get(ARQUIVAMENTO_AUTOMATICO_KEY),
+            redis.get('inscricoes_arquivamento_ultima_execucao')
+        ]);
+        const registros = arquivadas
+            .filter(item => item?.archiveStatus === 'archived')
+            .sort((a, b) => String(b.lastEventEnd || '').localeCompare(String(a.lastEventEnd || '')))
+            .map(registroArquivadoPublico);
+        res.json({
+            records: registros,
+            automaticEnabled: parseRedisValue(automatico) === true,
+            lastRun: parseRedisValue(ultimaExecucao) || null
+        });
+    } catch (error) {
+        console.error('❌ [Arquivo] Falha ao listar inscrições arquivadas:', error.message);
+        res.status(500).json({ error: 'Não foi possível carregar o arquivo.' });
+    }
+});
+
+app.post('/api/admin/arquivamento/previa', requireAdminSession, async (_req, res) => {
+    try {
+        const previa = await criarPreviaArquivamento();
+        const publico = candidato => {
+            const { _source, _proof, _documents, ...dados } = candidato;
+            return dados;
+        };
+        res.json({
+            checkedAt: previa.checkedAt,
+            retentionDays: previa.retentionDays,
+            scannedCount: previa.scannedCount,
+            eligible: previa.eligible.map(publico),
+            blocked: previa.blocked.map(publico)
+        });
+    } catch (error) {
+        console.error('❌ [Arquivo] Falha na prévia de arquivamento:', error.message);
+        res.status(503).json({ error: error.message || 'Não foi possível verificar calendário e inscrições.' });
+    }
+});
+
+app.post('/api/admin/arquivamento/aplicar', requireAdminSession, async (req, res) => {
+    const ids = Array.isArray(req.body?.ids)
+        ? [...new Set(req.body.ids.map(value => String(value || '').trim()).filter(Boolean))]
+        : [];
+    if (req.body?.confirm !== true) {
+        return res.status(400).json({ error: 'Confirmação explícita do arquivamento é obrigatória.' });
+    }
+    if (ids.length === 0 || ids.length > 50) {
+        return res.status(400).json({ error: 'Selecione entre 1 e 50 inscrições da prévia.' });
+    }
+
+    try {
+        const resultado = await executarArquivamento(ids, 50);
+        const ultimaExecucao = {
+            at: new Date().toISOString(),
+            trigger: 'admin',
+            processed: resultado.processed,
+            archived: resultado.archived,
+            failed: resultado.failed
+        };
+        await redis.set('inscricoes_arquivamento_ultima_execucao', ultimaExecucao);
+        res.status(resultado.rejectedIds.length ? 409 : 200).json(resultado);
+    } catch (error) {
+        console.error('❌ [Arquivo] Falha ao arquivar inscrições:', error.message);
+        res.status(error.statusCode || 500).json({ error: error.message || 'Não foi possível concluir o arquivamento.' });
+    }
+});
+
+app.post('/api/admin/arquivamento/automatico', requireAdminSession, async (req, res) => {
+    const enabled = req.body?.enabled;
+    if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Informe se o arquivamento automático deve ficar ativo.' });
+    }
+    if (!redis) return res.status(503).json({ error: 'Armazenamento de configurações indisponível.' });
+    try {
+        await redis.set(ARQUIVAMENTO_AUTOMATICO_KEY, enabled);
+        res.json({ success: true, automaticEnabled: enabled });
+    } catch (error) {
+        console.error('❌ [Arquivo] Falha ao salvar configuração automática:', error.message);
+        res.status(500).json({ error: 'Não foi possível salvar a configuração automática.' });
+    }
+});
+
+app.get('/api/admin/arquivadas/:id/termo.pdf', requireAdminSession, async (req, res) => {
+    try {
+        if (!blobStorageReady) return res.status(503).send('Armazenamento privado indisponível.');
+        const id = String(req.params.id || '');
+        const registro = (await getArchiveRecords()).find(item =>
+            String(item.id) === id && item.archiveStatus === 'archived'
+        );
+        const blobUrl = registro?.termoPdf?.blobUrl;
+        if (!blobUrl || !String(registro.termoPdf.pathname || '').startsWith('termos/assinados/')) {
+            return res.status(404).send('PDF do termo não disponível no arquivo.');
+        }
+        const arquivo = await getBlob(blobUrl, blobOptions({ access: 'private', useCache: false }));
+        if (arquivo.statusCode !== 200 || !arquivo.stream) {
+            return res.status(404).send('PDF do termo indisponível.');
+        }
+        const nome = String(registro.termoPdf.fileName || 'termo-assinado.pdf')
+            .replace(/[^a-zA-Z0-9_.-]/g, '_');
+        res.set({
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': `attachment; filename="${encodeURIComponent(nome)}"`,
+            'Cache-Control': 'private, no-store'
+        });
+        Readable.fromWeb(arquivo.stream).pipe(res);
+    } catch (error) {
+        console.error('❌ [Arquivo] Falha ao abrir PDF do termo:', error.message);
+        res.status(500).send('Não foi possível abrir o PDF do termo.');
     }
 });
 
@@ -3981,12 +4350,19 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
         // Filtrar registros que estao na Blacklist
         const blacklist = await getBlacklist();
+        const arquivadas = await getArchiveRecords();
+        const idsArquivados = arquivadas
+            .filter(item => item?.archiveStatus === 'archived')
+            .flatMap(item => [item.id, item.legacyId].filter(Boolean).map(String));
+        const ocultas = new Set([...blacklist.map(String), ...idsArquivados]);
         const unificadosFiltrados = unificados.filter(u => {
             const id = u.primeiraEtapa.id;
             // Aceita também o ID antigo para não reexibir registros legados
             // que já haviam sido ocultados antes da geração individual.
             const legacyId = u.primeiraEtapa.legacyId;
-            return id && !blacklist.includes(id) && (!legacyId || !blacklist.includes(legacyId));
+            return id
+                && !ocultas.has(String(id))
+                && (!legacyId || !ocultas.has(String(legacyId)));
         });
 
         console.log(`[DEBUG] Gerados ${unificados.length} registros unificados. ${blacklist.length} filtrados pela Blacklist.`);
@@ -4022,7 +4398,10 @@ app.delete('/api/admin/excluir/:email', async (req, res) => {
 // leituras/gravações do Redis quando várias inscrições são removidas juntas.
 app.delete('/api/agendamentos-selecionados', async (req, res) => {
     const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
-    const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+    const senhaAdmin = obterSenhaAdminConfigurada();
+    if (!senhaAdmin) {
+        return res.status(503).json({ success: false, error: 'Senha administrativa não configurada no ambiente.' });
+    }
     if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
         return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
     }
@@ -4084,8 +4463,8 @@ async function excluirAgendamentoPorId(req, res) {
         }
 
         const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
-        const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
-        if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
+        const senhaAdmin = obterSenhaAdminConfigurada();
+        if (!senhaAdmin || !senhaFornecida || senhaFornecida !== senhaAdmin) {
             const session = await findEvaluatorSession(req);
             if (session.status === 'unavailable') {
                 return res.status(503).json({ success: false, error: 'Armazenamento de sessões indisponível.' });
@@ -4154,7 +4533,10 @@ app.delete('/api/agendamentos/:id', excluirAgendamentoPorId);
 app.delete('/api/admin/excluir-tudo', async (req, res) => {
     try {
         const senhaFornecida = String(req.body?.password || req.headers['x-admin-password'] || '');
-        const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+        const senhaAdmin = obterSenhaAdminConfigurada();
+        if (!senhaAdmin) {
+            return res.status(503).json({ success: false, error: 'Senha administrativa não configurada no ambiente.' });
+        }
         if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
             return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
         }
@@ -4386,13 +4768,29 @@ app.delete('/api/admin/excluir-tudo', async (req, res) => {
 
 app.post('/api/auth/admin', (req, res) => {
     const { password } = req.body;
-    const adminPassword = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+    const adminPassword = obterSenhaAdminConfigurada();
+    if (!adminPassword) {
+        return res.status(503).json({
+            success: false,
+            message: 'A senha de administrador precisa ser configurada no ambiente antes de liberar o painel.'
+        });
+    }
     if (!password) return res.status(400).json({ error: 'Senha obrigatória.' });
     if (password === adminPassword) {
+        const sessionToken = createAdminSessionToken(adminPassword);
+        res.cookie(ADMIN_SESSION_COOKIE, sessionToken, {
+            ...getEvaluatorCookieOptions(req),
+            maxAge: ADMIN_SESSION_TTL_SECONDS * 1000
+        });
         res.json({ success: true, message: 'Acesso de administrador autorizado.' });
     } else {
         res.status(403).json({ success: false, message: 'Senha incorreta.' });
     }
+});
+
+app.post('/api/auth/admin/logout', (req, res) => {
+    res.clearCookie(ADMIN_SESSION_COOKIE, getEvaluatorCookieOptions(req));
+    res.json({ success: true });
 });
 
 app.post('/api/auth/viewer', async (req, res) => {
@@ -4537,7 +4935,10 @@ app.post('/api/evaluators', async (req, res) => {
 app.patch('/api/evaluators', async (req, res) => {
     const id = String(req.body?.id || '').trim();
     const senhaFornecida = String(req.body?.password || '');
-    const senhaAdmin = (process.env.ADMIN_PASSWORD || 'admin.dac.ufsc').replace(/^["']|["']$/g, '');
+    const senhaAdmin = obterSenhaAdminConfigurada();
+    if (!senhaAdmin) {
+        return res.status(503).json({ success: false, error: 'Senha administrativa não configurada no ambiente.' });
+    }
     if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
         return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
     }
@@ -5200,6 +5601,17 @@ async function saveTermoLegada(id, dados) {
     }
 }
 
+async function salvarReferenciaPdfTermo(id, referencia) {
+    const idNormalizado = String(id || '');
+    if (!idNormalizado || !referencia) return false;
+    if (idNormalizado.startsWith('forms_')) {
+        const mapa = await getTermosLegadas();
+        const atual = mapa[idNormalizado] || {};
+        return saveTermoLegada(idNormalizado, { ...atual, termoPdf: referencia });
+    }
+    return updateAgendamento(idNormalizado, { termoPdf: referencia });
+}
+
 app.post('/api/admin/atualizar-termo', async (req, res) => {
     const { id, termoDados, marcarConcluido = true } = req.body || {};
     if (!id || !termoDados || typeof termoDados !== 'object' || Array.isArray(termoDados)) {
@@ -5499,15 +5911,16 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
         return res.status(500).json({ error: 'Serviço de e-mail não configurado.' });
     }
 
+    let inscricaoParaSalvarTermo = null;
     // Quando o termo veio de uma inscrição, o destinatário deve ser o e-mail original.
     if (id) {
         const inscricoes = await getAgendamentos();
-        const inscricao = inscricoes.find(item => String(item.id) === String(id))
+        inscricaoParaSalvarTermo = inscricoes.find(item => String(item.id) === String(id))
             || await buscarDadosInscricaoForms(String(id));
-        if (!inscricao) {
+        if (!inscricaoParaSalvarTermo) {
             return res.status(404).json({ error: 'Inscrição não encontrada.' });
         }
-        const emailOriginal = String(inscricao.email || '').trim().toLowerCase();
+        const emailOriginal = String(inscricaoParaSalvarTermo.email || '').trim().toLowerCase();
         if (emailOriginal && emailOriginal !== normalizedEmail) {
             return res.status(400).json({ error: 'O e-mail informado não corresponde ao e-mail da inscrição.' });
         }
@@ -5526,6 +5939,34 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
     const safeFileName = String(fileName || 'Termo_DAC_2026.pdf')
         .replace(/[^a-zA-Z0-9_.-]/g, '_')
         .slice(0, 180) || 'Termo_DAC_2026.pdf';
+    let termoPdfPersistido = null;
+    if (id) {
+        if (!blobStorageReady) {
+            return res.status(503).json({ error: 'O PDF do termo não pode ser preservado porque o armazenamento privado não está configurado.' });
+        }
+        try {
+            const pathname = `termos/assinados/${randomUUID()}-${safeFileName}`;
+            const uploaded = await putBlob(pathname, pdfBuffer, blobOptions({
+                access: 'private',
+                addRandomSuffix: false,
+                contentType: 'application/pdf'
+            }));
+            termoPdfPersistido = {
+                pathname: uploaded.pathname,
+                blobUrl: uploaded.url,
+                fileName: safeFileName,
+                storedAt: new Date().toISOString()
+            };
+            const referenciaSalva = await salvarReferenciaPdfTermo(String(id), termoPdfPersistido);
+            if (!referenciaSalva) {
+                await deleteBlob(uploaded.url, blobOptions()).catch(() => null);
+                return res.status(500).json({ error: 'O PDF foi recebido, mas não foi possível vinculá-lo à inscrição.' });
+            }
+        } catch (error) {
+            console.error('❌ [Termo] Falha ao preservar PDF assinado no armazenamento privado:', error.message);
+            return res.status(503).json({ error: 'Não foi possível preservar o PDF assinado. O termo não foi enviado; tente novamente.' });
+        }
+    }
     const nomeSeguro = escapeHtml(nome || 'Proponente');
     const eventoSeguro = escapeHtml(evento || 'Seu projeto');
     const emailSeguro = escapeHtml(normalizedEmail);
@@ -5654,7 +6095,8 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
             const dadosTermo = {
                 termoAssinado: true,
                 termoAssinadoEm: new Date().toISOString(),
-                termoDados: dadosSalvos
+                termoDados: dadosSalvos,
+                ...(termoPdfPersistido ? { termoPdf: termoPdfPersistido } : {})
             };
             statusSaved = String(id).startsWith('forms_')
                 ? await saveTermoLegada(String(id), dadosTermo)
@@ -5673,7 +6115,13 @@ app.post('/api/enviar-termo-assinado', async (req, res) => {
         }
 
         console.log(`✅ Termo assinado enviado para ${normalizedEmail}; notificação administrativa separada: ${dacEmailSent ? 'enviada' : 'falhou'}`);
-        res.json({ success: true, statusSaved, dacEmailSent, calendarDescriptionUpdated });
+        res.json({
+            success: true,
+            statusSaved,
+            dacEmailSent,
+            calendarDescriptionUpdated,
+            termPdfStored: Boolean(termoPdfPersistido)
+        });
     } catch (e) {
         console.error(`❌ Erro ao enviar termo assinado para ${normalizedEmail}:`, e.response?.data || e.message);
         res.status(500).json({ error: e.response?.data?.message || 'Não foi possível enviar o PDF por e-mail.' });

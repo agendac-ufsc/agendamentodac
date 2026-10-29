@@ -300,6 +300,70 @@
         </div>
     </div>
 
+    <!-- Tab: Arquivo de inscrições (admin only) -->
+    <div class="tab-pane" id="pane-arquivo">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <h3 style="font-size:16px;color:#444;margin:0 0 5px">Arquivo de inscrições</h3>
+                    <p style="font-size:12px;color:#777;margin:0">Inscrições com evento confirmado no calendário há mais de 30 dias. Os dados e arquivos originais permanecem intactos; a ficha PDF é gerada a partir do resumo.</p>
+                </div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <button class="btn-top btn-purple" onclick="previewArchiveCandidates()"><i class="fas fa-clipboard-check"></i> Ver elegíveis</button>
+                    <button class="btn-top btn-refresh" onclick="loadArchives()"><i class="fas fa-sync-alt"></i> Atualizar arquivo</button>
+                </div>
+            </div>
+
+            <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:9px;margin:14px 0">
+                <label class="toggle-switch" style="flex-shrink:0">
+                    <input type="checkbox" id="archiveAutoToggle" onchange="setAutomaticArchive(this.checked)">
+                    <span class="ts"></span>
+                </label>
+                <div>
+                    <strong style="font-size:13px">Arquivamento automático diário</strong>
+                    <p id="archiveAutoDescription" style="font-size:12px;color:#666;margin:3px 0 0">Desativado até você revisar e ativar.</p>
+                </div>
+            </div>
+            <div id="archiveLastRun" style="font-size:12px;color:#777;margin-bottom:10px"></div>
+
+            <div id="archivePreview" style="display:none;margin:16px 0;padding:16px;background:#faf9ff;border:1px solid #ddd6fe;border-radius:10px">
+                <h4 style="font-size:14px;color:#444;margin:0 0 8px">Prévia — nada foi alterado</h4>
+                <div id="archivePreviewSummary" style="font-size:12px;color:#666;margin-bottom:12px"></div>
+                <div id="archivePreviewEligible"></div>
+                <div id="archivePreviewBlocked" style="margin-top:12px"></div>
+                <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;flex-wrap:wrap">
+                    <button class="btn-top btn-purple" id="btnApplyArchive" onclick="applyArchivePreview()" disabled><i class="fas fa-box-archive"></i> Arquivar selecionadas</button>
+                </div>
+            </div>
+
+            <div class="filters-bar" style="margin-top:16px">
+                <div class="search-wrap">
+                    <i class="fas fa-search"></i>
+                    <input type="search" id="archiveSearch" placeholder="Buscar evento ou proponente no arquivo..." oninput="renderArchiveTable()">
+                </div>
+            </div>
+            <div class="results-count" id="archiveResultsCount"></div>
+            <div class="table-wrap">
+                <div class="loading-msg" id="archiveLoading" style="display:none"><i class="fas fa-spinner fa-spin"></i> Carregando arquivo...</div>
+                <table id="archiveTable" style="display:none">
+                    <thead>
+                        <tr>
+                            <th>Evento / Proponente</th>
+                            <th>Local</th>
+                            <th>Fim do evento</th>
+                            <th>Arquivado em</th>
+                            <th>Documentos preservados</th>
+                            <th style="text-align:center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archiveBody"></tbody>
+                </table>
+                <div class="empty-msg" id="archiveEmpty" style="display:none">Nenhuma inscrição arquivada ainda.</div>
+                <div class="error-msg" id="archiveError" style="display:none"></div>
+            </div>
+        </div>
+    </div>
+
     <!-- Tab: Envio de Termos (admin only) -->
     <div class="tab-pane" id="pane-termos">
 
@@ -954,6 +1018,8 @@
 // ESTADO GLOBAL
 // ══════════════════════════════════════════════════
 let allUnificados = [];
+let archiveRecords = [];
+let archivePreview = null;
 let criterios = [];
 let avaliadores = [];
 let datasBloqueadas = [];
@@ -1041,7 +1107,14 @@ async function doLogin() {
     }
 }
 
-function logout() {
+async function logout() {
+    try {
+        if (userRole === 'admin') {
+            await fetch('/api/auth/admin/logout', { method: 'POST' });
+        } else if (userRole === 'viewer') {
+            await fetch('/api/auth/viewer/logout', { method: 'POST' });
+        }
+    } catch {}
     localStorage.removeItem('dac_role');
     localStorage.removeItem('dac_viewer_email');
     localStorage.removeItem('dac_ts');
@@ -1104,6 +1177,7 @@ function buildTabs() {
     if (userRole === 'admin') {
         bar.innerHTML = `
             <button class="tab-btn active" onclick="switchTab('inscricoes')">Inscrições</button>
+            <button class="tab-btn" onclick="switchTab('arquivo')">Arquivo</button>
             <button class="tab-btn" onclick="switchTab('relatorio')">Relatório</button>
             <button class="tab-btn" onclick="switchTab('termos')">Envio de Termos</button>
             <button class="tab-btn" onclick="switchTab('avaliadores')">Avaliadores</button>
@@ -1121,12 +1195,13 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     const pane = document.getElementById(`pane-${name}`);
     if (pane) pane.classList.add('active');
-    const keyMap = { inscricoes: 'inscri', relatorio: 'relatório', termos: 'termos', avaliadores: 'avaliadores', config: 'config' };
+    const keyMap = { inscricoes: 'inscri', arquivo: 'arquivo', relatorio: 'relatório', termos: 'termos', avaliadores: 'avaliadores', config: 'config' };
     const kw = keyMap[name] || name;
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
     });
     if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
+    if (name === 'arquivo') loadArchives();
     if (name === 'config') loadConfigs();
     if (name === 'relatorio') loadRelatorio();
 }
@@ -1148,6 +1223,281 @@ async function loadData(silencioso = false) {
         document.getElementById('inscricoesError').textContent = 'Erro ao carregar dados: ' + err.message;
         showInscricoesState('error');
     }
+}
+
+function formatArchiveDate(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return escapeHtml(value);
+    return new Intl.DateTimeFormat('pt-BR', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+        timeZone: 'America/Sao_Paulo'
+    }).format(date);
+}
+
+function formatArchiveBytes(bytes) {
+    const value = Math.max(0, Number(bytes) || 0);
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+async function loadArchives() {
+    const loading = document.getElementById('archiveLoading');
+    const error = document.getElementById('archiveError');
+    const empty = document.getElementById('archiveEmpty');
+    if (loading) loading.style.display = 'block';
+    if (error) error.style.display = 'none';
+    if (empty) empty.style.display = 'none';
+    try {
+        const response = await fetch(`/api/admin/arquivadas?_=${Date.now()}`, { cache: 'no-store' });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível abrir o arquivo.');
+        archiveRecords = Array.isArray(data.records) ? data.records : [];
+        const toggle = document.getElementById('archiveAutoToggle');
+        if (toggle) toggle.checked = data.automaticEnabled === true;
+        const description = document.getElementById('archiveAutoDescription');
+        if (description) {
+            description.textContent = data.automaticEnabled
+                ? 'Ativo: verifica o calendário diariamente às 06h (horário de Brasília).'
+                : 'Desativado até você revisar e ativar.';
+        }
+        const lastRun = document.getElementById('archiveLastRun');
+        if (lastRun) {
+            lastRun.textContent = data.lastRun?.at
+                ? `Última execução: ${formatArchiveDate(data.lastRun.at)} — ${Number(data.lastRun.archived) || 0} inscrição(ões) arquivada(s).`
+                : 'Ainda não houve execução do arquivamento.';
+        }
+        renderArchiveTable();
+    } catch (err) {
+        archiveRecords = [];
+        if (error) {
+            error.textContent = err.message.includes('Sessão administrativa')
+                ? 'Sessão administrativa expirada. Saia do painel e entre novamente para acessar o arquivo.'
+                : err.message;
+            error.style.display = 'block';
+        }
+        if (document.getElementById('archiveTable')) document.getElementById('archiveTable').style.display = 'none';
+        if (empty) empty.style.display = 'none';
+        document.getElementById('archiveResultsCount').textContent = '';
+    } finally {
+        if (loading) loading.style.display = 'none';
+    }
+}
+
+function renderArchiveTable() {
+    const query = String(document.getElementById('archiveSearch')?.value || '').trim().toLowerCase();
+    const rows = archiveRecords.filter(item =>
+        [item.eventName, item.applicantName, item.applicantEmail, item.venue]
+            .some(value => String(value || '').toLowerCase().includes(query))
+    );
+    const table = document.getElementById('archiveTable');
+    const empty = document.getElementById('archiveEmpty');
+    const body = document.getElementById('archiveBody');
+    const count = document.getElementById('archiveResultsCount');
+    if (!rows.length) {
+        table.style.display = 'none';
+        empty.style.display = archiveRecords.length ? 'none' : 'block';
+        count.textContent = archiveRecords.length ? 'Nenhum resultado para a busca.' : '';
+        body.innerHTML = '';
+        return;
+    }
+    table.style.display = 'table';
+    empty.style.display = 'none';
+    count.textContent = `${rows.length} inscrição(ões) no arquivo`;
+    body.innerHTML = rows.map(item => {
+        const sourceIndex = archiveRecords.indexOf(item);
+        const arquivoTermo = item.termPdfAvailable
+            ? `<a class="btn-action" href="/api/admin/arquivadas/${encodeURIComponent(item.id)}/termo.pdf" title="Baixar termo assinado"><i class="far fa-file-pdf" style="color:#16a34a"></i></a>`
+            : `<span title="${item.termoAssinado ? 'PDF do termo não disponível no sistema' : 'Não há termo assinado'}" style="font-size:11px;color:#888">Termo ${item.termoAssinado ? 'não arquivado' : 'não assinado'}</span>`;
+        const termoStatus = item.termPdfAvailable
+            ? '<span style="color:#15803d">Termo assinado (PDF guardado)</span>'
+            : `<span style="color:#777">${item.termoAssinado ? 'Termo assinado — PDF indisponível' : 'Sem termo assinado'}</span>`;
+        return `<tr>
+            <td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br><span>${escapeHtml(item.applicantName || 'Proponente não informado')}</span><br><small style="color:#888">${escapeHtml(item.applicantEmail || '')}</small></td>
+            <td>${escapeHtml(item.venue || '—')}</td>
+            <td>${formatArchiveDate(item.lastEventEnd)}</td>
+            <td>${formatArchiveDate(item.archivedAt)}</td>
+            <td><span style="color:#764ba2">Ficha PDF</span><br>${termoStatus}</td>
+            <td style="text-align:center;white-space:nowrap">
+                <button class="btn-action" title="Gerar ficha PDF do arquivo" onclick="generateArchivePDF(${sourceIndex})"><i class="far fa-file-pdf" style="color:#d9534f"></i></button>
+                ${arquivoTermo}
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+async function previewArchiveCandidates() {
+    const panel = document.getElementById('archivePreview');
+    const summary = document.getElementById('archivePreviewSummary');
+    const eligible = document.getElementById('archivePreviewEligible');
+    const blocked = document.getElementById('archivePreviewBlocked');
+    const apply = document.getElementById('btnApplyArchive');
+    panel.style.display = 'block';
+    summary.textContent = 'Consultando inscrições e calendário…';
+    eligible.innerHTML = '';
+    blocked.innerHTML = '';
+    apply.disabled = true;
+    try {
+        const response = await fetch('/api/admin/arquivamento/previa', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível gerar a prévia.');
+        archivePreview = data;
+        summary.textContent = `${data.scannedCount} inscrição(ões) verificadas. ${data.eligible.length} elegível(is); ${data.blocked.length} bloqueada(s) por segurança. Nada foi alterado.`;
+        if (data.eligible.length) {
+            eligible.innerHTML = `
+                <h5 style="font-size:13px;margin:8px 0">Elegíveis para arquivar</h5>
+                <div class="table-wrap"><table><thead><tr><th><input type="checkbox" checked onchange="toggleArchivePreviewSelection(this.checked)" aria-label="Selecionar todas"></th><th>Evento / Proponente</th><th>Fim do evento</th><th>Arquivos que serão mantidos</th><th>Termo</th></tr></thead>
+                <tbody>${data.eligible.map(item => `<tr>
+                    <td><input type="checkbox" class="archive-preview-checkbox" value="${escapeHtml(item.id)}" checked aria-label="Selecionar inscrição"></td>
+                    <td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br>${escapeHtml(item.applicantName || '')}</td>
+                    <td>${formatArchiveDate(item.lastEventEnd)}</td>
+                    <td>${Number(item.documentCount) || 0} arquivo(s) · ${formatArchiveBytes(item.documentBytes)}</td>
+                    <td>${item.termPdfAvailable ? 'PDF preservado' : item.termoAssinado ? 'Assinado; PDF não armazenado aqui' : 'Sem termo assinado'}</td>
+                </tr>`).join('')}</tbody></table></div>`;
+            apply.disabled = false;
+        } else {
+            eligible.innerHTML = '<p style="font-size:12px;color:#777">Nenhuma inscrição pronta para arquivamento.</p>';
+        }
+        if (data.blocked.length) {
+            blocked.innerHTML = `<h5 style="font-size:13px;margin:8px 0">Não elegíveis para mover</h5>
+                <div class="table-wrap"><table><thead><tr><th>Evento / Proponente</th><th>Motivo</th></tr></thead><tbody>
+                ${data.blocked.map(item => `<tr><td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br>${escapeHtml(item.applicantName || '')}</td><td>${escapeHtml(item.reason)}</td></tr>`).join('')}
+                </tbody></table></div>`;
+        }
+    } catch (err) {
+        archivePreview = null;
+        summary.textContent = err.message;
+    }
+}
+
+function toggleArchivePreviewSelection(checked) {
+    document.querySelectorAll('.archive-preview-checkbox').forEach(input => { input.checked = checked; });
+    const apply = document.getElementById('btnApplyArchive');
+    if (apply) apply.disabled = !document.querySelector('.archive-preview-checkbox:checked');
+}
+
+async function applyArchivePreview() {
+    if (!archivePreview) return;
+    const ids = [...document.querySelectorAll('.archive-preview-checkbox:checked')].map(input => input.value);
+    if (!ids.length) return alert('Selecione ao menos uma inscrição.');
+    const selecionadas = archivePreview.eligible.filter(item => ids.includes(String(item.id)));
+    const mensagem = `Arquivar ${ids.length} inscrição(ões)?\n\n` +
+        `• Serão removidas da aba Inscrições.\n` +
+        `• Os registros e arquivos originais serão mantidos sem alteração.\n` +
+        `• O Arquivo mostrará apenas o resumo e os PDFs disponíveis.\n` +
+        `• Os eventos do Google Calendar não serão alterados.\n\n` +
+        'Continuar?';
+    if (!confirm(mensagem)) return;
+
+    const apply = document.getElementById('btnApplyArchive');
+    apply.disabled = true;
+    try {
+        const response = await fetch('/api/admin/arquivamento/aplicar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids, confirm: true })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'O arquivamento não foi concluído.');
+        alert(`${data.archived} inscrição(ões) arquivada(s).${data.failed ? ` ${data.failed} com falha; atualize a prévia antes de tentar novamente.` : ''}`);
+        await Promise.all([loadArchives(), loadData(true)]);
+        await previewArchiveCandidates();
+    } catch (err) {
+        alert(err.message);
+        apply.disabled = false;
+    }
+}
+
+async function setAutomaticArchive(enabled) {
+    const toggle = document.getElementById('archiveAutoToggle');
+    if (enabled && !confirm('Ativar verificação diária às 06h de Brasília? O sistema moverá para o Arquivo as inscrições com vínculo exato no calendário após 30 dias. Os registros e arquivos originais serão preservados.')) {
+        toggle.checked = false;
+        return;
+    }
+    try {
+        const response = await fetch('/api/admin/arquivamento/automatico', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar a automação.');
+        document.getElementById('archiveAutoDescription').textContent = enabled
+            ? 'Ativo: verifica o calendário diariamente às 06h (horário de Brasília).'
+            : 'Desativado até você revisar e ativar.';
+        toggle.checked = enabled;
+    } catch (err) {
+        toggle.checked = !enabled;
+        alert(err.message);
+    }
+}
+
+function generateArchivePDF(idx) {
+    const item = archiveRecords[idx];
+    if (!item) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    const margin = 18;
+    let y = 20;
+    doc.setFillColor(118, 75, 162);
+    doc.rect(0, 0, 210, 26, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(14);
+    doc.text('FICHA DE INSCRIÇÃO — DAC/UFSC', 105, 12, { align: 'center' });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Registro resumido do arquivo', 105, 20, { align: 'center' });
+    y = 40;
+    doc.setTextColor(30);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('DADOS DO PROPONENTE', margin, y);
+    y += 10;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    const fields = [
+        ['Proponente', item.applicantName],
+        ['E-mail', item.applicantEmail],
+        ['Telefone', item.applicantPhone],
+        ['Local', item.venue],
+        ['Evento', item.eventName],
+        ['Fim do evento', formatArchiveDate(item.lastEventEnd)],
+        ['Inscrição', formatArchiveDate(item.registrationDate)],
+        ['Arquivada em', formatArchiveDate(item.archivedAt)],
+        ['Termo assinado', item.termoAssinado ? `Sim${item.termoAssinadoEm ? ` — ${formatArchiveDate(item.termoAssinadoEm)}` : ''}` : 'Não informado']
+    ];
+    fields.forEach(([label, value]) => {
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${label}:`, margin, y);
+        doc.setFont('helvetica', 'normal');
+        const lines = doc.splitTextToSize(String(value || '—'), 150);
+        doc.text(lines, margin + 36, y);
+        y += Math.max(7, lines.length * 5 + 2);
+    });
+    y += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.text('EVENTOS CONFIRMADOS NO GOOGLE CALENDAR', margin, y);
+    y += 8;
+    doc.setFont('helvetica', 'normal');
+    (item.calendarEvents || []).forEach(event => {
+        const text = `${event.stage || 'Evento'}: ${formatArchiveDate(event.start)} — ${formatArchiveDate(event.end)}`;
+        const lines = doc.splitTextToSize(text, 174);
+        if (y + lines.length * 5 > 275) { doc.addPage(); y = 20; }
+        doc.text(lines, margin, y);
+        y += lines.length * 5 + 2;
+    });
+    doc.setFontSize(8);
+    doc.setTextColor(130);
+    doc.text('Ficha resumida gerada a partir dos dados mantidos no arquivo.', margin, 285);
+    const safe = String(item.eventName || 'evento').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
+    doc.save(`ficha_arquivada_${safe}.pdf`);
 }
 
 window.addEventListener('message', (event) => {
