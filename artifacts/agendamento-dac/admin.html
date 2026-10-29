@@ -325,6 +325,7 @@
                 </div>
             </div>
             <div id="archiveLastRun" style="font-size:12px;color:#777;margin-bottom:10px"></div>
+            <p id="archiveCronNotice" style="display:none;font-size:12px;color:#765a16;background:#fff8db;border:1px solid #f3df97;border-radius:7px;padding:10px 12px;margin:0 0 12px"></p>
 
             <div id="archivePreview" style="display:none;margin:16px 0;padding:16px;background:#faf9ff;border:1px solid #ddd6fe;border-radius:10px">
                 <h4 style="font-size:14px;color:#444;margin:0 0 8px">Prévia — nada foi alterado</h4>
@@ -1258,10 +1259,18 @@ async function loadArchives() {
         const toggle = document.getElementById('archiveAutoToggle');
         if (toggle) toggle.checked = data.automaticEnabled === true;
         const description = document.getElementById('archiveAutoDescription');
+        const isReplitPreview = /\.replit\.(?:dev|app)$/i.test(location.hostname);
         if (description) {
             description.textContent = data.automaticEnabled
-                ? 'Ativo: verifica o calendário diariamente às 06h (horário de Brasília).'
+                ? isReplitPreview
+                    ? 'Ativo para a publicação: verifica o calendário diariamente às 06h (horário de Brasília).'
+                    : 'Ativo: verifica o calendário diariamente às 06h (horário de Brasília).'
                 : 'Desativado até você revisar e ativar.';
+        }
+        const cronNotice = document.getElementById('archiveCronNotice');
+        if (cronNotice) {
+            cronNotice.textContent = 'O preview do Replit não executa o cron diário da publicação. Para conferir e arquivar inscrições neste ambiente, clique em “Ver elegíveis” e depois em “Arquivar selecionadas”.';
+            cronNotice.style.display = isReplitPreview ? 'block' : 'none';
         }
         const lastRun = document.getElementById('archiveLastRun');
         if (lastRun) {
@@ -1348,7 +1357,13 @@ async function previewArchiveCandidates() {
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.error || 'Não foi possível gerar a prévia.');
         archivePreview = data;
-        summary.textContent = `${data.scannedCount} inscrição(ões) verificadas. ${data.eligible.length} elegível(is); ${data.blocked.length} bloqueada(s) por segurança. Nada foi alterado.`;
+        const bloqueadasTotal = Number.isFinite(Number(data.blockedCount))
+            ? Number(data.blockedCount)
+            : data.blocked.length;
+        const fontes = data.sources
+            ? ` (${Number(data.sources.redis) || 0} do sistema e ${Number(data.sources.forms) || 0} antigas do Forms)`
+            : '';
+        summary.textContent = `${data.scannedCount} inscrição(ões) verificadas${fontes}. ${data.eligible.length} elegível(is); ${bloqueadasTotal} sem condições para arquivar agora. Nada foi alterado.`;
         if (data.eligible.length) {
             eligible.innerHTML = `
                 <h5 style="font-size:13px;margin:8px 0">Elegíveis para arquivar</h5>
@@ -1364,11 +1379,17 @@ async function previewArchiveCandidates() {
         } else {
             eligible.innerHTML = '<p style="font-size:12px;color:#777">Nenhuma inscrição pronta para arquivamento.</p>';
         }
+        if (Array.isArray(data.warnings) && data.warnings.length) {
+            blocked.innerHTML = data.warnings.map(warning =>
+                `<p style="font-size:12px;color:#8a5b00;background:#fff8db;padding:9px 10px;border-radius:6px">${escapeHtml(warning)}</p>`
+            ).join('');
+        }
         if (data.blocked.length) {
-            blocked.innerHTML = `<h5 style="font-size:13px;margin:8px 0">Não elegíveis para mover</h5>
+            blocked.innerHTML += `<h5 style="font-size:13px;margin:8px 0">Inscrições ainda não elegíveis</h5>
                 <div class="table-wrap"><table><thead><tr><th>Evento / Proponente</th><th>Motivo</th></tr></thead><tbody>
                 ${data.blocked.map(item => `<tr><td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br>${escapeHtml(item.applicantName || '')}</td><td>${escapeHtml(item.reason)}</td></tr>`).join('')}
-                </tbody></table></div>`;
+                </tbody></table></div>
+                ${bloqueadasTotal > data.blocked.length ? `<p style="font-size:12px;color:#777">Mostrando ${data.blocked.length} de ${bloqueadasTotal} inscrições.</p>` : ''}`;
         }
     } catch (err) {
         archivePreview = null;
@@ -1416,7 +1437,7 @@ async function applyArchivePreview() {
 
 async function setAutomaticArchive(enabled) {
     const toggle = document.getElementById('archiveAutoToggle');
-    if (enabled && !confirm('Ativar verificação diária às 06h de Brasília? O sistema moverá para o Arquivo as inscrições com vínculo exato no calendário após 30 dias. Os registros e arquivos originais serão preservados.')) {
+    if (enabled && !confirm('Ativar verificação diária às 06h de Brasília? O sistema moverá para o Arquivo as inscrições com vínculo confirmado no calendário após 30 dias. Os registros e arquivos originais serão preservados.')) {
         toggle.checked = false;
         return;
     }

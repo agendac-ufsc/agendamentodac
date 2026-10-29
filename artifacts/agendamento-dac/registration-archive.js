@@ -23,13 +23,58 @@ function listaEtapasEvento(inscricao) {
     return etapas.filter(etapa => etapa && etapa.data && etapa.horario);
 }
 
-function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new Date()) {
-    const id = String(inscricao?.id || '');
+function etapasEsperadasArquivo(inscricao) {
     const etapas = listaEtapasEvento(inscricao);
     const nomeEvento = String(inscricao?.evento || '').trim();
+    if (!nomeEvento || etapas.length === 0) return [];
+
+    return etapas.map((etapa, index) => {
+        const stage = etapas.length > 1 ? `Evento ${index + 1}` : 'Evento';
+        return {
+            etapa,
+            stage,
+            summary: normalizarTextoCalendario(
+                etapa._archiveEventSummary || `${stage}: ${nomeEvento}`
+            )
+        };
+    });
+}
+
+function inicioEsperadoEtapa(etapa) {
+    const hora = String(etapa?.horario || '').match(/\b\d{1,2}:\d{2}\b/)?.[0];
+    if (!etapa?.data || !hora) return '';
+    const [horaNumero, minuto] = hora.split(':');
+    return `${String(etapa.data).slice(0, 10)}T${horaNumero.padStart(2, '0')}:${minuto}`;
+}
+
+function chaveEtapaEsperada(etapaEsperada) {
+    const inicio = inicioEsperadoEtapa(etapaEsperada?.etapa);
+    return inicio && etapaEsperada?.summary
+        ? `${etapaEsperada.summary}|${inicio}`
+        : '';
+}
+
+function chaveEventoCalendario(evento) {
+    const summary = normalizarTextoCalendario(evento?.summary);
+    const inicio = evento?.start?.dateTime;
+    if (!summary || !inicio || !String(inicio).includes('T')) return '';
+    return `${summary}|${String(inicio).slice(0, 16)}`;
+}
+
+function correspondeEventoEtapa(evento, etapaEsperada) {
+    const chaveEsperada = chaveEtapaEsperada(etapaEsperada);
+    return Boolean(chaveEsperada && chaveEventoCalendario(evento) === chaveEsperada);
+}
+
+function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new Date(), opcoes = {}) {
+    const id = String(inscricao?.id || '');
+    const etapasEsperadas = etapasEsperadasArquivo(inscricao);
     const agoraMs = agora instanceof Date ? agora.getTime() : Date.parse(agora);
 
-    if (!id || !nomeEvento || etapas.length === 0) {
+    if (inscricao._archiveBlockedReason) {
+        return { elegivel: false, motivo: inscricao._archiveBlockedReason };
+    }
+    if (!id || !String(inscricao?.evento || '').trim() || etapasEsperadas.length === 0) {
         return { elegivel: false, motivo: 'Inscrição sem ID ou etapa de evento completa.' };
     }
     if (inscricao.calendarSynced !== true) {
@@ -42,32 +87,32 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
         return { elegivel: false, motivo: 'Data de referência inválida.' };
     }
 
-    const expectedEvents = etapas.map((_etapa, index) => {
-        const label = etapas.length > 1 ? `Evento ${index + 1}` : 'Evento';
-        return normalizarTextoCalendario(`${label}: ${nomeEvento}`);
-    });
-    const byRegistrationId = (Array.isArray(eventosCalendario) ? eventosCalendario : []).filter(evento => {
+    const legacyEventIds = opcoes.legacyEventIds instanceof Set
+        ? opcoes.legacyEventIds
+        : Array.isArray(opcoes.legacyEventIds)
+            ? new Set(opcoes.legacyEventIds.map(String))
+            : null;
+    const eventos = (Array.isArray(eventosCalendario) ? eventosCalendario : []).filter(evento => {
         const privateProps = evento?.extendedProperties?.private || {};
-        return String(privateProps.dac_inscricao_id || '') === id
-            && privateProps.dac_source === 'sistema'
-            && evento.status !== 'cancelled';
+        if (privateProps.dac_source !== 'sistema' || evento.status === 'cancelled') return false;
+        const eventRegistrationId = String(privateProps.dac_inscricao_id || '');
+        if (eventRegistrationId) return eventRegistrationId === id;
+        return !legacyEventIds || legacyEventIds.has(String(evento.id || ''));
     });
-    const eventStageEvents = byRegistrationId.filter(evento =>
-        /^evento(?:\s+\d+)?:/.test(normalizarTextoCalendario(evento.summary))
-    );
-    if (eventStageEvents.length !== expectedEvents.length) {
-        return { elegivel: false, motivo: 'A quantidade de eventos no calendário não corresponde à inscrição.' };
-    }
 
-    const matched = expectedEvents.map(title =>
-        eventStageEvents.filter(evento => normalizarTextoCalendario(evento.summary) === title)
+    const matched = etapasEsperadas.map(etapaEsperada =>
+        eventos.filter(evento => correspondeEventoEtapa(evento, etapaEsperada))
     );
     if (matched.some(matches => matches.length !== 1)) {
-        return { elegivel: false, motivo: 'Não há correspondência única entre inscrição e calendário.' };
+        return { elegivel: false, motivo: 'Não há correspondência única por nome, data e horário no calendário.' };
     }
 
-    const eventos = matched.map(matches => matches[0]);
-    const ends = eventos.map(evento => dataFinalCalendario(evento));
+    const eventosCorrespondentes = matched.map(matches => matches[0]);
+    const idsEventos = eventosCorrespondentes.map(evento => String(evento.id || ''));
+    if (new Set(idsEventos).size !== idsEventos.length) {
+        return { elegivel: false, motivo: 'O mesmo evento do calendário corresponde a mais de uma etapa.' };
+    }
+    const ends = eventosCorrespondentes.map(evento => dataFinalCalendario(evento));
     if (ends.some(end => end === null)) {
         return { elegivel: false, motivo: 'O calendário não informa a data final de todos os eventos.' };
     }
@@ -77,12 +122,12 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
         return { elegivel: false, motivo: 'Ainda não se passaram mais de 30 dias desde o fim de todos os eventos.' };
     }
 
-    const eventSummaries = eventos.map((evento, index) => ({
+    const eventSummaries = eventosCorrespondentes.map((evento, index) => ({
         summary: String(evento.summary || ''),
         start: evento.start?.dateTime || evento.start?.date || null,
         end: evento.end?.dateTime || evento.end?.date || null,
         eventId: evento.id || null,
-        stage: expectedEvents.length > 1 ? `Evento ${index + 1}` : 'Evento'
+        stage: etapasEsperadas[index].stage
     }));
 
     return {
@@ -128,6 +173,9 @@ module.exports = {
     ARCHIVE_RETENTION_DAYS,
     ARCHIVE_RETENTION_MS,
     avaliarElegibilidadeArquivo,
+    etapasEsperadasArquivo,
+    chaveEtapaEsperada,
     criarRegistroArquivado,
+    correspondeEventoEtapa,
     dataFinalCalendario
 };

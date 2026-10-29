@@ -46,27 +46,81 @@ function evento(overrides = {}) {
     };
 }
 
-test('só considera eventos do calendário vinculados pelo ID privado exato', () => {
+test('vincula evento novo por ID e aceita evento legado somente com nome, data e horário exatos', () => {
     const prova = avaliarElegibilidadeArquivo(inscricao(), [evento()], agora);
     assert.equal(prova.elegivel, true);
 
-    const semVinculoExato = avaliarElegibilidadeArquivo(inscricao(), [
+    const idDeOutraInscricao = avaliarElegibilidadeArquivo(inscricao(), [
         evento({ extendedProperties: { private: { dac_source: 'sistema', dac_inscricao_id: 'outra' } } })
     ], agora);
-    assert.equal(semVinculoExato.elegivel, false);
+    assert.equal(idDeOutraInscricao.elegivel, false);
+
+    const eventoLegado = evento({
+        extendedProperties: { private: { dac_source: 'sistema' } }
+    });
+    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [eventoLegado], agora).elegivel, true);
+    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [eventoLegado], agora, {
+        legacyEventIds: new Set()
+    }).elegivel, false);
+
+    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [
+        evento({
+            extendedProperties: { private: { dac_source: 'sistema' } },
+            start: { dateTime: '2026-08-02T19:00:00-03:00' }
+        })
+    ], agora).elegivel, false);
+    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [
+        evento({
+            extendedProperties: { private: { dac_source: 'sistema' } },
+            start: { dateTime: '2026-08-01T18:00:00-03:00' }
+        })
+    ], agora).elegivel, false);
+    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [
+        evento({ extendedProperties: { private: {} } })
+    ], agora).elegivel, false);
+});
+
+test('valida o resumo original dos eventos de inscrições antigas do Forms', () => {
+    const inscricaoForms = inscricao({
+        id: 'forms_pessoa_mostra_1',
+        etapas: {
+            evento: [{
+                data: '2026-08-01',
+                horario: '19:00 às 21:00',
+                _archiveEventSummary: 'Evento 1: Mostra de Música'
+            }]
+        }
+    });
+    const eventoForms = evento({
+        summary: 'Evento 1: Mostra de Música',
+        extendedProperties: { private: { dac_source: 'sistema' } }
+    });
+    assert.equal(avaliarElegibilidadeArquivo(inscricaoForms, [eventoForms], agora).elegivel, true);
 });
 
 test('exige que todos os eventos tenham terminado há mais de 30 dias', () => {
     const fimRecente = new Date(agora.getTime() - ARCHIVE_RETENTION_MS + 1).toISOString();
-    const prova = avaliarElegibilidadeArquivo(inscricao(), [
-        evento({ end: { dateTime: fimEvento } }),
+    const inscricaoComDoisEventos = inscricao({
+        etapas: {
+            evento: [
+                { data: '2026-08-01', horario: '19:00 às 21:00' },
+                { data: '2026-08-02', horario: '19:00 às 21:00' }
+            ]
+        }
+    });
+    const prova = avaliarElegibilidadeArquivo(inscricaoComDoisEventos, [
+        evento({
+            summary: 'Evento 1: Mostra de Música',
+            end: { dateTime: fimEvento }
+        }),
         evento({
             id: 'calendar-event-2',
             summary: 'Evento 2: Mostra de Música',
+            start: { dateTime: '2026-08-02T19:00:00-03:00' },
             end: { dateTime: fimRecente },
             extendedProperties: { private: { dac_source: 'sistema', dac_inscricao_id: 'site_123' } }
         })
-    ], agora);
+    ], agora, undefined);
     assert.equal(prova.elegivel, false);
 });
 
@@ -78,8 +132,16 @@ test('não arquiva sincronização incompleta, cancelamentos ou eventos sem fim'
 
 test('usa limite estrito de mais de 30 dias e entende fim de evento de dia inteiro', () => {
     const exatamente30Dias = new Date(agora.getTime() - ARCHIVE_RETENTION_MS).toISOString();
+    const inscricaoNoCorte = inscricao({
+        etapas: { evento: { data: '2026-09-09', horario: '08:00 às 09:00' } }
+    });
     assert.equal(
-        avaliarElegibilidadeArquivo(inscricao(), [evento({ end: { dateTime: exatamente30Dias } })], agora).elegivel,
+        avaliarElegibilidadeArquivo(inscricaoNoCorte, [
+            evento({
+                start: { dateTime: '2026-09-09T08:00:00-03:00' },
+                end: { dateTime: exatamente30Dias }
+            })
+        ], agora).elegivel,
         false
     );
     assert.equal(

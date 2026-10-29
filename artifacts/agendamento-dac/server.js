@@ -31,7 +31,14 @@ const {
     revokeEvaluatorSession
 } = require('./evaluator-auth');
 const { ADMIN_SESSION_TTL_SECONDS, createAdminSessionToken, verifyAdminSessionToken } = require('./admin-session');
-const { ARCHIVE_RETENTION_DAYS, avaliarElegibilidadeArquivo, criarRegistroArquivado } = require('./registration-archive');
+const {
+    ARCHIVE_RETENTION_DAYS,
+    avaliarElegibilidadeArquivo,
+    etapasEsperadasArquivo,
+    chaveEtapaEsperada,
+    criarRegistroArquivado,
+    correspondeEventoEtapa
+} = require('./registration-archive');
 
 const app = express();
 app.use(cors());
@@ -1203,7 +1210,7 @@ async function listarEventosSistemaCalendario(calendarId, agora) {
             auth: googleAuthClient,
             calendarId,
             timeMin: '2000-01-01T00:00:00.000Z',
-            timeMax: agora.toISOString(),
+            timeMax: new Date(agora.getFullYear() + 3, 11, 31).toISOString(),
             singleEvents: true,
             orderBy: 'startTime',
             maxResults: 2500,
@@ -1220,20 +1227,248 @@ async function listarEventosSistemaCalendario(calendarId, agora) {
     return eventos;
 }
 
+async function carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, eventosPorCalendario) {
+    try {
+        if (!googleAuthClient) await initGoogleAuth();
+        await getConfigs('prévia de arquivamento de inscrições legadas');
+        if (!googleAuthClient || !SPREADSHEET_ID) {
+            return {
+                inscricoes: [],
+                aviso: 'Não foi possível consultar inscrições antigas do Google Forms nesta prévia.'
+            };
+        }
+
+        let resposta;
+        try {
+            resposta = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient,
+                spreadsheetId: SPREADSHEET_ID,
+                range: 'Respostas ao formulário 1!A:ZZ'
+            });
+        } catch {
+            const metadata = await sheets.spreadsheets.get({
+                auth: googleAuthClient,
+                spreadsheetId: SPREADSHEET_ID
+            });
+            const nomeAba = metadata.data?.sheets?.[0]?.properties?.title;
+            if (!nomeAba) throw new Error('A planilha não possui uma aba de respostas.');
+            resposta = await sheets.spreadsheets.values.get({
+                auth: googleAuthClient,
+                spreadsheetId: SPREADSHEET_ID,
+                range: `'${nomeAba}'!A:ZZ`
+            });
+        }
+
+        const rows = resposta.data.values || [];
+        const headers = (rows[0] || []).map(header => String(header || '').toLowerCase());
+        const valores = rows.slice(1);
+        const findIndices = keywords => headers.reduce((indices, header, index) => {
+            if (keywords.some(keyword => header.includes(keyword))) indices.push(index);
+            return indices;
+        }, []);
+        const emailIndices = findIndices(['endereço de e-mail', 'e-mail', 'email', 'e mail']);
+        const phoneIndices = findIndices(['telefone', 'celular', 'contato', 'phone', 'whatsapp', 'mobile']);
+        const eventIndex = headers.findIndex(header =>
+            header.includes('nome do evento')
+            || header.includes('título do projeto')
+            || header.includes('event name')
+            || header.includes('project title')
+        );
+        const nameIndex = headers.findIndex(header =>
+            (header.includes('nome completo') && !header.includes('representante'))
+            || header.includes('full name')
+        );
+        if (eventIndex < 0) {
+            return {
+                inscricoes: [],
+                aviso: 'A planilha de inscrições antigas não contém uma coluna de nome do evento.'
+            };
+        }
+
+        const linhasUsadas = new Set();
+        for (const inscricao of [...inscricoesRedis].reverse()) {
+            if (inscricao?.inscricaoTeste === true || ehRascunhoUnificado(inscricao)) continue;
+            const emailInscricao = String(inscricao?.email || '').trim().toLowerCase();
+            const telefoneInscricao = String(inscricao?.telefone || '').replace(/\D/g, '');
+            for (let index = valores.length - 1; index >= 0; index--) {
+                if (linhasUsadas.has(index)) continue;
+                const linha = valores[index] || [];
+                const emails = emailIndices.map(coluna => String(linha[coluna] || '').trim().toLowerCase());
+                const telefones = phoneIndices.map(coluna => String(linha[coluna] || '').replace(/\D/g, ''));
+                const correspondeEmail = emailInscricao && emails.includes(emailInscricao);
+                const correspondeTelefone = telefoneInscricao.length >= 8
+                    && telefones.some(telefone => telefone && telefone.includes(telefoneInscricao));
+                if (correspondeEmail || correspondeTelefone) {
+                    linhasUsadas.add(index);
+                    break;
+                }
+            }
+        }
+
+        const normalizar = valor => String(valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLowerCase()
+            .replace(/\s+/g, ' ')
+            .trim();
+        const eventosLegados = [];
+        for (const [calendarId, eventos] of eventosPorCalendario.entries()) {
+            for (const evento of eventos) {
+                const props = evento?.extendedProperties?.private || {};
+                const prefixo = String(evento?.summary || '').match(/^evento(?:\s+\d+)?\s*:\s*(.+)$/i);
+                if (props.dac_source !== 'sistema' || props.dac_inscricao_id || !prefixo) continue;
+                eventosLegados.push({ evento, calendarId, nomeNormalizado: normalizar(prefixo[1]) });
+            }
+        }
+
+        const formularios = valores.map((linha, index) => {
+            if (linhasUsadas.has(index)) return null;
+            const evento = String(linha[eventIndex] || '').trim();
+            if (!evento) return null;
+            const email = String(emailIndices.length ? linha[emailIndices[0]] || '' : '').trim().toLowerCase();
+            const nome = String(nameIndex >= 0 ? linha[nameIndex] || '' : '').trim();
+            const legacyId = `forms_${email || 'noemail'}_${evento.toLowerCase()}`.replace(/\s+/g, '_');
+            const tituloNormalizado = normalizar(evento);
+            const candidatos = eventosLegados.filter(item => item.nomeNormalizado === tituloNormalizado);
+            const candidatosPorEmail = email
+                ? candidatos.filter(item => String(item.evento.description || '').toLowerCase().includes(email))
+                : [];
+            const repeticoesMesmoTitulo = valores.reduce((total, outraLinha, outraIndex) =>
+                total + (!linhasUsadas.has(outraIndex)
+                    && normalizar(outraLinha[eventIndex]) === tituloNormalizado ? 1 : 0), 0);
+            const repeticoesMesmoEmailETitulo = valores.reduce((total, outraLinha, outraIndex) => {
+                if (linhasUsadas.has(outraIndex)
+                    || normalizar(outraLinha[eventIndex]) !== tituloNormalizado
+                    || !email) return total;
+                const outroEmail = String(emailIndices.length ? outraLinha[emailIndices[0]] || '' : '')
+                    .trim().toLowerCase();
+                return total + (outroEmail === email ? 1 : 0);
+            }, 0);
+
+            let bloqueio = '';
+            let eventosCorrespondentes = candidatosPorEmail.length ? candidatosPorEmail : candidatos;
+            if (candidatosPorEmail.length && repeticoesMesmoEmailETitulo > 1) {
+                bloqueio = 'Há mais de uma resposta do mesmo e-mail para este evento; o vínculo com o calendário é ambíguo.';
+            } else if (!candidatosPorEmail.length && repeticoesMesmoTitulo > 1) {
+                bloqueio = 'Há respostas repetidas para este evento sem um e-mail identificável no calendário.';
+            } else if (!eventosCorrespondentes.length) {
+                bloqueio = 'Não foi encontrado evento do sistema com o mesmo título no calendário.';
+            } else if (new Set(eventosCorrespondentes.map(item => item.calendarId)).size !== 1) {
+                bloqueio = 'O título foi encontrado em mais de um calendário; o local não pôde ser confirmado.';
+            }
+
+            const calendarId = !bloqueio ? eventosCorrespondentes[0].calendarId : '';
+            const eventosEtapa = !bloqueio
+                ? [...new Map(eventosCorrespondentes.map(item => [item.evento.id, item])).values()]
+                    .map(item => {
+                        const inicio = item.evento.start?.dateTime || '';
+                        const fim = item.evento.end?.dateTime || '';
+                        if (!inicio.includes('T') || !fim.includes('T')) return null;
+                        const horarioInicio = inicio.split('T')[1].slice(0, 5);
+                        const horarioFim = fim.split('T')[1].slice(0, 5);
+                        if (!horarioInicio || !horarioFim) return null;
+                        return {
+                            data: inicio.slice(0, 10),
+                            horario: `${horarioInicio} às ${horarioFim}`,
+                            _archiveEventSummary: item.evento.summary
+                        };
+                    }).filter(Boolean)
+                : [];
+            if (!bloqueio && eventosEtapa.length !== eventosCorrespondentes.length) {
+                bloqueio = 'O calendário não informa data e horário completos para todas as etapas.';
+            }
+
+            return {
+                id: `${legacyId}_${index}`,
+                legacyId,
+                nome: nome || 'Inscrição Forms',
+                email: email || 'N/A',
+                telefone: String(phoneIndices.length ? linha[phoneIndices[0]] || '' : '').trim(),
+                evento,
+                timestamp: String(linha[0] || ''),
+                local: calendarId === CALENDAR_IDS.igrejinha ? 'igrejinha' : 'teatro',
+                localNome: calendarId === CALENDAR_IDS.igrejinha ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari',
+                calendarId,
+                calendarSynced: !bloqueio && eventosEtapa.length > 0,
+                etapas: { evento: eventosEtapa },
+                isLegada: true,
+                _archiveBlockedReason: bloqueio
+            };
+        }).filter(Boolean);
+
+        return { inscricoes: formularios, aviso: '' };
+    } catch (error) {
+        console.warn('⚠️ [Arquivo] Não foi possível consultar inscrições antigas do Google Forms:', error.message);
+        return {
+            inscricoes: [],
+            aviso: 'Não foi possível consultar inscrições antigas do Google Forms nesta prévia.'
+        };
+    }
+}
+
+function mapearEventosLegadosSemAmbiguidade(inscricoes, eventosPorCalendario) {
+    const proprietariosPorEtapa = new Map();
+    for (const inscricao of inscricoes) {
+        if (!inscricao?.id || inscricao.calendarSynced !== true || inscricao._archiveBlockedReason) continue;
+        const calendarId = obterCalendarIdInscricao(inscricao);
+        if (!calendarId) continue;
+        for (const etapa of etapasEsperadasArquivo(inscricao)) {
+            const chaveEtapa = chaveEtapaEsperada(etapa);
+            if (!chaveEtapa) continue;
+            const chave = `${calendarId}|${chaveEtapa}`;
+            if (!proprietariosPorEtapa.has(chave)) proprietariosPorEtapa.set(chave, new Set());
+            proprietariosPorEtapa.get(chave).add(String(inscricao.id));
+        }
+    }
+
+    const permitidosPorInscricao = new Map();
+    for (const [calendarId, eventos] of eventosPorCalendario.entries()) {
+        for (const evento of eventos) {
+            const props = evento?.extendedProperties?.private || {};
+            if (props.dac_source !== 'sistema' || props.dac_inscricao_id || !evento.id) continue;
+            const proprietarios = proprietariosPorEtapa.get(
+                `${calendarId}|${chaveEventoCalendarioParaArquivo(evento)}`
+            );
+            if (proprietarios?.size !== 1) continue;
+            const [id] = proprietarios;
+            if (!permitidosPorInscricao.has(id)) permitidosPorInscricao.set(id, new Set());
+            permitidosPorInscricao.get(id).add(String(evento.id));
+        }
+    }
+    return permitidosPorInscricao;
+}
+
+function chaveEventoCalendarioParaArquivo(evento) {
+    const summary = String(evento?.summary || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/\s+/g, ' ')
+        .trim();
+    const inicio = evento?.start?.dateTime;
+    return summary && inicio?.includes('T') ? `${summary}|${String(inicio).slice(0, 16)}` : '';
+}
+
 async function criarPreviaArquivamento(agora = new Date()) {
     if (!redis) throw new Error('Armazenamento das inscrições indisponível.');
     if (!googleAuthClient) await initGoogleAuth();
     if (!googleAuthClient) throw new Error('Autenticação do Google Calendar indisponível.');
 
-    const [inscricoes, arquivadas] = await Promise.all([getAgendamentos(), getArchiveRecords()]);
+    const [inscricoesRedis, arquivadas] = await Promise.all([getAgendamentos(), getArchiveRecords()]);
     const idsJaArquivados = new Set(arquivadas
         .filter(item => item?.archiveStatus === 'archived')
         .flatMap(item => [item.id, item.legacyId].filter(Boolean).map(String)));
-    const calendarIds = [...new Set(inscricoes.map(obterCalendarIdInscricao).filter(Boolean))];
+    const calendarIds = [...new Set([
+        ...Object.values(CALENDAR_IDS),
+        ...inscricoesRedis.map(obterCalendarIdInscricao)
+    ].filter(Boolean))];
     const eventosPorCalendario = new Map();
     await Promise.all(calendarIds.map(async calendarId => {
         eventosPorCalendario.set(calendarId, await listarEventosSistemaCalendario(calendarId, agora));
     }));
+    const formsResult = await carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, eventosPorCalendario);
+    const inscricoes = [...inscricoesRedis, ...formsResult.inscricoes];
+    const eventosLegadosPermitidos = mapearEventosLegadosSemAmbiguidade(inscricoes, eventosPorCalendario);
 
     const elegiveis = [];
     const bloqueadas = [];
@@ -1241,13 +1476,32 @@ async function criarPreviaArquivamento(agora = new Date()) {
         const id = String(inscricao?.id || '');
         if (!id || idsJaArquivados.has(id) || idsJaArquivados.has(String(inscricao?.legacyId || ''))) continue;
         const calendarId = obterCalendarIdInscricao(inscricao);
-        if (!calendarId) continue;
+        const completa = inscricao.calendarSynced === true
+            || inscricao.inscricaoTesteConcluida === true
+            || inscricao.isLegada === true;
+        const adicionarBloqueada = motivo => {
+            if (!completa) return;
+            bloqueadas.push({
+                id,
+                applicantName: String(inscricao.nome || ''),
+                eventName: String(inscricao.evento || ''),
+                reason: motivo
+            });
+        };
+        if (!calendarId) {
+            adicionarBloqueada('Não foi possível identificar o calendário/local desta inscrição.');
+            continue;
+        }
         const prova = avaliarElegibilidadeArquivo(
             inscricao,
             eventosPorCalendario.get(calendarId) || [],
-            agora
+            agora,
+            { legacyEventIds: eventosLegadosPermitidos.get(id) || new Set() }
         );
-        if (!prova.elegivel) continue;
+        if (!prova.elegivel) {
+            adicionarBloqueada(prova.motivo);
+            continue;
+        }
 
         const documentos = Array.isArray(inscricao.documentos) ? inscricao.documentos : [];
         const termoPdfValido = Boolean(
@@ -1278,7 +1532,13 @@ async function criarPreviaArquivamento(agora = new Date()) {
         retentionDays: ARCHIVE_RETENTION_DAYS,
         scannedCount: inscricoes.length,
         eligible: elegiveis,
-        blocked: bloqueadas
+        blocked: bloqueadas.slice(0, 100),
+        blockedCount: bloqueadas.length,
+        sources: {
+            redis: inscricoesRedis.length,
+            forms: formsResult.inscricoes.length
+        },
+        warnings: formsResult.aviso ? [formsResult.aviso] : []
     };
 }
 
