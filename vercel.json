@@ -6,7 +6,17 @@
       "includeFiles": "artifacts/agendamento-dac/index*.html"
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/arquivar-inscricoes",
+      "schedule": "0 9 * * *"
+    }
+  ],
   "routes": [
+    {
+      "src": "^/api/cron/arquivar-inscricoes$",
+      "dest": "/api/cron/arquivar-inscricoes.js"
+    },
     {
       "src": "^/api/cron/verificar-atividades$",
       "dest": "/api/cron/verificar-atividades.js"
