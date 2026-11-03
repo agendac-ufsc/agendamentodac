@@ -33,6 +33,8 @@ const {
 const { ADMIN_SESSION_TTL_SECONDS, createAdminSessionToken, verifyAdminSessionToken } = require('./admin-session');
 const {
     ARCHIVE_RETENTION_DAYS,
+    normalizarTextoCalendario: normalizarTituloArquivo,
+    extrairNomeEventoCalendario,
     avaliarElegibilidadeArquivo,
     etapasEsperadasArquivo,
     chaveEtapaEsperada,
@@ -1297,19 +1299,17 @@ async function carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, evento
             }
         }
 
-        const normalizar = valor => String(valor || '')
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .toLowerCase()
-            .replace(/\s+/g, ' ')
-            .trim();
         const eventosLegados = [];
         for (const [calendarId, eventos] of eventosPorCalendario.entries()) {
             for (const evento of eventos) {
                 const props = evento?.extendedProperties?.private || {};
-                const prefixo = String(evento?.summary || '').match(/^evento(?:\s+\d+)?\s*:\s*(.+)$/i);
-                if (props.dac_source !== 'sistema' || props.dac_inscricao_id || !prefixo) continue;
-                eventosLegados.push({ evento, calendarId, nomeNormalizado: normalizar(prefixo[1]) });
+                const nomeEvento = extrairNomeEventoCalendario(evento?.summary);
+                if (props.dac_source !== 'sistema' || props.dac_inscricao_id || !nomeEvento) continue;
+                eventosLegados.push({
+                    evento,
+                    calendarId,
+                    nomeNormalizado: normalizarTituloArquivo(nomeEvento)
+                });
             }
         }
 
@@ -1320,17 +1320,17 @@ async function carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, evento
             const email = String(emailIndices.length ? linha[emailIndices[0]] || '' : '').trim().toLowerCase();
             const nome = String(nameIndex >= 0 ? linha[nameIndex] || '' : '').trim();
             const legacyId = `forms_${email || 'noemail'}_${evento.toLowerCase()}`.replace(/\s+/g, '_');
-            const tituloNormalizado = normalizar(evento);
+            const tituloNormalizado = normalizarTituloArquivo(evento);
             const candidatos = eventosLegados.filter(item => item.nomeNormalizado === tituloNormalizado);
             const candidatosPorEmail = email
                 ? candidatos.filter(item => String(item.evento.description || '').toLowerCase().includes(email))
                 : [];
             const repeticoesMesmoTitulo = valores.reduce((total, outraLinha, outraIndex) =>
                 total + (!linhasUsadas.has(outraIndex)
-                    && normalizar(outraLinha[eventIndex]) === tituloNormalizado ? 1 : 0), 0);
+                    && normalizarTituloArquivo(outraLinha[eventIndex]) === tituloNormalizado ? 1 : 0), 0);
             const repeticoesMesmoEmailETitulo = valores.reduce((total, outraLinha, outraIndex) => {
                 if (linhasUsadas.has(outraIndex)
-                    || normalizar(outraLinha[eventIndex]) !== tituloNormalizado
+                    || normalizarTituloArquivo(outraLinha[eventIndex]) !== tituloNormalizado
                     || !email) return total;
                 const outroEmail = String(emailIndices.length ? outraLinha[emailIndices[0]] || '' : '')
                     .trim().toLowerCase();

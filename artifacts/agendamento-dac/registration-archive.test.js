@@ -3,7 +3,9 @@ const assert = require('node:assert/strict');
 const {
     ARCHIVE_RETENTION_MS,
     avaliarElegibilidadeArquivo,
-    criarRegistroArquivado
+    criarRegistroArquivado,
+    extrairNomeEventoCalendario,
+    normalizarTextoCalendario
 } = require('./registration-archive');
 
 const agora = new Date('2026-10-09T12:00:00.000Z');
@@ -96,6 +98,29 @@ test('valida o resumo original dos eventos de inscrições antigas do Forms', ()
         extendedProperties: { private: { dac_source: 'sistema' } }
     });
     assert.equal(avaliarElegibilidadeArquivo(inscricaoForms, [eventoForms], agora).elegivel, true);
+});
+
+test('reconhece títulos antigos do calendário com hífen e diferentes etapas', () => {
+    const tituloFormulario = 'NECRÓPSIA - ESTUDOS PARA RESSUSCITAR UM CADÁVER';
+    const tituloCalendario = 'Necrópsia – estudos para ressuscitar um cadáver';
+
+    assert.equal(
+        normalizarTextoCalendario(tituloFormulario),
+        normalizarTextoCalendario(tituloCalendario)
+    );
+    assert.equal(
+        extrairNomeEventoCalendario(`Montagem - ${tituloCalendario}`),
+        tituloCalendario
+    );
+    assert.equal(
+        extrairNomeEventoCalendario(`Evento - ${tituloCalendario}`),
+        tituloCalendario
+    );
+    assert.equal(
+        extrairNomeEventoCalendario(`Evento 2: ${tituloCalendario}`),
+        tituloCalendario
+    );
+    assert.equal(extrairNomeEventoCalendario(tituloCalendario), '');
 });
 
 test('exige que todos os eventos tenham terminado há mais de 30 dias', () => {

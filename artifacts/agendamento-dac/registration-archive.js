@@ -6,8 +6,17 @@ function normalizarTextoCalendario(valor) {
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase()
+        .replace(/[‐‑‒–—―−]/g, '-')
+        .replace(/\s*-\s*/g, ' - ')
         .replace(/\s+/g, ' ')
         .trim();
+}
+
+function extrairNomeEventoCalendario(summary) {
+    const prefixo = String(summary || '').trim().match(
+        /^(?:ensaio|montagem|evento|desmontagem)(?:\s+\d+)?\s*[:\-‐‑‒–—―−]\s*(.+)$/i
+    );
+    return prefixo?.[1]?.trim() || '';
 }
 
 function dataFinalCalendario(evento) {
@@ -172,6 +181,8 @@ function criarRegistroArquivado(inscricao, prova, arquivadoEm = new Date()) {
 module.exports = {
     ARCHIVE_RETENTION_DAYS,
     ARCHIVE_RETENTION_MS,
+    normalizarTextoCalendario,
+    extrairNomeEventoCalendario,
     avaliarElegibilidadeArquivo,
     etapasEsperadasArquivo,
     chaveEtapaEsperada,
