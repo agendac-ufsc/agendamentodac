@@ -3,7 +3,7 @@ name: Automatic archive expectation
 description: Product expectation for when completed registrations leave Inscrições.
 ---
 
-Completed registrations should move automatically from Inscrições to Arquivo after the event date has passed by more than 30 days. A manual eligibility preview is not a substitute for automatic archival.
+Completed registrations should move automatically from Inscrições to Arquivo as soon as every scheduled event has ended. For multi-event registrations, keep the registration in Inscrições until the last event has ended. The daily production cron performs the move on its next run; a manual eligibility preview is not a substitute for automatic archival.
 
 **Why:** the user explicitly stated that this should happen automatically.
 

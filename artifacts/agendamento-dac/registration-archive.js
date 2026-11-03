@@ -1,5 +1,4 @@
-const ARCHIVE_RETENTION_DAYS = 30;
-const ARCHIVE_RETENTION_MS = ARCHIVE_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const ARCHIVE_RETENTION_DAYS = 0;
 
 function normalizarTextoCalendario(valor) {
     return String(valor || '')
@@ -148,9 +147,9 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
         return { elegivel: false, motivo: 'O calendário não informa a data final de todos os eventos.' };
     }
 
-    const corte = agoraMs - ARCHIVE_RETENTION_MS;
+    const corte = agoraMs;
     if (ends.some(end => end >= corte)) {
-        return { elegivel: false, motivo: 'Ainda não se passaram mais de 30 dias desde o fim de todos os eventos.' };
+        return { elegivel: false, motivo: 'Ainda há evento em andamento ou futuro.' };
     }
 
     const eventSummaries = eventosCorrespondentes.map((evento, index) => ({
@@ -202,7 +201,6 @@ function criarRegistroArquivado(inscricao, prova, arquivadoEm = new Date()) {
 
 module.exports = {
     ARCHIVE_RETENTION_DAYS,
-    ARCHIVE_RETENTION_MS,
     normalizarTextoCalendario,
     extrairNomeEventoCalendario,
     isTrustedLegacyCalendarEvent,
