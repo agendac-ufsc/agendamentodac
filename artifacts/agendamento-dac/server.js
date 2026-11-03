@@ -39,6 +39,8 @@ const {
     criarRegistroArquivado,
     correspondeEventoEtapa
 } = require('./registration-archive');
+const { parseRedisValue } = require('./redis-value');
+const { ensureAutomaticArchiveEnabled } = require('./archive-automation');
 
 const app = express();
 app.use(cors());
@@ -170,7 +172,6 @@ const assessmentStore = redis ? createAssessmentStore(redis) : null;
 const EVALUATOR_SESSION_COOKIE = 'dac_evaluator_session';
 const ADMIN_SESSION_COOKIE = 'dac_admin_session';
 const INSCRICOES_ARQUIVADAS_KEY = 'inscricoes_arquivadas_v1';
-const ARQUIVAMENTO_AUTOMATICO_KEY = 'inscricoes_arquivamento_automatico_ativo';
 const ARQUIVAMENTO_LOCK_KEY = 'inscricoes_arquivamento_lock';
 
 function obterSenhaAdminConfigurada() {
@@ -260,15 +261,6 @@ async function findEvaluatorSession(req) {
         ? { status: 'authenticated', evaluator: session.evaluator, token }
         : { status: 'unauthenticated', evaluator: null };
 }
-
-const parseRedisValue = (data) => {
-    if (!data) return null;
-    if (Array.isArray(data) || (typeof data === 'object' && data !== null)) return data;
-    if (typeof data === 'string') {
-        try { return JSON.parse(data); } catch { return null; }
-    }
-    return null;
-};
 
 const getAgendamentos = async () => {
     try {
@@ -2584,8 +2576,7 @@ app.get('/api/cron/arquivar-inscricoes', async (req, res) => {
     if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
 
     try {
-        const ativo = parseRedisValue(await redis.get(ARQUIVAMENTO_AUTOMATICO_KEY)) === true;
-        if (!ativo) return res.json({ success: true, skipped: true, reason: 'Arquivamento automático desativado.' });
+        await ensureAutomaticArchiveEnabled(redis);
 
         const resultado = await executarArquivamento(null, 20);
         await redis.set('inscricoes_arquivamento_ultima_execucao', {
@@ -4100,18 +4091,18 @@ app.get('/api/agendamento/:id', async (req, res) => {
 app.get('/api/admin/arquivadas', requireAdminSession, async (req, res) => {
     try {
         if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
-        const [arquivadas, automatico, ultimaExecucao] = await Promise.all([
+        const [arquivadas, ultimaExecucao] = await Promise.all([
             getArchiveRecords(),
-            redis.get(ARQUIVAMENTO_AUTOMATICO_KEY),
             redis.get('inscricoes_arquivamento_ultima_execucao')
         ]);
+        await ensureAutomaticArchiveEnabled(redis);
         const registros = arquivadas
             .filter(item => item?.archiveStatus === 'archived')
             .sort((a, b) => String(b.lastEventEnd || '').localeCompare(String(a.lastEventEnd || '')))
             .map(registroArquivadoPublico);
         res.json({
             records: registros,
-            automaticEnabled: parseRedisValue(automatico) === true,
+            automaticEnabled: true,
             lastRun: parseRedisValue(ultimaExecucao) || null
         });
     } catch (error) {
@@ -4170,13 +4161,13 @@ app.post('/api/admin/arquivamento/aplicar', requireAdminSession, async (req, res
 
 app.post('/api/admin/arquivamento/automatico', requireAdminSession, async (req, res) => {
     const enabled = req.body?.enabled;
-    if (typeof enabled !== 'boolean') {
-        return res.status(400).json({ error: 'Informe se o arquivamento automático deve ficar ativo.' });
+    if (enabled !== true) {
+        return res.status(409).json({ error: 'O arquivamento automático é permanente e não pode ser desativado.' });
     }
     if (!redis) return res.status(503).json({ error: 'Armazenamento de configurações indisponível.' });
     try {
-        await redis.set(ARQUIVAMENTO_AUTOMATICO_KEY, enabled);
-        res.json({ success: true, automaticEnabled: enabled });
+        await ensureAutomaticArchiveEnabled(redis);
+        res.json({ success: true, automaticEnabled: true });
     } catch (error) {
         console.error('❌ [Arquivo] Falha ao salvar configuração automática:', error.message);
         res.status(500).json({ error: 'Não foi possível salvar a configuração automática.' });

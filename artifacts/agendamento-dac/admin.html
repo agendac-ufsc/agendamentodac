@@ -315,13 +315,13 @@
             </div>
 
             <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:9px;margin:14px 0">
-                <label class="toggle-switch" style="flex-shrink:0">
-                    <input type="checkbox" id="archiveAutoToggle" onchange="setAutomaticArchive(this.checked)">
-                    <span class="ts"></span>
+                <label class="toggle-switch" style="flex-shrink:0;cursor:default">
+                    <input type="checkbox" id="archiveAutoToggle" checked disabled aria-label="Arquivamento automático sempre ativo">
+                    <span class="ts" style="cursor:default"></span>
                 </label>
                 <div>
                     <strong style="font-size:13px">Arquivamento automático diário</strong>
-                    <p id="archiveAutoDescription" style="font-size:12px;color:#666;margin:3px 0 0">Desativado até você revisar e ativar.</p>
+                    <p id="archiveAutoDescription" style="font-size:12px;color:#666;margin:3px 0 0">Sempre ativo: verifica o calendário diariamente às 06h (horário de Brasília).</p>
                 </div>
             </div>
             <div id="archiveLastRun" style="font-size:12px;color:#777;margin-bottom:10px"></div>
@@ -1261,11 +1261,9 @@ async function loadArchives() {
         const description = document.getElementById('archiveAutoDescription');
         const isReplitPreview = /\.replit\.(?:dev|app)$/i.test(location.hostname);
         if (description) {
-            description.textContent = data.automaticEnabled
-                ? isReplitPreview
-                    ? 'Ativo para a publicação: verifica o calendário diariamente às 06h (horário de Brasília).'
-                    : 'Ativo: verifica o calendário diariamente às 06h (horário de Brasília).'
-                : 'Desativado até você revisar e ativar.';
+            description.textContent = isReplitPreview
+                ? 'Sempre ativo para a publicação: verifica o calendário diariamente às 06h (horário de Brasília).'
+                : 'Sempre ativo: verifica o calendário diariamente às 06h (horário de Brasília).';
         }
         const cronNotice = document.getElementById('archiveCronNotice');
         if (cronNotice) {
@@ -1276,7 +1274,9 @@ async function loadArchives() {
         if (lastRun) {
             lastRun.textContent = data.lastRun?.at
                 ? `Última execução: ${formatArchiveDate(data.lastRun.at)} — ${Number(data.lastRun.archived) || 0} inscrição(ões) arquivada(s).`
-                : 'Ainda não houve execução do arquivamento.';
+                : isReplitPreview
+                    ? 'O cron diário da publicação não executa no preview do Replit.'
+                    : 'Nenhuma execução registrada. Confira o cron e a variável CRON_SECRET no projeto da Vercel.';
         }
         renderArchiveTable();
     } catch (err) {
@@ -1432,30 +1432,6 @@ async function applyArchivePreview() {
     } catch (err) {
         alert(err.message);
         apply.disabled = false;
-    }
-}
-
-async function setAutomaticArchive(enabled) {
-    const toggle = document.getElementById('archiveAutoToggle');
-    if (enabled && !confirm('Ativar verificação diária às 06h de Brasília? O sistema moverá para o Arquivo as inscrições com vínculo confirmado no calendário após 30 dias. Os registros e arquivos originais serão preservados.')) {
-        toggle.checked = false;
-        return;
-    }
-    try {
-        const response = await fetch('/api/admin/arquivamento/automatico', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ enabled })
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar a automação.');
-        document.getElementById('archiveAutoDescription').textContent = enabled
-            ? 'Ativo: verifica o calendário diariamente às 06h (horário de Brasília).'
-            : 'Desativado até você revisar e ativar.';
-        toggle.checked = enabled;
-    } catch (err) {
-        toggle.checked = !enabled;
-        alert(err.message);
     }
 }
 
