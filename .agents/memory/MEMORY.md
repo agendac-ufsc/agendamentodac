@@ -1,3 +1,4 @@
 - [Workflow secrets](workflow-secrets.md) — after adding project secrets, restart every managed workflow that consumes them.
 - [Corepack for pnpm workflows](corepack-pnpm-workflows.md) — use Corepack when the project pins pnpm and the global wrapper loops during workflow startup.
 - [Package firewall updates](package-firewall-transitive-update.md) — update a direct dependency to a compatible patched release when a transitive package is blocked.
+- [Automatic archive expectation](registration-archive-expectation.md) — completed registrations over 30 days old should move automatically from Inscrições to Arquivo.

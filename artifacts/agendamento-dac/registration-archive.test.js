@@ -3,9 +3,12 @@ const assert = require('node:assert/strict');
 const {
     ARCHIVE_RETENTION_MS,
     avaliarElegibilidadeArquivo,
+    etapasEsperadasArquivo,
     criarRegistroArquivado,
     extrairNomeEventoCalendario,
-    normalizarTextoCalendario
+    normalizarTextoCalendario,
+    correspondeEventoEtapa,
+    isTrustedLegacyCalendarEvent
 } = require('./registration-archive');
 
 const agora = new Date('2026-10-09T12:00:00.000Z');
@@ -80,6 +83,23 @@ test('vincula evento novo por ID e aceita evento legado somente com nome, data e
     assert.equal(avaliarElegibilidadeArquivo(inscricao(), [
         evento({ extendedProperties: { private: {} } })
     ], agora).elegivel, false);
+
+    const eventoAntigoSemMarcador = evento({
+        extendedProperties: { private: {} },
+        description: '<strong>EM ANÁLISE</strong>'
+    });
+    assert.equal(
+        avaliarElegibilidadeArquivo(inscricao(), [eventoAntigoSemMarcador], agora, {
+            legacyEventIds: new Set([eventoAntigoSemMarcador.id])
+        }).elegivel,
+        true
+    );
+    assert.equal(
+        avaliarElegibilidadeArquivo(inscricao(), [eventoAntigoSemMarcador], agora, {
+            legacyEventIds: new Set()
+        }).elegivel,
+        false
+    );
 });
 
 test('valida o resumo original dos eventos de inscrições antigas do Forms', () => {
@@ -121,6 +141,50 @@ test('reconhece títulos antigos do calendário com hífen e diferentes etapas',
         tituloCalendario
     );
     assert.equal(extrairNomeEventoCalendario(tituloCalendario), '');
+});
+
+test('corresponde a resumo legado quando o tipo de hífen varia', () => {
+    const titulo = 'Necrópsia - estudos para ressuscitar um cadáver';
+    const inscricaoLegada = inscricao({
+        evento: titulo,
+        etapas: {
+            evento: [{
+                data: '2026-08-01',
+                horario: '19:00 às 21:00',
+                _archiveEventSummary: `Evento - ${titulo.replace(' - ', ' – ')}`
+            }]
+        }
+    });
+    const esperado = etapasEsperadasArquivo(inscricaoLegada)[0];
+    const calendarEvent = evento({
+        summary: `Evento - ${titulo}`,
+        start: { dateTime: '2026-08-01T19:00:00-03:00' }
+    });
+
+    assert.equal(correspondeEventoEtapa(calendarEvent, esperado), true);
+});
+
+test('confirma origem de eventos antigos sem marcador por metadados ou descrição oficial', () => {
+    assert.equal(isTrustedLegacyCalendarEvent(evento({
+        extendedProperties: { private: {} },
+        description: '<strong>EM ANÁLISE</strong>'
+    })), true);
+    assert.equal(isTrustedLegacyCalendarEvent(evento({
+        extendedProperties: { private: {} },
+        description: 'Em análise\nLocal: Teatro Carmen Fossari'
+    })), true);
+    assert.equal(isTrustedLegacyCalendarEvent(evento({
+        extendedProperties: { private: {} },
+        creator: { email: 'calendar-bot@example.org' }
+    }), 'calendar-bot@example.org'), true);
+    assert.equal(isTrustedLegacyCalendarEvent(evento({
+        extendedProperties: { private: { dac_source: 'manual' } },
+        description: '<strong>EM ANÁLISE</strong>'
+    })), false);
+    assert.equal(isTrustedLegacyCalendarEvent(evento({
+        extendedProperties: { private: { dac_inscricao_id: 'another-registration' } },
+        description: '<strong>EM ANÁLISE</strong>'
+    })), false);
 });
 
 test('exige que todos os eventos tenham terminado há mais de 30 dias', () => {

@@ -35,9 +35,11 @@ const {
     ARCHIVE_RETENTION_DAYS,
     normalizarTextoCalendario: normalizarTituloArquivo,
     extrairNomeEventoCalendario,
+    isTrustedLegacyCalendarEvent,
     avaliarElegibilidadeArquivo,
     etapasEsperadasArquivo,
     chaveEtapaEsperada,
+    chaveEventoCalendario,
     criarRegistroArquivado,
     correspondeEventoEtapa
 } = require('./registration-archive');
@@ -1195,7 +1197,7 @@ function obterCalendarIdInscricao(inscricao) {
     return '';
 }
 
-async function listarEventosSistemaCalendario(calendarId, agora) {
+async function listarEventosCalendarioParaArquivo(calendarId, agora) {
     const eventos = [];
     let pageToken;
     let pages = 0;
@@ -1208,7 +1210,6 @@ async function listarEventosSistemaCalendario(calendarId, agora) {
             singleEvents: true,
             orderBy: 'startTime',
             maxResults: 2500,
-            privateExtendedProperty: 'dac_source=sistema',
             ...(pageToken ? { pageToken } : {})
         });
         eventos.push(...(response.data.items || []));
@@ -1300,16 +1301,22 @@ async function carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, evento
         }
 
         const eventosLegados = [];
+        const eventosSemOrigemConfirmada = [];
         for (const [calendarId, eventos] of eventosPorCalendario.entries()) {
             for (const evento of eventos) {
                 const props = evento?.extendedProperties?.private || {};
                 const nomeEvento = extrairNomeEventoCalendario(evento?.summary);
-                if (props.dac_source !== 'sistema' || props.dac_inscricao_id || !nomeEvento) continue;
-                eventosLegados.push({
+                if (!nomeEvento || props.dac_inscricao_id) continue;
+                const item = {
                     evento,
                     calendarId,
                     nomeNormalizado: normalizarTituloArquivo(nomeEvento)
-                });
+                };
+                if (isTrustedLegacyCalendarEvent(evento, SERVICE_ACCOUNT_EMAIL)) {
+                    eventosLegados.push(item);
+                } else if (!props.dac_source) {
+                    eventosSemOrigemConfirmada.push(item);
+                }
             }
         }
 
@@ -1339,12 +1346,17 @@ async function carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, evento
 
             let bloqueio = '';
             let eventosCorrespondentes = candidatosPorEmail.length ? candidatosPorEmail : candidatos;
+            const candidatoSemOrigem = eventosSemOrigemConfirmada.some(
+                item => item.nomeNormalizado === tituloNormalizado
+            );
             if (candidatosPorEmail.length && repeticoesMesmoEmailETitulo > 1) {
                 bloqueio = 'Há mais de uma resposta do mesmo e-mail para este evento; o vínculo com o calendário é ambíguo.';
             } else if (!candidatosPorEmail.length && repeticoesMesmoTitulo > 1) {
                 bloqueio = 'Há respostas repetidas para este evento sem um e-mail identificável no calendário.';
             } else if (!eventosCorrespondentes.length) {
-                bloqueio = 'Não foi encontrado evento do sistema com o mesmo título no calendário.';
+                bloqueio = candidatoSemOrigem
+                    ? 'Foi encontrado um evento com este título, mas sem identificação confiável de origem do sistema.'
+                    : 'Não foi encontrado evento do sistema com o mesmo título no calendário.';
             } else if (new Set(eventosCorrespondentes.map(item => item.calendarId)).size !== 1) {
                 bloqueio = 'O título foi encontrado em mais de um calendário; o local não pôde ser confirmado.';
             }
@@ -1416,8 +1428,7 @@ function mapearEventosLegadosSemAmbiguidade(inscricoes, eventosPorCalendario) {
     const permitidosPorInscricao = new Map();
     for (const [calendarId, eventos] of eventosPorCalendario.entries()) {
         for (const evento of eventos) {
-            const props = evento?.extendedProperties?.private || {};
-            if (props.dac_source !== 'sistema' || props.dac_inscricao_id || !evento.id) continue;
+            if (!isTrustedLegacyCalendarEvent(evento, SERVICE_ACCOUNT_EMAIL) || !evento.id) continue;
             const proprietarios = proprietariosPorEtapa.get(
                 `${calendarId}|${chaveEventoCalendarioParaArquivo(evento)}`
             );
@@ -1431,14 +1442,7 @@ function mapearEventosLegadosSemAmbiguidade(inscricoes, eventosPorCalendario) {
 }
 
 function chaveEventoCalendarioParaArquivo(evento) {
-    const summary = String(evento?.summary || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/\s+/g, ' ')
-        .trim();
-    const inicio = evento?.start?.dateTime;
-    return summary && inicio?.includes('T') ? `${summary}|${String(inicio).slice(0, 16)}` : '';
+    return chaveEventoCalendario(evento);
 }
 
 async function criarPreviaArquivamento(agora = new Date()) {
@@ -1456,7 +1460,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
     ].filter(Boolean))];
     const eventosPorCalendario = new Map();
     await Promise.all(calendarIds.map(async calendarId => {
-        eventosPorCalendario.set(calendarId, await listarEventosSistemaCalendario(calendarId, agora));
+        eventosPorCalendario.set(calendarId, await listarEventosCalendarioParaArquivo(calendarId, agora));
     }));
     const formsResult = await carregarInscricoesFormsLegadasParaArquivo(inscricoesRedis, eventosPorCalendario);
     const inscricoes = [...inscricoesRedis, ...formsResult.inscricoes];

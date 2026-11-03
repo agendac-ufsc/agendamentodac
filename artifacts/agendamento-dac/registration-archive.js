@@ -19,6 +19,23 @@ function extrairNomeEventoCalendario(summary) {
     return prefixo?.[1]?.trim() || '';
 }
 
+function isTrustedLegacyCalendarEvent(evento, serviceAccountEmail = '') {
+    const privateProps = evento?.extendedProperties?.private || {};
+    if (privateProps.dac_inscricao_id) return false;
+    if (privateProps.dac_source === 'sistema') return true;
+    if (privateProps.dac_source) return false;
+
+    const creatorEmail = String(evento?.creator?.email || '').trim().toLowerCase();
+    if (serviceAccountEmail && creatorEmail === String(serviceAccountEmail).trim().toLowerCase()) {
+        return true;
+    }
+
+    const description = String(evento?.description || '');
+    return /<strong>\s*em\s+an[aá]lise\s*<\/strong>/i.test(description)
+        || /^em\s+an[aá]lise\s*\r?\n\s*local:/i.test(description)
+        || (/proponente:/i.test(description) && /local:/i.test(description));
+}
+
 function dataFinalCalendario(evento) {
     const valor = evento?.end?.dateTime || evento?.end?.date;
     if (!valor) return null;
@@ -103,10 +120,15 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
             : null;
     const eventos = (Array.isArray(eventosCalendario) ? eventosCalendario : []).filter(evento => {
         const privateProps = evento?.extendedProperties?.private || {};
-        if (privateProps.dac_source !== 'sistema' || evento.status === 'cancelled') return false;
+        if (evento.status === 'cancelled') return false;
         const eventRegistrationId = String(privateProps.dac_inscricao_id || '');
-        if (eventRegistrationId) return eventRegistrationId === id;
-        return !legacyEventIds || legacyEventIds.has(String(evento.id || ''));
+        if (eventRegistrationId) {
+            return privateProps.dac_source === 'sistema' && eventRegistrationId === id;
+        }
+        if (privateProps.dac_source === 'sistema') {
+            return !legacyEventIds || legacyEventIds.has(String(evento.id || ''));
+        }
+        return Boolean(legacyEventIds?.has(String(evento.id || '')));
     });
 
     const matched = etapasEsperadas.map(etapaEsperada =>
@@ -183,9 +205,11 @@ module.exports = {
     ARCHIVE_RETENTION_MS,
     normalizarTextoCalendario,
     extrairNomeEventoCalendario,
+    isTrustedLegacyCalendarEvent,
     avaliarElegibilidadeArquivo,
     etapasEsperadasArquivo,
     chaveEtapaEsperada,
+    chaveEventoCalendario,
     criarRegistroArquivado,
     correspondeEventoEtapa,
     dataFinalCalendario
