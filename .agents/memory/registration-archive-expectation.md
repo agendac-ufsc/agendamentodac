@@ -3,8 +3,10 @@ name: Automatic archive expectation
 description: Product expectation for when completed registrations leave Inscrições.
 ---
 
-Completed registrations should move automatically from Inscrições to Arquivo as soon as every scheduled event has ended. For multi-event registrations, keep the registration in Inscrições until the last event has ended. The daily production cron performs the move on its next run; a manual eligibility preview is not a substitute for automatic archival.
+A registration moves automatically from Inscrições to Arquivo as soon as every scheduled event occurrence has ended. There is no 30-day waiting period and no daily cron, manual eligibility preview, or on/off toggle.
 
-**Why:** the user explicitly stated that this should happen automatically.
+When the admin panel is open, schedule an automatic refresh for the latest end time of each registration's event occurrences. When the panel is opened again after an event ends, immediately catch up and archive all completed eligible registrations. A later event occurrence keeps the registration in Inscrições until it ends.
 
-**How to apply:** Treat the production automatic path as a required behavior whenever changing archive eligibility, event matching, or scheduled execution.
+**Why:** the user explicitly requested immediate automatic archiving once the entire event is complete, with no arbitrary delay or manual controls.
+
+**How to apply:** Preserve unique calendar matching, cancellation checks, and the all-occurrences-complete rule. Keep original registrations and files intact; only change which tab displays the registration.

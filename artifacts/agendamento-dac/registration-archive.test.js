@@ -186,19 +186,24 @@ test('confirma origem de eventos antigos sem marcador por metadados ou descriç�
     })), false);
 });
 
-test('mantém a inscrição ativa enquanto qualquer evento ainda estiver no futuro', () => {
-    const fimFuturo = new Date(agora.getTime() + 1).toISOString();
+test('mantém inscrição ativa até o fim da última ocorrência e agenda a verificação', () => {
+    const fimFuturo = '2026-10-10T00:00:00.000Z';
     const inscricaoComDoisEventos = inscricao({ etapas: { evento: [
         { data: '2026-08-01', horario: '19:00 às 21:00' },
-        { data: '2026-08-02', horario: '19:00 às 21:00' }
+        { data: '2026-10-09', horario: '19:00 às 21:00' }
     ] } });
     const prova = avaliarElegibilidadeArquivo(inscricaoComDoisEventos, [
-        evento({ summary: 'Evento 1: Mostra de Música', end: { dateTime: fimEvento } }),
-        evento({ id: 'calendar-event-2', summary: 'Evento 2: Mostra de Música',
-            start: { dateTime: '2026-08-02T19:00:00-03:00' }, end: { dateTime: fimFuturo },
-            extendedProperties: { private: { dac_source: 'sistema', dac_inscricao_id: 'site_123' } } })
+        evento({ summary: 'Evento 1: Mostra de Música' }),
+        evento({
+            id: 'calendar-event-2',
+            summary: 'Evento 2: Mostra de Música',
+            start: { dateTime: '2026-10-09T19:00:00-03:00' },
+            end: { dateTime: fimFuturo },
+            extendedProperties: { private: { dac_source: 'sistema', dac_inscricao_id: 'site_123' } }
+        })
     ], agora);
     assert.equal(prova.elegivel, false);
+    assert.equal(prova.nextCheckAt, fimFuturo);
 });
 
 test('não arquiva sincronização incompleta, cancelamentos ou eventos sem fim', () => {
@@ -207,15 +212,19 @@ test('não arquiva sincronização incompleta, cancelamentos ou eventos sem fim'
     assert.equal(avaliarElegibilidadeArquivo(inscricao(), [evento({ end: {} })], agora).elegivel, false);
 });
 
-test('exige que todos os eventos tenham terminado e entende evento de dia inteiro', () => {
-    const inscricaoNoCorte = inscricao({ etapas: { evento: { data: '2026-09-09', horario: '08:00 às 09:00' } } });
-    assert.equal(avaliarElegibilidadeArquivo(inscricaoNoCorte, [evento({
-        start: { dateTime: '2026-09-09T08:00:00-03:00' }, end: { dateTime: agora.toISOString() }
-    })], agora).elegivel, false);
-    assert.equal(avaliarElegibilidadeArquivo(inscricaoNoCorte, [evento({
-        start: { dateTime: '2026-09-09T08:00:00-03:00' }, end: { dateTime: new Date(agora.getTime() - 1).toISOString() }
+test('arquiva no horário final e entende evento de dia inteiro', () => {
+    const inscricaoNoFim = inscricao({
+        etapas: { evento: { data: '2026-10-09', horario: '08:00 às 09:00' } }
+    });
+    assert.equal(avaliarElegibilidadeArquivo(inscricaoNoFim, [evento({
+        start: { dateTime: '2026-10-09T08:00:00-03:00' },
+        end: { dateTime: agora.toISOString() }
     })], agora).elegivel, true);
-    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [evento({ end: { date: '2026-08-01' } })], agora).elegivel, true);
+    assert.equal(avaliarElegibilidadeArquivo(inscricaoNoFim, [evento({
+        start: { dateTime: '2026-10-09T08:00:00-03:00' },
+        end: { dateTime: new Date(agora.getTime() - 1000).toISOString() }
+    })], agora).elegivel, true);
+    assert.equal(avaliarElegibilidadeArquivo(inscricao(), [evento({ end: { date: '2026-10-08' } })], agora).elegivel, true);
 });
 
 test('resumo arquivado preserva o original e não copia documentos ou dados extensos', () => {

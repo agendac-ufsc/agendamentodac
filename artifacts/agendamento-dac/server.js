@@ -32,7 +32,6 @@ const {
 } = require('./evaluator-auth');
 const { ADMIN_SESSION_TTL_SECONDS, createAdminSessionToken, verifyAdminSessionToken } = require('./admin-session');
 const {
-    ARCHIVE_RETENTION_DAYS,
     normalizarTextoCalendario: normalizarTituloArquivo,
     extrairNomeEventoCalendario,
     isTrustedLegacyCalendarEvent,
@@ -44,7 +43,6 @@ const {
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
-const { ensureAutomaticArchiveEnabled } = require('./archive-automation');
 
 const app = express();
 app.use(cors());
@@ -1468,6 +1466,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
 
     const elegiveis = [];
     const bloqueadas = [];
+    let nextCheckAt = null;
     for (const inscricao of inscricoes) {
         const id = String(inscricao?.id || '');
         if (!id || idsJaArquivados.has(id) || idsJaArquivados.has(String(inscricao?.legacyId || ''))) continue;
@@ -1494,6 +1493,11 @@ async function criarPreviaArquivamento(agora = new Date()) {
             agora,
             { legacyEventIds: eventosLegadosPermitidos.get(id) || new Set() }
         );
+        const nextCheckTimestamp = Date.parse(prova.nextCheckAt || '');
+        if (Number.isFinite(nextCheckTimestamp) && nextCheckTimestamp > agora.getTime()
+            && (!nextCheckAt || nextCheckTimestamp < Date.parse(nextCheckAt))) {
+            nextCheckAt = new Date(nextCheckTimestamp).toISOString();
+        }
         if (!prova.elegivel) {
             adicionarBloqueada(prova.motivo);
             continue;
@@ -1525,7 +1529,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
 
     return {
         checkedAt: agora.toISOString(),
-        retentionDays: ARCHIVE_RETENTION_DAYS,
+        nextCheckAt,
         scannedCount: inscricoes.length,
         eligible: elegiveis,
         blocked: bloqueadas.slice(0, 100),
@@ -1552,7 +1556,7 @@ async function atualizarInscricoesArquivadas(registros) {
     await redis.set(INSCRICOES_ARQUIVADAS_KEY, registros);
 }
 
-async function executarArquivamento(idsSolicitados = null, limite = 50) {
+async function executarArquivamento(idsSolicitados = null, limite = Infinity) {
     if (!redis) throw new Error('Armazenamento das inscrições indisponível.');
     const lockToken = randomUUID();
     const locked = await redis.set(ARQUIVAMENTO_LOCK_KEY, lockToken, { nx: true, ex: 180 });
@@ -1593,9 +1597,9 @@ async function executarArquivamento(idsSolicitados = null, limite = 50) {
             );
             if (idxExistente >= 0) arquivadas[idxExistente] = concluido;
             else arquivadas.push(concluido);
-            await atualizarInscricoesArquivadas(arquivadas);
             resultados.push({ id: candidato.id, archived: true, preservedFiles: documentos.length });
         }
+        if (resultados.length) await atualizarInscricoesArquivadas(arquivadas);
 
         return {
             success: naoElegiveis.length === 0 && resultados.every(item => item.archived),
@@ -1603,7 +1607,8 @@ async function executarArquivamento(idsSolicitados = null, limite = 50) {
             archived: resultados.filter(item => item.archived).length,
             failed: resultados.filter(item => !item.archived).length,
             rejectedIds: naoElegiveis,
-            results: resultados
+            results: resultados,
+            nextCheckAt: previa.nextCheckAt
         };
     } finally {
         const lockAtual = await redis.get(ARQUIVAMENTO_LOCK_KEY).catch(() => null);
@@ -2568,37 +2573,6 @@ app.get('/api/cron/verificar-atividades', async (req, res) => {
     } catch (error) {
         console.error('❌ [Cron] Falha ao verificar envios automáticos de atividades:', error.message);
         return res.status(500).json({ error: 'Falha ao verificar envios automáticos.' });
-    }
-});
-
-app.get('/api/cron/arquivar-inscricoes', async (req, res) => {
-    const autorizacao = String(req.headers.authorization || '');
-    const cronSecret = limparConfiguracaoBrevo(process.env.CRON_SECRET);
-    if (!cronSecret || autorizacao !== `Bearer ${cronSecret}`) {
-        return res.status(401).json({ error: 'Não autorizado' });
-    }
-    if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
-
-    try {
-        await ensureAutomaticArchiveEnabled(redis);
-
-        const resultado = await executarArquivamento(null, 20);
-        await redis.set('inscricoes_arquivamento_ultima_execucao', {
-            at: new Date().toISOString(),
-            trigger: 'cron',
-            processed: resultado.processed,
-            archived: resultado.archived,
-            failed: resultado.failed
-        });
-        return res.json({
-            success: resultado.failed === 0,
-            processed: resultado.processed,
-            archived: resultado.archived,
-            failed: resultado.failed
-        });
-    } catch (error) {
-        console.error('❌ [Cron] Falha no arquivamento automático:', error.message);
-        return res.status(error.statusCode || 500).json({ error: 'Falha ao arquivar inscrições.' });
     }
 });
 
@@ -4092,89 +4066,45 @@ app.get('/api/agendamento/:id', async (req, res) => {
     }
 });
 
-app.get('/api/admin/arquivadas', requireAdminSession, async (req, res) => {
+app.get('/api/admin/arquivadas', requireAdminSession, async (_req, res) => {
     try {
         if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
         const [arquivadas, ultimaExecucao] = await Promise.all([
             getArchiveRecords(),
             redis.get('inscricoes_arquivamento_ultima_execucao')
         ]);
-        await ensureAutomaticArchiveEnabled(redis);
         const registros = arquivadas
             .filter(item => item?.archiveStatus === 'archived')
             .sort((a, b) => String(b.lastEventEnd || '').localeCompare(String(a.lastEventEnd || '')))
             .map(registroArquivadoPublico);
-        res.json({
-            records: registros,
-            automaticEnabled: true,
-            lastRun: parseRedisValue(ultimaExecucao) || null
-        });
+        res.json({ records: registros, lastRun: parseRedisValue(ultimaExecucao) || null });
     } catch (error) {
         console.error('❌ [Arquivo] Falha ao listar inscrições arquivadas:', error.message);
         res.status(500).json({ error: 'Não foi possível carregar o arquivo.' });
     }
 });
 
-app.post('/api/admin/arquivamento/previa', requireAdminSession, async (_req, res) => {
+app.post('/api/admin/arquivamento/sincronizar', requireAdminSession, async (_req, res) => {
+    if (!redis) return res.status(503).json({ error: 'Armazenamento de inscrições indisponível.' });
     try {
-        const previa = await criarPreviaArquivamento();
-        const publico = candidato => {
-            const { _source, _proof, _documents, ...dados } = candidato;
-            return dados;
-        };
-        res.json({
-            checkedAt: previa.checkedAt,
-            retentionDays: previa.retentionDays,
-            scannedCount: previa.scannedCount,
-            eligible: previa.eligible.map(publico),
-            blocked: previa.blocked.map(publico)
-        });
-    } catch (error) {
-        console.error('❌ [Arquivo] Falha na prévia de arquivamento:', error.message);
-        res.status(503).json({ error: error.message || 'Não foi possível verificar calendário e inscrições.' });
-    }
-});
-
-app.post('/api/admin/arquivamento/aplicar', requireAdminSession, async (req, res) => {
-    const ids = Array.isArray(req.body?.ids)
-        ? [...new Set(req.body.ids.map(value => String(value || '').trim()).filter(Boolean))]
-        : [];
-    if (req.body?.confirm !== true) {
-        return res.status(400).json({ error: 'Confirmação explícita do arquivamento é obrigatória.' });
-    }
-    if (ids.length === 0 || ids.length > 50) {
-        return res.status(400).json({ error: 'Selecione entre 1 e 50 inscrições da prévia.' });
-    }
-
-    try {
-        const resultado = await executarArquivamento(ids, 50);
+        const resultado = await executarArquivamento();
         const ultimaExecucao = {
             at: new Date().toISOString(),
-            trigger: 'admin',
+            trigger: 'painel',
             processed: resultado.processed,
             archived: resultado.archived,
-            failed: resultado.failed
+            failed: resultado.failed,
+            nextCheckAt: resultado.nextCheckAt
         };
         await redis.set('inscricoes_arquivamento_ultima_execucao', ultimaExecucao);
-        res.status(resultado.rejectedIds.length ? 409 : 200).json(resultado);
+        const registros = (await getArchiveRecords())
+            .filter(item => item?.archiveStatus === 'archived')
+            .sort((a, b) => String(b.lastEventEnd || '').localeCompare(String(a.lastEventEnd || '')))
+            .map(registroArquivadoPublico);
+        res.json({ records: registros, archived: resultado.archived, nextCheckAt: resultado.nextCheckAt });
     } catch (error) {
-        console.error('❌ [Arquivo] Falha ao arquivar inscrições:', error.message);
-        res.status(error.statusCode || 500).json({ error: error.message || 'Não foi possível concluir o arquivamento.' });
-    }
-});
-
-app.post('/api/admin/arquivamento/automatico', requireAdminSession, async (req, res) => {
-    const enabled = req.body?.enabled;
-    if (enabled !== true) {
-        return res.status(409).json({ error: 'O arquivamento automático é permanente e não pode ser desativado.' });
-    }
-    if (!redis) return res.status(503).json({ error: 'Armazenamento de configurações indisponível.' });
-    try {
-        await ensureAutomaticArchiveEnabled(redis);
-        res.json({ success: true, automaticEnabled: true });
-    } catch (error) {
-        console.error('❌ [Arquivo] Falha ao salvar configuração automática:', error.message);
-        res.status(500).json({ error: 'Não foi possível salvar a configuração automática.' });
+        console.error('❌ [Arquivo] Falha ao sincronizar automaticamente:', error.message);
+        res.status(error.statusCode || 503).json({ error: error.message || 'Não foi possível atualizar o arquivo.' });
     }
 });
 

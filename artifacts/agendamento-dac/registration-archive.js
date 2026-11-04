@@ -1,5 +1,3 @@
-const ARCHIVE_RETENTION_DAYS = 0;
-
 function normalizarTextoCalendario(valor) {
     return String(valor || '')
         .normalize('NFD')
@@ -147,9 +145,13 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
         return { elegivel: false, motivo: 'O calendário não informa a data final de todos os eventos.' };
     }
 
-    const corte = agoraMs;
-    if (ends.some(end => end >= corte)) {
-        return { elegivel: false, motivo: 'Ainda há evento em andamento ou futuro.' };
+    const ultimoEventoMs = Math.max(...ends);
+    if (ultimoEventoMs > agoraMs) {
+        return {
+            elegivel: false,
+            motivo: 'Ainda há ocorrência(s) futura(s) do evento.',
+            nextCheckAt: new Date(ultimoEventoMs).toISOString()
+        };
     }
 
     const eventSummaries = eventosCorrespondentes.map((evento, index) => ({
@@ -163,7 +165,7 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
     return {
         elegivel: true,
         eventos: eventSummaries,
-        ultimoEventoEm: new Date(Math.max(...ends)).toISOString()
+        ultimoEventoEm: new Date(ultimoEventoMs).toISOString()
     };
 }
 
@@ -200,7 +202,6 @@ function criarRegistroArquivado(inscricao, prova, arquivadoEm = new Date()) {
 }
 
 module.exports = {
-    ARCHIVE_RETENTION_DAYS,
     normalizarTextoCalendario,
     extrairNomeEventoCalendario,
     isTrustedLegacyCalendarEvent,
