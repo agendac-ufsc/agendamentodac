@@ -1257,6 +1257,7 @@ async function loadArchives() {
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar o arquivo.');
             archiveRecords = Array.isArray(data.records) ? data.records : [];
+            if (allUnificados.length) renderTabela();
             agendarAtualizacaoArquivo(data.nextCheckAt);
             renderArchiveTable();
             if (Number(data.archived) > 0) await loadData(true);
@@ -1264,7 +1265,6 @@ async function loadArchives() {
             if (!err.message.includes('Sessão administrativa')) {
                 agendarAtualizacaoArquivo(new Date(Date.now() + 5 * 60 * 1000).toISOString());
             }
-            archiveRecords = [];
             if (error) {
                 error.textContent = err.message.includes('Sessão administrativa')
                     ? 'Sessão administrativa expirada. Saia do painel e entre novamente para acessar o arquivo.'
@@ -1450,7 +1450,26 @@ function toggleSort() {
     renderTabela();
 }
 
+function obterInscricoesNaoArquivadas() {
+    const idsArquivados = new Set(
+        (Array.isArray(archiveRecords) ? archiveRecords : [])
+            .flatMap(registro => [registro?.id, registro?.legacyId])
+            .filter(id => id !== undefined && id !== null && String(id).trim())
+            .map(id => String(id).trim())
+    );
+    for (const id of inscricoesSelecionadas) {
+        if (idsArquivados.has(String(id).trim())) inscricoesSelecionadas.delete(id);
+    }
+    return allUnificados.filter(item => {
+        const primeiraEtapa = item?.primeiraEtapa || {};
+        const ids = [primeiraEtapa.id, primeiraEtapa.legacyId, item?.id, item?.legacyId];
+        return !ids.some(id => id !== undefined && id !== null
+            && idsArquivados.has(String(id).trim()));
+    });
+}
+
 function renderTabela() {
+    const inscricoesAtivas = obterInscricoesNaoArquivadas();
     const q = (document.getElementById('searchInput').value || '').toLowerCase();
     const filterLocal = document.getElementById('filterLocal').value;
     const filterStatus = document.getElementById('filterStatus').value;
@@ -1465,7 +1484,7 @@ function renderTabela() {
     };
 
     const qDigits = q.replace(/\D/g, '');
-    let filtered = allUnificados.filter(item => {
+    let filtered = inscricoesAtivas.filter(item => {
         const p = item.primeiraEtapa;
         const telDigits = (p.telefone || '').replace(/\D/g, '');
         const matchTel = qDigits.length >= 3 && telDigits && telDigits.includes(qDigits);
@@ -1490,7 +1509,7 @@ function renderTabela() {
         return sortOrder === 'desc' ? tB - tA : tA - tB;
     });
 
-    document.getElementById('resultsCount').textContent = `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
+    document.getElementById('resultsCount').textContent = `Exibindo ${filtered.length} de ${inscricoesAtivas.length} inscrição(ões)`;
 
     if (filtered.length === 0) {
         showInscricoesState('empty');
