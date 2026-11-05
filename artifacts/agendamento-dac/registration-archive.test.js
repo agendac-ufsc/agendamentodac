@@ -4,11 +4,13 @@ const {
     avaliarElegibilidadeArquivo,
     etapasEsperadasArquivo,
     criarRegistroArquivado,
+    criarResumoBloqueioArquivo,
     extrairNomeEventoCalendario,
     normalizarTextoCalendario,
     correspondeEventoEtapa,
     isTrustedLegacyCalendarEvent
 } = require('./registration-archive');
+const archiveFixtures = require('./registration-archive.fixtures');
 
 const agora = new Date('2026-10-09T12:00:00.000Z');
 const fimEvento = new Date(agora.getTime() - 1000).toISOString();
@@ -210,6 +212,98 @@ test('não arquiva sincronização incompleta, cancelamentos ou eventos sem fim'
     assert.equal(avaliarElegibilidadeArquivo(inscricao({ calendarSynced: false }), [evento()], agora).elegivel, false);
     assert.equal(avaliarElegibilidadeArquivo(inscricao({ statusInscricao: 'Cancelado' }), [evento()], agora).elegivel, false);
     assert.equal(avaliarElegibilidadeArquivo(inscricao(), [evento({ end: {} })], agora).elegivel, false);
+});
+
+test('arquiva registro histórico com data brasileira, título legado e fuso equivalente', () => {
+    const prova = avaliarElegibilidadeArquivo(
+        archiveFixtures.historicalRegistration,
+        [archiveFixtures.historicalEvent],
+        archiveFixtures.referenceDate
+    );
+    assert.equal(prova.elegivel, true);
+    assert.equal(prova.ultimoEventoEm, '2026-04-16T00:00:00.000Z');
+});
+
+test('exige correspondência inequívoca de todas as ocorrências históricas', () => {
+    const prova = avaliarElegibilidadeArquivo(
+        archiveFixtures.multipleOccurrenceRegistration,
+        archiveFixtures.multipleOccurrenceEvents,
+        archiveFixtures.referenceDate
+    );
+    assert.equal(prova.elegivel, true);
+    assert.equal(prova.eventos.length, 2);
+    assert.equal(prova.ultimoEventoEm, '2026-08-15T00:30:00.000Z');
+});
+
+test('mantém ativa uma ocorrência futura em registro com várias etapas', () => {
+    const prova = avaliarElegibilidadeArquivo(
+        archiveFixtures.futureRegistration,
+        [archiveFixtures.futureEvent],
+        archiveFixtures.referenceDate
+    );
+    assert.equal(prova.elegivel, false);
+    assert.match(prova.motivo, /futura/i);
+});
+
+test('mantém ativo quando falta data final no calendário', () => {
+    const prova = avaliarElegibilidadeArquivo(
+        archiveFixtures.historicalRegistration,
+        [{ ...archiveFixtures.historicalEvent, end: {} }],
+        archiveFixtures.referenceDate
+    );
+    assert.equal(prova.elegivel, false);
+    assert.match(prova.motivo, /data final/i);
+});
+
+test('mantém ativo quando não há correspondência no calendário', () => {
+    const prova = avaliarElegibilidadeArquivo(
+        archiveFixtures.historicalRegistration,
+        [],
+        archiveFixtures.referenceDate
+    );
+    assert.equal(prova.elegivel, false);
+    assert.match(prova.motivo, /não foi localizada/i);
+});
+
+test('mantém ativo quando duas ocorrências são igualmente compatíveis', () => {
+    const duplicado = {
+        ...archiveFixtures.historicalEvent,
+        id: 'fixture-calendar-event-duplicate'
+    };
+    const prova = avaliarElegibilidadeArquivo(
+        archiveFixtures.historicalRegistration,
+        [archiveFixtures.historicalEvent, duplicado],
+        archiveFixtures.referenceDate
+    );
+    assert.equal(prova.elegivel, false);
+    assert.match(prova.motivo, /ambígua/i);
+});
+
+for (const status of ['cancelled', 'canceled']) {
+    test(`mantém ativa uma ocorrência com status ${status} no calendário`, () => {
+        const prova = avaliarElegibilidadeArquivo(
+            archiveFixtures.historicalRegistration,
+            [{ ...archiveFixtures.historicalEvent, status }],
+            archiveFixtures.referenceDate
+        );
+        assert.equal(prova.elegivel, false);
+        assert.match(prova.motivo, /cancelada/i);
+    });
+}
+
+test('resumo administrativo do bloqueio não inclui dados do proponente ou IDs', () => {
+    const resumo = criarResumoBloqueioArquivo({
+        ...archiveFixtures.historicalRegistration,
+        nome: 'Nome sintético privado',
+        email: 'nao-usar@example.invalid',
+        telefone: '0000000000'
+    }, 'Correspondência ausente.');
+    assert.deepEqual(resumo, {
+        eventName: 'Mostra Cênica de Exemplo',
+        venue: 'Local de teste',
+        eventDates: ['2026-04-15'],
+        reason: 'Correspondência ausente.'
+    });
 });
 
 test('arquiva no horário final e entende evento de dia inteiro', () => {

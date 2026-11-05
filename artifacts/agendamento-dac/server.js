@@ -40,6 +40,7 @@ const {
     chaveEtapaEsperada,
     chaveEventoCalendario,
     criarRegistroArquivado,
+    criarResumoBloqueioArquivo,
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
@@ -1476,12 +1477,7 @@ async function criarPreviaArquivamento(agora = new Date()) {
             || inscricao.isLegada === true;
         const adicionarBloqueada = motivo => {
             if (!completa) return;
-            bloqueadas.push({
-                id,
-                applicantName: String(inscricao.nome || ''),
-                eventName: String(inscricao.evento || ''),
-                reason: motivo
-            });
+            bloqueadas.push(criarResumoBloqueioArquivo(inscricao, motivo));
         };
         if (!calendarId) {
             adicionarBloqueada('Não foi possível identificar o calendário/local desta inscrição.');
@@ -1608,7 +1604,9 @@ async function executarArquivamento(idsSolicitados = null, limite = Infinity) {
             failed: resultados.filter(item => !item.archived).length,
             rejectedIds: naoElegiveis,
             results: resultados,
-            nextCheckAt: previa.nextCheckAt
+            nextCheckAt: previa.nextCheckAt,
+            blocked: previa.blocked,
+            blockedCount: previa.blockedCount
         };
     } finally {
         const lockAtual = await redis.get(ARQUIVAMENTO_LOCK_KEY).catch(() => null);
@@ -4101,7 +4099,13 @@ app.post('/api/admin/arquivamento/sincronizar', requireAdminSession, async (_req
             .filter(item => item?.archiveStatus === 'archived')
             .sort((a, b) => String(b.lastEventEnd || '').localeCompare(String(a.lastEventEnd || '')))
             .map(registroArquivadoPublico);
-        res.json({ records: registros, archived: resultado.archived, nextCheckAt: resultado.nextCheckAt });
+        res.json({
+            records: registros,
+            archived: resultado.archived,
+            nextCheckAt: resultado.nextCheckAt,
+            blocked: resultado.blocked,
+            blockedCount: resultado.blockedCount
+        });
     } catch (error) {
         console.error('❌ [Arquivo] Falha ao sincronizar automaticamente:', error.message);
         res.status(error.statusCode || 503).json({ error: error.message || 'Não foi possível atualizar o arquivo.' });

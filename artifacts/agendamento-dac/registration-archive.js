@@ -46,6 +46,39 @@ function listaEtapasEvento(inscricao) {
     return etapas.filter(etapa => etapa && etapa.data && etapa.horario);
 }
 
+function normalizarDataEtapa(valor) {
+    const texto = String(valor || '').trim();
+    let partes = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (partes) {
+        const [, ano, mes, dia] = partes;
+        const data = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+        return data.getUTCFullYear() === Number(ano)
+            && data.getUTCMonth() + 1 === Number(mes)
+            && data.getUTCDate() === Number(dia)
+            ? `${ano}-${mes}-${dia}`
+            : '';
+    }
+
+    partes = texto.match(/^(\d{2})[/-](\d{2})[/-](\d{4})$/);
+    if (!partes) return '';
+    const [, dia, mes, ano] = partes;
+    const data = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+    return data.getUTCFullYear() === Number(ano)
+        && data.getUTCMonth() + 1 === Number(mes)
+        && data.getUTCDate() === Number(dia)
+        ? `${ano}-${mes}-${dia}`
+        : '';
+}
+
+function chaveResumoEtapa(valor) {
+    const texto = String(valor || '').trim();
+    const prefixo = texto.match(
+        /^(ensaio|montagem|evento|desmontagem)(?:\s+\d+)?\s*[:\-‐‑‒–—―−]\s*(.+)$/i
+    );
+    if (!prefixo) return normalizarTextoCalendario(texto);
+    return `${normalizarTextoCalendario(prefixo[1])}|${normalizarTextoCalendario(prefixo[2])}`;
+}
+
 function etapasEsperadasArquivo(inscricao) {
     const etapas = listaEtapasEvento(inscricao);
     const nomeEvento = String(inscricao?.evento || '').trim();
@@ -64,29 +97,64 @@ function etapasEsperadasArquivo(inscricao) {
 }
 
 function inicioEsperadoEtapa(etapa) {
-    const hora = String(etapa?.horario || '').match(/\b\d{1,2}:\d{2}\b/)?.[0];
-    if (!etapa?.data || !hora) return '';
-    const [horaNumero, minuto] = hora.split(':');
-    return `${String(etapa.data).slice(0, 10)}T${horaNumero.padStart(2, '0')}:${minuto}`;
+    const data = normalizarDataEtapa(etapa?.data);
+    const hora = String(etapa?.horario || '').match(/(?:^|\D)(\d{1,2})\s*(?::|h)\s*(\d{2})(?!\d)/i);
+    if (!data || !hora) return '';
+    const horaNumero = Number(hora[1]);
+    const minuto = Number(hora[2]);
+    if (horaNumero > 23 || minuto > 59) return '';
+    return `${data}T${String(horaNumero).padStart(2, '0')}:${String(minuto).padStart(2, '0')}`;
 }
 
 function chaveEtapaEsperada(etapaEsperada) {
     const inicio = inicioEsperadoEtapa(etapaEsperada?.etapa);
-    return inicio && etapaEsperada?.summary
-        ? `${etapaEsperada.summary}|${inicio}`
+    const resumo = chaveResumoEtapa(etapaEsperada?.summary);
+    return inicio && resumo
+        ? `${resumo}|${inicio}`
         : '';
 }
 
+function inicioLocalEventoCalendario(evento) {
+    const valor = String(evento?.start?.dateTime || '');
+    if (!valor.includes('T')) return '';
+
+    const temFusoExplicito = /(?:Z|[+-]\d{2}:\d{2})$/i.test(valor);
+    if (!temFusoExplicito) {
+        return evento?.start?.timeZone === 'America/Sao_Paulo'
+            ? valor.slice(0, 16)
+            : '';
+    }
+
+    const timestamp = Date.parse(valor);
+    if (!Number.isFinite(timestamp)) return '';
+    const partes = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23'
+    }).formatToParts(new Date(timestamp));
+    const valores = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+    if (!valores.year || !valores.month || !valores.day || !valores.hour || !valores.minute) return '';
+    return `${valores.year}-${valores.month}-${valores.day}T${valores.hour}:${valores.minute}`;
+}
+
 function chaveEventoCalendario(evento) {
-    const summary = normalizarTextoCalendario(evento?.summary);
-    const inicio = evento?.start?.dateTime;
-    if (!summary || !inicio || !String(inicio).includes('T')) return '';
-    return `${summary}|${String(inicio).slice(0, 16)}`;
+    const summary = chaveResumoEtapa(evento?.summary);
+    const inicio = inicioLocalEventoCalendario(evento);
+    if (!summary || !inicio) return '';
+    return `${summary}|${inicio}`;
 }
 
 function correspondeEventoEtapa(evento, etapaEsperada) {
     const chaveEsperada = chaveEtapaEsperada(etapaEsperada);
     return Boolean(chaveEsperada && chaveEventoCalendario(evento) === chaveEsperada);
+}
+
+function eventoCalendarioCancelado(evento) {
+    return ['cancelled', 'canceled'].includes(String(evento?.status || '').toLowerCase());
 }
 
 function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new Date(), opcoes = {}) {
@@ -115,9 +183,8 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
         : Array.isArray(opcoes.legacyEventIds)
             ? new Set(opcoes.legacyEventIds.map(String))
             : null;
-    const eventos = (Array.isArray(eventosCalendario) ? eventosCalendario : []).filter(evento => {
+    const eventosPermitidos = (Array.isArray(eventosCalendario) ? eventosCalendario : []).filter(evento => {
         const privateProps = evento?.extendedProperties?.private || {};
-        if (evento.status === 'cancelled') return false;
         const eventRegistrationId = String(privateProps.dac_inscricao_id || '');
         if (eventRegistrationId) {
             return privateProps.dac_source === 'sistema' && eventRegistrationId === id;
@@ -127,12 +194,27 @@ function avaliarElegibilidadeArquivo(inscricao, eventosCalendario, agora = new D
         }
         return Boolean(legacyEventIds?.has(String(evento.id || '')));
     });
+    const eventos = eventosPermitidos.filter(evento => !eventoCalendarioCancelado(evento));
+    const eventosCancelados = eventosPermitidos.filter(evento => eventoCalendarioCancelado(evento));
 
     const matched = etapasEsperadas.map(etapaEsperada =>
         eventos.filter(evento => correspondeEventoEtapa(evento, etapaEsperada))
     );
-    if (matched.some(matches => matches.length !== 1)) {
-        return { elegivel: false, motivo: 'Não há correspondência única por nome, data e horário no calendário.' };
+    const hasAmbiguousMatch = matched.some(matches => matches.length > 1);
+    const hasMissingMatch = matched.some(matches => matches.length === 0);
+    if (hasAmbiguousMatch || hasMissingMatch) {
+        if (hasMissingMatch && etapasEsperadas.some(etapaEsperada =>
+            eventosCancelados.some(evento => correspondeEventoEtapa(evento, etapaEsperada))
+        )) {
+            return { elegivel: false, motivo: 'Há ocorrência correspondente cancelada no calendário.' };
+        }
+        if (hasAmbiguousMatch && hasMissingMatch) {
+            return { elegivel: false, motivo: 'Uma ou mais etapas estão ausentes ou têm correspondência ambígua no calendário.' };
+        }
+        if (hasAmbiguousMatch) {
+            return { elegivel: false, motivo: 'Mais de uma ocorrência do calendário corresponde à mesma etapa; a correspondência é ambígua.' };
+        }
+        return { elegivel: false, motivo: 'Não foi localizada uma ocorrência correspondente por título, data e horário local no calendário.' };
     }
 
     const eventosCorrespondentes = matched.map(matches => matches[0]);
@@ -201,6 +283,18 @@ function criarRegistroArquivado(inscricao, prova, arquivadoEm = new Date()) {
     };
 }
 
+function criarResumoBloqueioArquivo(inscricao, motivo) {
+    const eventDates = [...new Set(listaEtapasEvento(inscricao)
+        .map(etapa => normalizarDataEtapa(etapa.data))
+        .filter(Boolean))];
+    return {
+        eventName: String(inscricao?.evento || ''),
+        venue: String(inscricao?.localNome || inscricao?.local || ''),
+        eventDates,
+        reason: String(motivo || '')
+    };
+}
+
 module.exports = {
     normalizarTextoCalendario,
     extrairNomeEventoCalendario,
@@ -210,6 +304,7 @@ module.exports = {
     chaveEtapaEsperada,
     chaveEventoCalendario,
     criarRegistroArquivado,
+    criarResumoBloqueioArquivo,
     correspondeEventoEtapa,
     dataFinalCalendario
 };
