@@ -328,10 +328,9 @@
                         <tr>
                             <th>Evento / Proponente</th>
                             <th>Local</th>
-                            <th>Data(s) do evento</th>
-                            <th>Organização</th>
-                            <th>Cadastro original</th>
-                            <th style="text-align:center">Ações</th>
+                            <th>Etapas</th>
+                            <th>Status</th>
+                            <th style="text-align:center">Informações</th>
                         </tr>
                     </thead>
                     <tbody id="archiveBody"></tbody>
@@ -1276,6 +1275,90 @@ async function loadArchives() {
     }
 }
 
+function findArchiveSourceIndex(item) {
+    const ids = [item?.id, item?.legacyId]
+        .filter(value => value !== undefined && value !== null && String(value).trim())
+        .map(String);
+    if (!ids.length) return -1;
+    return allUnificados.findIndex(source => [
+        source?.id,
+        source?.legacyId,
+        source?.primeiraEtapa?.id,
+        source?.primeiraEtapa?.legacyId
+    ].some(value => value !== undefined && value !== null && ids.includes(String(value))));
+}
+
+function renderArchiveStages(item, sourceRecord) {
+    const source = sourceRecord || item || {};
+    const p = source?.primeiraEtapa || source || {};
+    const names = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+    let html = '';
+
+    if (p.etapas && typeof p.etapas === 'object') {
+        for (const key of Object.keys(p.etapas)) {
+            const items = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
+            items.forEach((entry, index) => {
+                if (!entry?.data || !entry?.horario) return;
+                const label = items.length > 1 ? `${names[key] || key} ${index + 1}` : (names[key] || key);
+                const date = String(entry.data).split('-').reverse().join('/');
+                html += `<span style="display:block;white-space:nowrap;margin-bottom:2px"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(date)}, ${escapeHtml(entry.horario)}</span>`;
+            });
+        }
+    }
+
+    if (!html) {
+        const second = source?.segundaEtapa || item?.segundaEtapa;
+        const headers = Array.isArray(second?.headers) ? second.headers : [];
+        const values = Array.isArray(second?.valores) ? second.valores : [];
+        const columns = [
+            { keywords: ['ensaio'], label: 'Ensaio' },
+            { keywords: ['montagem'], label: 'Montagem' },
+            { keywords: ['1º dia', '1o dia', 'realização do evento'], label: 'Evento' },
+            { keywords: ['2º dia', '2o dia'], label: 'Evento 2' },
+            { keywords: ['3º dia', '3o dia'], label: 'Evento 3' },
+            { keywords: ['4º dia', '4o dia'], label: 'Evento 4' },
+            { keywords: ['desmontagem'], label: 'Desmontagem' }
+        ];
+        columns.forEach(({ keywords, label }) => {
+            const index = headers.findIndex(header =>
+                keywords.some(keyword => String(header || '').toLowerCase().includes(keyword))
+            );
+            if (index < 0 || !values[index] || !String(values[index]).trim()) return;
+            html += `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#666"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(String(values[index]).trim())}</span>`;
+        });
+        if (html) html = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Forms</span>${html}`;
+    }
+
+    if (!html && Array.isArray(p.calendarDates) && p.calendarDates.length) {
+        html = p.calendarDates.map(entry => {
+            const date = entry?.data ? String(entry.data).split('-').reverse().join('/') : '';
+            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(date)}</strong>${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}${entry?.resumo ? ` <span style="font-size:10px;color:#aaa">(${escapeHtml(entry.resumo)})</span>` : ''}</span>`;
+        }).join('');
+        if (html) html = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Calendário</span>${html}`;
+    }
+
+    const events = Array.isArray(item?.calendarEvents)
+        ? item.calendarEvents
+        : (Array.isArray(source?.calendarEvents) ? source.calendarEvents : []);
+    if (!html && events.length) {
+        html = events.map(entry => {
+            const startValue = entry?.start && typeof entry.start === 'object'
+                ? (entry.start.dateTime || entry.start.date)
+                : entry?.start;
+            const endValue = entry?.end && typeof entry.end === 'object'
+                ? (entry.end.dateTime || entry.end.date)
+                : entry?.end;
+            const start = formatArchiveDate(startValue);
+            const end = endValue ? formatArchiveDate(endValue) : '';
+            const label = escapeHtml(entry?.stage || entry?.summary || 'Evento');
+            return `<span style="display:block;white-space:nowrap;margin-bottom:2px"><strong>${label}:</strong> ${start}${end ? ` — ${end}` : ''}</span>`;
+        }).join('');
+    }
+
+    if (!html && Array.isArray(item?.eventDates)) html = formatArchiveEventDates(item.eventDates);
+    return html || '<span style="color:#aaa">—</span>';
+}
+
 function renderArchiveTable() {
     const persistedIds = new Set(archiveRecords
         .flatMap(item => [item?.id, item?.legacyId])
@@ -1288,6 +1371,7 @@ function renderArchiveTable() {
             .filter(item => ![item.id, item.legacyId].filter(Boolean).some(id => persistedIds.has(String(id))))
         : [];
     archiveDisplayRecords = [...archiveRecords, ...visualRecords];
+
     const query = String(document.getElementById('archiveSearch')?.value || '').trim().toLowerCase();
     const rows = archiveDisplayRecords.filter(item =>
         [item.eventName, item.applicantName, item.applicantEmail, item.venue]
@@ -1304,45 +1388,58 @@ function renderArchiveTable() {
         body.innerHTML = '';
         return;
     }
+
     table.style.display = 'table';
     empty.style.display = 'none';
     count.textContent = `${rows.length} inscrição(ões) no arquivo`;
     body.innerHTML = rows.map(item => {
-        const sourceIndex = archiveDisplayRecords.indexOf(item);
-        const arquivoTermo = item.visualOnly
-            ? '<span style="font-size:11px;color:#888">Mantido no cadastro original</span>'
-            : item.termPdfAvailable
-            ? `<a class="btn-action" href="/api/admin/arquivadas/${encodeURIComponent(item.id)}/termo.pdf" title="Baixar termo assinado"><i class="far fa-file-pdf" style="color:#16a34a"></i></a>`
-            : `<span title="${item.termoAssinado ? 'PDF do termo não disponível no sistema' : 'Não há termo assinado'}" style="font-size:11px;color:#888">Termo ${item.termoAssinado ? 'não arquivado' : 'não assinado'}</span>`;
-        const termoStatus = item.visualOnly
-            ? '<span style="color:#15803d">Dados e arquivos no cadastro original</span>'
-            : item.termPdfAvailable
-            ? '<span style="color:#15803d">Termo assinado (PDF guardado)</span>'
-            : `<span style="color:#777">${item.termoAssinado ? 'Termo assinado — PDF indisponível' : 'Sem termo assinado'}</span>`;
-        const eventDates = item.visualOnly
-            ? formatArchiveEventDates(item.eventDates)
-            : formatArchiveDate(item.lastEventEnd);
-        const archiveState = item.visualOnly ? 'Visual' : formatArchiveDate(item.archivedAt);
-        const actions = item.visualOnly
-            ? '<span style="font-size:11px;color:#888">Somente visual</span>'
-            : `<button class="btn-action" title="Gerar ficha PDF do arquivo" onclick="generateArchivePDF(${sourceIndex})"><i class="far fa-file-pdf" style="color:#d9534f"></i></button>`;
+        const archiveIndex = archiveDisplayRecords.indexOf(item);
+        const sourceIndex = findArchiveSourceIndex(item);
+        const sourceRecord = sourceIndex >= 0 ? allUnificados[sourceIndex] : null;
+        const source = sourceRecord || item;
+        const p = source?.primeiraEtapa || source || {};
+        const eventName = p.evento || item.eventName || 'Evento sem título';
+        const applicantName = p.nome || item.applicantName || 'Proponente não informado';
+        const applicantEmail = p.email || item.applicantEmail || '';
+        const venue = p.localNome || p.local || item.venue || item.localNome || '—';
+        const isIgrejinha = String(venue).toLowerCase().includes('igrej');
+        const localBadge = `<span class="local-badge ${isIgrejinha ? 'local-igrejinha' : 'local-teatro'}"><i class="fas fa-${isIgrejinha ? 'church' : 'theater-masks'}"></i> ${escapeHtml(venue)}</span>`;
+        const stages = renderArchiveStages(item, sourceRecord);
+        const rawStatus = String(source?.status || item.status || p.status || '');
+        let statusClass = 'st-pendente';
+        let statusText = rawStatus || '—';
+        if (rawStatus.includes('Completo')) {
+            statusClass = 'st-completo';
+            statusText = 'Completo';
+        }
+        if (rawStatus.includes('Cancelado')) {
+            statusClass = 'st-cancelado';
+            statusText = 'Cancelado';
+        }
+        const contactButton = sourceIndex >= 0
+            ? `<button class="btn-action" title="Ver contato do proponente" aria-label="Ver contato do proponente" onclick="showContact(${sourceIndex})" style="color:#6b7280"><i class="fas fa-address-card"></i></button>`
+            : '';
+        const infoButtons = `${contactButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
+
         return `<tr>
-            <td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br><span>${escapeHtml(item.applicantName || 'Proponente não informado')}</span><br><small style="color:#888">${escapeHtml(item.applicantEmail || '')}</small></td>
-            <td>${escapeHtml(item.venue || '—')}</td>
-            <td>${eventDates}</td>
-            <td>${archiveState}</td>
-            <td>${item.visualOnly ? '<span style="color:#15803d">Visualização</span>' : '<span style="color:#764ba2">Ficha PDF</span>'}<br>${termoStatus}</td>
-            <td style="text-align:center;white-space:nowrap">
-                ${actions}
-                ${arquivoTermo}
-            </td>
+            <td><strong>${escapeHtml(eventName)}</strong><br><span>${escapeHtml(applicantName)}</span><br><small style="color:#888">${escapeHtml(applicantEmail)}</small></td>
+            <td>${localBadge}</td>
+            <td style="font-size:12px;line-height:1.7">${stages}</td>
+            <td><span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span></td>
+            <td class="acoes-cell"><div class="acoes-list">${infoButtons}</div></td>
         </tr>`;
     }).join('');
 }
 
 function generateArchivePDF(idx) {
     const item = archiveDisplayRecords[idx];
-    if (!item || item.visualOnly) return;
+    if (!item) return;
+    const sourceIndex = findArchiveSourceIndex(item);
+    if (sourceIndex >= 0) {
+        generatePDF(sourceIndex);
+        return;
+    }
+
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const margin = 18;
@@ -1372,8 +1469,7 @@ function generateArchivePDF(idx) {
         ['Evento', item.eventName],
         ['Fim do evento', formatArchiveDate(item.lastEventEnd)],
         ['Inscrição', formatArchiveDate(item.registrationDate)],
-        ['Arquivada em', formatArchiveDate(item.archivedAt)],
-        ['Termo assinado', item.termoAssinado ? `Sim${item.termoAssinadoEm ? ` — ${formatArchiveDate(item.termoAssinadoEm)}` : ''}` : 'Não informado']
+        ['Arquivada em', formatArchiveDate(item.archivedAt)]
     ];
     fields.forEach(([label, value]) => {
         doc.setFont('helvetica', 'bold');
@@ -1388,20 +1484,52 @@ function generateArchivePDF(idx) {
     doc.text('EVENTOS CONFIRMADOS NO GOOGLE CALENDAR', margin, y);
     y += 8;
     doc.setFont('helvetica', 'normal');
-    (item.calendarEvents || []).forEach(event => {
-        const text = `${event.stage || 'Evento'}: ${formatArchiveDate(event.start)} — ${formatArchiveDate(event.end)}`;
+    const events = Array.isArray(item.calendarEvents) ? item.calendarEvents : [];
+    events.forEach(entry => {
+        const startValue = entry?.start && typeof entry.start === 'object'
+            ? (entry.start.dateTime || entry.start.date)
+            : entry?.start;
+        const endValue = entry?.end && typeof entry.end === 'object'
+            ? (entry.end.dateTime || entry.end.date)
+            : entry?.end;
+        const text = `${entry.stage || 'Evento'}: ${formatArchiveDate(startValue)}${endValue ? ` — ${formatArchiveDate(endValue)}` : ''}`;
         const lines = doc.splitTextToSize(text, 174);
-        if (y + lines.length * 5 > 275) { doc.addPage(); y = 20; }
+        if (y + lines.length * 5 > 275) {
+            doc.addPage();
+            y = 20;
+        }
         doc.text(lines, margin, y);
         y += lines.length * 5 + 2;
     });
+    if (!events.length && Array.isArray(item.eventDates)) {
+        item.eventDates.forEach(value => {
+            const lines = doc.splitTextToSize(formatArchiveEventDates([value]), 174);
+            if (y + lines.length * 5 > 275) {
+                doc.addPage();
+                y = 20;
+            }
+            doc.text(lines, margin, y);
+            y += lines.length * 5 + 2;
+        });
+    }
     doc.setFontSize(8);
     doc.setTextColor(130);
     doc.text('Ficha resumida gerada a partir dos dados mantidos no arquivo.', margin, 285);
-    const safe = String(item.eventName || 'evento').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '_');
-    doc.save(`ficha_arquivada_${safe}.pdf`);
-}
 
+    const safe = String(item.eventName || 'evento')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9]/g, '_');
+    const blob = doc.output('blob');
+    const blobUrl = URL.createObjectURL(blob);
+    const preview = window.open(blobUrl, '_blank');
+    if (!preview) {
+        alert('Por favor, permita pop-ups deste site para visualizar o PDF em outra aba.');
+        doc.save(`ficha_arquivada_${safe}.pdf`);
+        return;
+    }
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+}
 window.addEventListener('message', (event) => {
     if (event.origin !== window.location.origin || event.data?.type !== 'termo-assinado') return;
     const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(event.data.id));
