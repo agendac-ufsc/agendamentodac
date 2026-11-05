@@ -306,7 +306,7 @@
             <div class="card-header">
                 <div>
                     <h3 style="font-size:16px;color:#444;margin:0 0 5px">Arquivo de inscrições</h3>
-                    <p style="font-size:12px;color:#777;margin:0">Inscrições cujas ocorrências terminaram. A inscrição só entra no Arquivo quando todas as datas do evento se encerram; dados e arquivos originais permanecem intactos.</p>
+                    <p style="font-size:12px;color:#777;margin:0">Separação visual das inscrições com todas as datas do evento anteriores a hoje. O cadastro original e os eventos do Calendário permanecem intactos.</p>
                 </div>
                 <div style="display:flex;gap:8px;flex-wrap:wrap">
                     <button class="btn-top btn-refresh" onclick="loadArchives()"><i class="fas fa-sync-alt"></i> Atualizar arquivo</button>
@@ -320,23 +320,7 @@
                 </div>
             </div>
             <div class="results-count" id="archiveResultsCount"></div>
-            <div id="archiveBlockedPanel" style="display:none;margin:14px 0;padding:14px;border:1px solid #f5cf75;border-radius:8px;background:#fffbeb">
-                <h4 style="font-size:14px;color:#713f12;margin:0 0 5px">Inscrições mantidas ativas</h4>
-                <p id="archiveBlockedSummary" style="font-size:12px;color:#854d0e;margin:0 0 10px"></p>
-                <div class="table-wrap" style="margin:0">
-                    <table id="archiveBlockedTable">
-                        <thead>
-                            <tr>
-                                <th>Evento</th>
-                                <th>Local</th>
-                                <th>Data(s)</th>
-                                <th>Por que não foi arquivado</th>
-                            </tr>
-                        </thead>
-                        <tbody id="archiveBlockedBody"></tbody>
-                    </table>
-                </div>
-            </div>
+            <p id="archiveVisualNote" style="font-size:12px;color:#777;margin:12px 0">Inscrições sem data de evento identificada permanecem em Inscrições.</p>
             <div class="table-wrap">
                 <div class="loading-msg" id="archiveLoading" style="display:none"><i class="fas fa-spinner fa-spin"></i> Carregando arquivo...</div>
                 <table id="archiveTable" style="display:none">
@@ -344,15 +328,15 @@
                         <tr>
                             <th>Evento / Proponente</th>
                             <th>Local</th>
-                            <th>Fim do evento</th>
-                            <th>Arquivado em</th>
-                            <th>Documentos preservados</th>
+                            <th>Data(s) do evento</th>
+                            <th>Organização</th>
+                            <th>Cadastro original</th>
                             <th style="text-align:center">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="archiveBody"></tbody>
                 </table>
-                <div class="empty-msg" id="archiveEmpty" style="display:none">Nenhuma inscrição arquivada ainda.</div>
+                <div class="empty-msg" id="archiveEmpty" style="display:none">Nenhuma inscrição com todas as datas do evento anteriores a hoje.</div>
                 <div class="error-msg" id="archiveError" style="display:none"></div>
             </div>
         </div>
@@ -1013,10 +997,8 @@
 // ══════════════════════════════════════════════════
 let allUnificados = [];
 let archiveRecords = [];
-let archiveBlockedRecords = [];
-let archiveBlockedCount = 0;
-let archiveRefreshTimer = null;
-let archiveSyncPromise = null;
+let archiveDisplayRecords = [];
+let archiveLoadPromise = null;
 let criterios = [];
 let avaliadores = [];
 let datasBloqueadas = [];
@@ -1217,6 +1199,7 @@ async function loadData(silencioso = false) {
         if (data.error) throw new Error(data.error);
         allUnificados = Array.isArray(data) ? data : [];
         renderTabela();
+        if (userRole === 'admin') renderArchiveTable();
         sincronizarTermoAdminAberto();
     } catch (err) {
         if (silencioso) return;
@@ -1254,50 +1237,9 @@ function formatArchiveEventDates(values) {
     return dates.length ? dates.join(', ') : '—';
 }
 
-function renderArchiveBlockedRecords() {
-    const panel = document.getElementById('archiveBlockedPanel');
-    const summary = document.getElementById('archiveBlockedSummary');
-    const body = document.getElementById('archiveBlockedBody');
-    if (!panel || !summary || !body) return;
-
-    const total = Math.max(0, Number(archiveBlockedCount) || archiveBlockedRecords.length);
-    if (!total) {
-        panel.style.display = 'none';
-        body.innerHTML = '';
-        return;
-    }
-
-    panel.style.display = 'block';
-    summary.textContent = total > archiveBlockedRecords.length
-        ? `Exibindo ${archiveBlockedRecords.length} de ${total} inscrições. Nomes, contatos e IDs dos proponentes não são exibidos.`
-        : `${total} inscrição(ões) permanecem ativas. Nomes, contatos e IDs dos proponentes não são exibidos.`;
-    body.innerHTML = archiveBlockedRecords.map(item => `
-        <tr>
-            <td>${escapeHtml(item.eventName || 'Evento sem título')}</td>
-            <td>${escapeHtml(item.venue || '—')}</td>
-            <td>${escapeHtml(formatArchiveEventDates(item.eventDates))}</td>
-            <td>${escapeHtml(item.reason || 'Não foi possível confirmar o encerramento.')}</td>
-        </tr>
-    `).join('');
-}
-
-function agendarAtualizacaoArquivo(nextCheckAt) {
-    if (archiveRefreshTimer) clearTimeout(archiveRefreshTimer);
-    archiveRefreshTimer = null;
-    if (!nextCheckAt) return;
-
-    const nextAt = Date.parse(nextCheckAt);
-    if (!Number.isFinite(nextAt)) return;
-    const delay = Math.max(0, nextAt - Date.now() + 500);
-    archiveRefreshTimer = setTimeout(() => {
-        archiveRefreshTimer = null;
-        loadArchives();
-    }, Math.min(delay, 2147483647));
-}
-
 async function loadArchives() {
-    if (archiveSyncPromise) return archiveSyncPromise;
-    archiveSyncPromise = (async () => {
+    if (archiveLoadPromise) return archiveLoadPromise;
+    archiveLoadPromise = (async () => {
         const loading = document.getElementById('archiveLoading');
         const error = document.getElementById('archiveError');
         const empty = document.getElementById('archiveEmpty');
@@ -1305,26 +1247,15 @@ async function loadArchives() {
         if (error) error.style.display = 'none';
         if (empty) empty.style.display = 'none';
         try {
-            const response = await fetch('/api/admin/arquivamento/sincronizar?_=' + Date.now(), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: '{}',
+            const response = await fetch('/api/admin/arquivadas?_=' + Date.now(), {
                 cache: 'no-store'
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar o arquivo.');
             archiveRecords = Array.isArray(data.records) ? data.records : [];
-            archiveBlockedRecords = Array.isArray(data.blocked) ? data.blocked : [];
-            archiveBlockedCount = Number(data.blockedCount) || archiveBlockedRecords.length;
             if (allUnificados.length) renderTabela();
-            agendarAtualizacaoArquivo(data.nextCheckAt);
             renderArchiveTable();
-            renderArchiveBlockedRecords();
-            if (Number(data.archived) > 0) await loadData(true);
         } catch (err) {
-            if (!err.message.includes('Sessão administrativa')) {
-                agendarAtualizacaoArquivo(new Date(Date.now() + 5 * 60 * 1000).toISOString());
-            }
             if (error) {
                 error.textContent = err.message.includes('Sessão administrativa')
                     ? 'Sessão administrativa expirada. Saia do painel e entre novamente para acessar o arquivo.'
@@ -1339,15 +1270,26 @@ async function loadArchives() {
         }
     })();
     try {
-        return await archiveSyncPromise;
+        return await archiveLoadPromise;
     } finally {
-        archiveSyncPromise = null;
+        archiveLoadPromise = null;
     }
 }
 
 function renderArchiveTable() {
+    const persistedIds = new Set(archiveRecords
+        .flatMap(item => [item?.id, item?.legacyId])
+        .filter(Boolean)
+        .map(String));
+    const visualRecords = userRole === 'admin'
+        ? allUnificados
+            .filter(item => inscricaoTemTodasDatasPassadas(item))
+            .map(criarRegistroArquivoVisual)
+            .filter(item => ![item.id, item.legacyId].filter(Boolean).some(id => persistedIds.has(String(id))))
+        : [];
+    archiveDisplayRecords = [...archiveRecords, ...visualRecords];
     const query = String(document.getElementById('archiveSearch')?.value || '').trim().toLowerCase();
-    const rows = archiveRecords.filter(item =>
+    const rows = archiveDisplayRecords.filter(item =>
         [item.eventName, item.applicantName, item.applicantEmail, item.venue]
             .some(value => String(value || '').toLowerCase().includes(query))
     );
@@ -1357,8 +1299,8 @@ function renderArchiveTable() {
     const count = document.getElementById('archiveResultsCount');
     if (!rows.length) {
         table.style.display = 'none';
-        empty.style.display = archiveRecords.length ? 'none' : 'block';
-        count.textContent = archiveRecords.length ? 'Nenhum resultado para a busca.' : '';
+        empty.style.display = archiveDisplayRecords.length ? 'none' : 'block';
+        count.textContent = archiveDisplayRecords.length ? 'Nenhum resultado para a busca.' : '';
         body.innerHTML = '';
         return;
     }
@@ -1366,21 +1308,32 @@ function renderArchiveTable() {
     empty.style.display = 'none';
     count.textContent = `${rows.length} inscrição(ões) no arquivo`;
     body.innerHTML = rows.map(item => {
-        const sourceIndex = archiveRecords.indexOf(item);
-        const arquivoTermo = item.termPdfAvailable
+        const sourceIndex = archiveDisplayRecords.indexOf(item);
+        const arquivoTermo = item.visualOnly
+            ? '<span style="font-size:11px;color:#888">Mantido no cadastro original</span>'
+            : item.termPdfAvailable
             ? `<a class="btn-action" href="/api/admin/arquivadas/${encodeURIComponent(item.id)}/termo.pdf" title="Baixar termo assinado"><i class="far fa-file-pdf" style="color:#16a34a"></i></a>`
             : `<span title="${item.termoAssinado ? 'PDF do termo não disponível no sistema' : 'Não há termo assinado'}" style="font-size:11px;color:#888">Termo ${item.termoAssinado ? 'não arquivado' : 'não assinado'}</span>`;
-        const termoStatus = item.termPdfAvailable
+        const termoStatus = item.visualOnly
+            ? '<span style="color:#15803d">Dados e arquivos no cadastro original</span>'
+            : item.termPdfAvailable
             ? '<span style="color:#15803d">Termo assinado (PDF guardado)</span>'
             : `<span style="color:#777">${item.termoAssinado ? 'Termo assinado — PDF indisponível' : 'Sem termo assinado'}</span>`;
+        const eventDates = item.visualOnly
+            ? formatArchiveEventDates(item.eventDates)
+            : formatArchiveDate(item.lastEventEnd);
+        const archiveState = item.visualOnly ? 'Visual' : formatArchiveDate(item.archivedAt);
+        const actions = item.visualOnly
+            ? '<span style="font-size:11px;color:#888">Somente visual</span>'
+            : `<button class="btn-action" title="Gerar ficha PDF do arquivo" onclick="generateArchivePDF(${sourceIndex})"><i class="far fa-file-pdf" style="color:#d9534f"></i></button>`;
         return `<tr>
             <td><strong>${escapeHtml(item.eventName || 'Evento sem título')}</strong><br><span>${escapeHtml(item.applicantName || 'Proponente não informado')}</span><br><small style="color:#888">${escapeHtml(item.applicantEmail || '')}</small></td>
             <td>${escapeHtml(item.venue || '—')}</td>
-            <td>${formatArchiveDate(item.lastEventEnd)}</td>
-            <td>${formatArchiveDate(item.archivedAt)}</td>
-            <td><span style="color:#764ba2">Ficha PDF</span><br>${termoStatus}</td>
+            <td>${eventDates}</td>
+            <td>${archiveState}</td>
+            <td>${item.visualOnly ? '<span style="color:#15803d">Visualização</span>' : '<span style="color:#764ba2">Ficha PDF</span>'}<br>${termoStatus}</td>
             <td style="text-align:center;white-space:nowrap">
-                <button class="btn-action" title="Gerar ficha PDF do arquivo" onclick="generateArchivePDF(${sourceIndex})"><i class="far fa-file-pdf" style="color:#d9534f"></i></button>
+                ${actions}
                 ${arquivoTermo}
             </td>
         </tr>`;
@@ -1388,8 +1341,8 @@ function renderArchiveTable() {
 }
 
 function generateArchivePDF(idx) {
-    const item = archiveRecords[idx];
-    if (!item) return;
+    const item = archiveDisplayRecords[idx];
+    if (!item || item.visualOnly) return;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: 'mm', format: 'a4' });
     const margin = 18;
@@ -1510,6 +1463,102 @@ function toggleSort() {
     renderTabela();
 }
 
+function normalizarDataEventoVisual(valor) {
+    const texto = String(valor || '').trim();
+    let partes = texto.match(/(\d{4})-(\d{2})-(\d{2})/);
+    let ano;
+    let mes;
+    let dia;
+    if (partes) {
+        [, ano, mes, dia] = partes;
+    } else {
+        partes = texto.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/);
+        if (!partes) return '';
+        [, dia, mes, ano] = partes;
+        dia = String(dia).padStart(2, '0');
+        mes = String(mes).padStart(2, '0');
+    }
+    const data = new Date(Date.UTC(Number(ano), Number(mes) - 1, Number(dia)));
+    if (data.getUTCFullYear() !== Number(ano)
+        || data.getUTCMonth() + 1 !== Number(mes)
+        || data.getUTCDate() !== Number(dia)) return '';
+    return `${ano}-${mes}-${dia}`;
+}
+
+function hojeEmSaoPaulo(agora = new Date()) {
+    const partes = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).formatToParts(agora).map(parte => [parte.type, parte.value]));
+    return `${partes.year}-${partes.month}-${partes.day}`;
+}
+
+function obterDatasEventoVisual(item) {
+    const p = item?.primeiraEtapa || {};
+    const evento = p.etapas?.evento;
+    const etapasEvento = Array.isArray(evento) ? evento : (evento ? [evento] : []);
+    const datasEtapa = etapasEvento.map(etapa => String(etapa?.data || '').trim());
+    if (datasEtapa.some(Boolean)) {
+        const dates = datasEtapa.map(normalizarDataEventoVisual);
+        return { dates: dates.filter(Boolean), complete: dates.length > 0 && dates.every(Boolean) };
+    }
+
+    const headers = item?.segundaEtapa?.headers;
+    const valores = item?.segundaEtapa?.valores;
+    if (Array.isArray(headers) && Array.isArray(valores)) {
+        const normalizarCabecalho = value => String(value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[º°]/g, 'o')
+            .toLowerCase();
+        const palavrasChaveEvento = ['realizacao do evento', '1o dia', '2o dia', '3o dia', '4o dia'];
+        const datasForms = headers.reduce((datas, header, index) => {
+            const nome = normalizarCabecalho(header);
+            const valor = String(valores[index] || '').trim();
+            if (valor && palavrasChaveEvento.some(chave => nome.includes(chave))) datas.push(valor);
+            return datas;
+        }, []);
+        if (datasForms.length) {
+            const dates = datasForms.map(normalizarDataEventoVisual);
+            return { dates: dates.filter(Boolean), complete: dates.length > 0 && dates.every(Boolean) };
+        }
+    }
+
+    const datasCalendario = Array.isArray(p.calendarDates)
+        ? p.calendarDates.map(eventoCalendario => String(eventoCalendario?.data || '').trim())
+        : [];
+    if (datasCalendario.some(Boolean)) {
+        const dates = datasCalendario.map(normalizarDataEventoVisual);
+        return { dates: dates.filter(Boolean), complete: dates.length > 0 && dates.every(Boolean) };
+    }
+    return { dates: [], complete: false };
+}
+
+function inscricaoTemTodasDatasPassadas(item, agora = new Date()) {
+    const { dates, complete } = obterDatasEventoVisual(item);
+    if (!complete || !dates.length) return false;
+    const hoje = hojeEmSaoPaulo(agora);
+    return dates.every(data => data < hoje);
+}
+
+function criarRegistroArquivoVisual(item) {
+    const p = item?.primeiraEtapa || {};
+    const { dates } = obterDatasEventoVisual(item);
+    return {
+        id: String(p.id || ''),
+        legacyId: String(p.legacyId || ''),
+        eventName: String(p.evento || ''),
+        applicantName: String(p.nome || ''),
+        applicantEmail: String(p.email || ''),
+        venue: String(p.localNome || p.local || ''),
+        eventDates: [...new Set(dates)].sort(),
+        visualOnly: true,
+        termoAssinado: p.termoAssinado === true || p.termoAssinado === 'true'
+    };
+}
+
 function obterInscricoesNaoArquivadas() {
     const idsArquivados = new Set(
         (Array.isArray(archiveRecords) ? archiveRecords : [])
@@ -1522,6 +1571,7 @@ function obterInscricoesNaoArquivadas() {
     }
     return allUnificados.filter(item => {
         const primeiraEtapa = item?.primeiraEtapa || {};
+        if (userRole === 'admin' && inscricaoTemTodasDatasPassadas(item)) return false;
         const ids = [primeiraEtapa.id, primeiraEtapa.legacyId, item?.id, item?.legacyId];
         return !ids.some(id => id !== undefined && id !== null
             && idsArquivados.has(String(id).trim()));
