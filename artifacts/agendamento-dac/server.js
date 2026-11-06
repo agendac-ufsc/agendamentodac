@@ -4141,7 +4141,11 @@ app.get('/api/admin/arquivadas/:id/termo.pdf', requireAdminSession, async (req, 
     }
 });
 
-app.get('/api/admin/dados-unificados', async (req, res) => {
+app.get('/api/admin/dados-unificados', (req, res, next) => {
+    if (req.query.incluirArquivadas === 'true') return requireAdminSession(req, res, next);
+    next();
+}, async (req, res) => {
+    const incluirArquivadas = req.query.incluirArquivadas === 'true';
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
     res.set('Pragma', 'no-cache');
     if (!googleAuthClient) await initGoogleAuth();
@@ -4282,11 +4286,11 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
 
             if (correspondencia) {
                 usedSheetIndices.add(correspondenciaIdx);
-                if (p.inscricaoTeste !== true) {
+                if (p.inscricaoTeste !== true && !incluirArquivadas) {
                     await sincronizarDocumentosForms(p, headers, correspondencia);
                 }
                 // Etapa 2 encontrada — criar eventos no Calendar se ainda não foram criados
-                if (p.calendarSynced !== true) {
+                if (!incluirArquivadas && p.calendarSynced !== true) {
                     try {
                         const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
                         const linhasEtapas = [];
@@ -4555,7 +4559,7 @@ app.get('/api/admin/dados-unificados', async (req, res) => {
         });
 
         console.log(`[DEBUG] Gerados ${unificados.length} registros unificados. ${blacklist.length} filtrados pela Blacklist.`);
-        res.json(unificadosFiltrados);
+        res.json(incluirArquivadas ? unificados : unificadosFiltrados);
     } catch (error) {
         console.error('[DEBUG] Erro ao gerar dados unificados:', error);
         res.status(500).json({ error: 'Erro ao gerar dados unificados' });

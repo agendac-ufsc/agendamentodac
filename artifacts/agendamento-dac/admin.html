@@ -996,6 +996,7 @@
 // ══════════════════════════════════════════════════
 let allUnificados = [];
 let archiveRecords = [];
+let archiveSourceRecords = [];
 let archiveDisplayRecords = [];
 let archiveLoadPromise = null;
 let criterios = [];
@@ -1252,6 +1253,15 @@ async function loadArchives() {
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || 'Não foi possível atualizar o arquivo.');
             archiveRecords = Array.isArray(data.records) ? data.records : [];
+            archiveSourceRecords = [];
+            if (userRole === 'admin' && archiveRecords.length) {
+                const sourceResponse = await fetch('/api/admin/dados-unificados?incluirArquivadas=true&_=' + Date.now(), {
+                    cache: 'no-store'
+                });
+                const sourceData = await sourceResponse.json().catch(() => ({}));
+                if (!sourceResponse.ok) throw new Error(sourceData.error || 'Não foi possível carregar os dados completos das inscrições arquivadas.');
+                archiveSourceRecords = Array.isArray(sourceData) ? sourceData : [];
+            }
             if (allUnificados.length) renderTabela();
             renderArchiveTable();
         } catch (err) {
@@ -1275,17 +1285,19 @@ async function loadArchives() {
     }
 }
 
-function findArchiveSourceIndex(item) {
+function findArchiveSourceRecord(item) {
     const ids = [item?.id, item?.legacyId]
         .filter(value => value !== undefined && value !== null && String(value).trim())
         .map(String);
-    if (!ids.length) return -1;
-    return allUnificados.findIndex(source => [
-        source?.id,
-        source?.legacyId,
-        source?.primeiraEtapa?.id,
-        source?.primeiraEtapa?.legacyId
-    ].some(value => value !== undefined && value !== null && ids.includes(String(value))));
+    if (!ids.length) return null;
+    const sources = [
+        ...(Array.isArray(archiveSourceRecords) ? archiveSourceRecords : []),
+        ...(Array.isArray(allUnificados) ? allUnificados : [])
+    ];
+    return sources.find(source => [
+        source?.id, source?.legacyId,
+        source?.primeiraEtapa?.id, source?.primeiraEtapa?.legacyId
+    ].some(value => value !== undefined && value !== null && ids.includes(String(value)))) || null;
 }
 
 function renderArchiveStages(item, sourceRecord) {
@@ -1394,8 +1406,7 @@ function renderArchiveTable() {
     count.textContent = `${rows.length} inscrição(ões) no arquivo`;
     body.innerHTML = rows.map(item => {
         const archiveIndex = archiveDisplayRecords.indexOf(item);
-        const sourceIndex = findArchiveSourceIndex(item);
-        const sourceRecord = sourceIndex >= 0 ? allUnificados[sourceIndex] : null;
+        const sourceRecord = findArchiveSourceRecord(item);
         const source = sourceRecord || item;
         const p = source?.primeiraEtapa || source || {};
         const eventName = p.evento || item.eventName || 'Evento sem título';
@@ -1416,8 +1427,8 @@ function renderArchiveTable() {
             statusClass = 'st-cancelado';
             statusText = 'Cancelado';
         }
-        const contactButton = sourceIndex >= 0
-            ? `<button class="btn-action" title="Ver contato do proponente" aria-label="Ver contato do proponente" onclick="showContact(${sourceIndex})" style="color:#6b7280"><i class="fas fa-address-card"></i></button>`
+        const contactButton = sourceRecord
+            ? `<button class="btn-action" title="Ver contato do proponente" aria-label="Ver contato do proponente" onclick="showArchiveContact(${archiveIndex})" style="color:#6b7280"><i class="fas fa-address-card"></i></button>`
             : '';
         const infoButtons = `${contactButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
 
@@ -1431,105 +1442,27 @@ function renderArchiveTable() {
     }).join('');
 }
 
+function showArchiveContact(idx) {
+    const item = archiveDisplayRecords[idx];
+    const sourceRecord = findArchiveSourceRecord(item);
+    if (!sourceRecord) {
+        alert('Não foi possível carregar os dados completos do proponente. Atualize o arquivo e tente novamente.');
+        return;
+    }
+    showContact(sourceRecord);
+}
+
 function generateArchivePDF(idx) {
     const item = archiveDisplayRecords[idx];
     if (!item) return;
-    const sourceIndex = findArchiveSourceIndex(item);
-    if (sourceIndex >= 0) {
-        generatePDF(sourceIndex);
+    const sourceRecord = findArchiveSourceRecord(item);
+    if (!sourceRecord) {
+        alert('Não foi possível carregar a ficha completa da inscrição. Atualize o arquivo e tente novamente.');
         return;
     }
-
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-    const margin = 18;
-    let y = 20;
-    doc.setFillColor(118, 75, 162);
-    doc.rect(0, 0, 210, 26, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.text('FICHA DE INSCRIÇÃO — DAC/UFSC', 105, 12, { align: 'center' });
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text('Registro resumido do arquivo', 105, 20, { align: 'center' });
-    y = 40;
-    doc.setTextColor(30);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.text('DADOS DO PROPONENTE', margin, y);
-    y += 10;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    const fields = [
-        ['Proponente', item.applicantName],
-        ['E-mail', item.applicantEmail],
-        ['Telefone', item.applicantPhone],
-        ['Local', item.venue],
-        ['Evento', item.eventName],
-        ['Fim do evento', formatArchiveDate(item.lastEventEnd)],
-        ['Inscrição', formatArchiveDate(item.registrationDate)],
-        ['Arquivada em', formatArchiveDate(item.archivedAt)]
-    ];
-    fields.forEach(([label, value]) => {
-        doc.setFont('helvetica', 'bold');
-        doc.text(`${label}:`, margin, y);
-        doc.setFont('helvetica', 'normal');
-        const lines = doc.splitTextToSize(String(value || '—'), 150);
-        doc.text(lines, margin + 36, y);
-        y += Math.max(7, lines.length * 5 + 2);
-    });
-    y += 8;
-    doc.setFont('helvetica', 'bold');
-    doc.text('EVENTOS CONFIRMADOS NO GOOGLE CALENDAR', margin, y);
-    y += 8;
-    doc.setFont('helvetica', 'normal');
-    const events = Array.isArray(item.calendarEvents) ? item.calendarEvents : [];
-    events.forEach(entry => {
-        const startValue = entry?.start && typeof entry.start === 'object'
-            ? (entry.start.dateTime || entry.start.date)
-            : entry?.start;
-        const endValue = entry?.end && typeof entry.end === 'object'
-            ? (entry.end.dateTime || entry.end.date)
-            : entry?.end;
-        const text = `${entry.stage || 'Evento'}: ${formatArchiveDate(startValue)}${endValue ? ` — ${formatArchiveDate(endValue)}` : ''}`;
-        const lines = doc.splitTextToSize(text, 174);
-        if (y + lines.length * 5 > 275) {
-            doc.addPage();
-            y = 20;
-        }
-        doc.text(lines, margin, y);
-        y += lines.length * 5 + 2;
-    });
-    if (!events.length && Array.isArray(item.eventDates)) {
-        item.eventDates.forEach(value => {
-            const lines = doc.splitTextToSize(formatArchiveEventDates([value]), 174);
-            if (y + lines.length * 5 > 275) {
-                doc.addPage();
-                y = 20;
-            }
-            doc.text(lines, margin, y);
-            y += lines.length * 5 + 2;
-        });
-    }
-    doc.setFontSize(8);
-    doc.setTextColor(130);
-    doc.text('Ficha resumida gerada a partir dos dados mantidos no arquivo.', margin, 285);
-
-    const safe = String(item.eventName || 'evento')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-zA-Z0-9]/g, '_');
-    const blob = doc.output('blob');
-    const blobUrl = URL.createObjectURL(blob);
-    const preview = window.open(blobUrl, '_blank');
-    if (!preview) {
-        alert('Por favor, permita pop-ups deste site para visualizar o PDF em outra aba.');
-        doc.save(`ficha_arquivada_${safe}.pdf`);
-        return;
-    }
-    setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    generatePDF(sourceRecord);
 }
+
 window.addEventListener('message', (event) => {
     if (event.origin !== window.location.origin || event.data?.type !== 'termo-assinado') return;
     const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(event.data.id));
@@ -2405,15 +2338,16 @@ function obterCpfCnpjProponente(item) {
 }
 
 function showContact(idx) {
-    const item = allUnificados[idx];
-    const p = item.primeiraEtapa;
+    const item = typeof idx === 'number' ? allUnificados[idx] : idx;
+    if (!item) return;
+    const p = item.primeiraEtapa || item;
     const cpfCnpj = obterCpfCnpjProponente(item);
     document.getElementById('contatoBody').innerHTML = `
         <p><strong>Proponente:</strong> ${p.nome||'—'}</p>
         <p style="margin-top:8px;display:flex;align-items:center;gap:8px">
             <strong>E-mail:</strong>
             <a href="mailto:${p.email}">${p.email||'—'}</a>
-            ${p.email ? `<button onclick="openEmailRapido('${p.email}','${(p.nome||'').replace(/'/g,"\\'")}','${(p.evento||allUnificados[idx].evento||'').replace(/'/g,"\\'")}');event.stopPropagation()" title="Enviar e-mail rápido" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:15px;padding:2px 4px;border-radius:5px;line-height:1" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='none'"><i class="fas fa-paper-plane"></i></button>` : ''}
+            ${p.email ? `<button onclick="openEmailRapido('${p.email}','${(p.nome||'').replace(/'/g,"\\'")}','${(p.evento||item.evento||'').replace(/'/g,"\\'")}');event.stopPropagation()" title="Enviar e-mail rápido" style="background:none;border:none;cursor:pointer;color:#764ba2;font-size:15px;padding:2px 4px;border-radius:5px;line-height:1" onmouseover="this.style.background='#f3e8ff'" onmouseout="this.style.background='none'"><i class="fas fa-paper-plane"></i></button>` : ''}
         </p>
         <p style="margin-top:8px"><strong>Telefone:</strong> ${p.telefone||'—'}</p>
         <p style="margin-top:8px"><strong>CPF/CNPJ:</strong> ${escapeHtml(cpfCnpj || '—')}</p>
@@ -3033,8 +2967,12 @@ function obterDadosComplementaresPDF(item) {
 }
 
 function generatePDF(idx) {
+    const item = typeof idx === 'number' ? allUnificados[idx] : idx;
+    if (!item?.primeiraEtapa) {
+        alert('Não foi possível carregar todos os dados da inscrição para gerar o PDF.');
+        return;
+    }
     const { jsPDF } = window.jspdf;
-    const item = allUnificados[idx];
     const p = item.primeiraEtapa;
     const dadosComplementares = obterDadosComplementaresPDF(item);
     const doc = new jsPDF({ unit:'mm', format:'a4' });
