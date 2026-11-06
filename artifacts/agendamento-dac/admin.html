@@ -91,6 +91,15 @@
         #inscricoesTable .acoes-list{display:flex;align-items:center;justify-content:center;gap:2px;flex-wrap:nowrap;direction:ltr;min-width:0}
         #inscricoesTable .acoes-list .btn-action{flex:0 0 21px;width:21px;padding:3px 0;font-size:14px;line-height:1;white-space:nowrap}
         #inscricoesTable .acoes-list .btn-action small{font-size:9px;margin-left:-2px}
+        /* O arquivo mantém uma tabela compacta, independente da aba Inscrições. */
+        #pane-arquivo .archive-table-wrap{width:fit-content;max-width:100%;margin-inline:auto}
+        #archiveTable{width:860px;min-width:760px;max-width:100%;margin-inline:auto;table-layout:fixed}
+        #archiveTable th:nth-child(1),#archiveTable td:nth-child(1){width:26%}
+        #archiveTable th:nth-child(2),#archiveTable td:nth-child(2){width:17%}
+        #archiveTable th:nth-child(3),#archiveTable td:nth-child(3){width:32%}
+        #archiveTable th:nth-child(4),#archiveTable td:nth-child(4){width:12%}
+        #archiveTable th:nth-child(5),#archiveTable td:nth-child(5){width:112px;text-align:center}
+        #archiveTable .acoes-list{display:flex;align-items:center;justify-content:center;gap:2px;min-width:0}
         .col-evento{font-weight:700;color:#333}
         .local-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
         .local-teatro{background:#ede9fe;color:#7c3aed}
@@ -321,7 +330,7 @@
             </div>
             <div class="results-count" id="archiveResultsCount"></div>
             <p id="archiveVisualNote" style="font-size:12px;color:#777;margin:12px 0">Inscrições sem data de evento identificada permanecem em Inscrições.</p>
-            <div class="table-wrap">
+            <div class="table-wrap archive-table-wrap">
                 <div class="loading-msg" id="archiveLoading" style="display:none"><i class="fas fa-spinner fa-spin"></i> Carregando arquivo...</div>
                 <table id="archiveTable" style="display:none">
                     <thead>
