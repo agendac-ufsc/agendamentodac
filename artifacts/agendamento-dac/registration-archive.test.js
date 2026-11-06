@@ -5,6 +5,7 @@ const {
     etapasEsperadasArquivo,
     criarRegistroArquivado,
     criarResumoBloqueioArquivo,
+    filtrarRegistrosArquivadosExcluidos,
     extrairNomeEventoCalendario,
     normalizarTextoCalendario,
     correspondeEventoEtapa,
@@ -347,4 +348,20 @@ test('resumo arquivado preserva o original e não copia documentos ou dados exte
     assert.equal('documentos' in archived, false);
     assert.equal('segundaEtapaTeste' in archived, false);
     assert.equal('termoDados' in archived, false);
+});
+
+test('remove registros arquivados pelos IDs atuais ou legados', () => {
+    const registros = [
+        { id: 'site_1', legacyId: 'forms_1' },
+        { id: 'site_2', legacyId: 'forms_2' },
+        { id: 'site_3', legacyId: '' }
+    ];
+    assert.deepEqual(
+        filtrarRegistrosArquivadosExcluidos(registros, [
+            { id: 'site_1', legacyId: 'forms_1' },
+            { id: 'outro_id', legacyId: 'forms_2' },
+            { id: '' }
+        ]),
+        [{ id: 'site_3', legacyId: '' }]
+    );
 });
