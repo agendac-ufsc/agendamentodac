@@ -295,6 +295,20 @@ function criarResumoBloqueioArquivo(inscricao, motivo) {
     };
 }
 
+function filtrarRegistrosArquivadosExcluidos(registros, entradas) {
+    const ids = new Set((Array.isArray(entradas) ? entradas : [])
+        .flatMap(entrada => entrada && typeof entrada === 'object'
+            ? [entrada.id, entrada.legacyId]
+            : [entrada])
+        .filter(id => id !== undefined && id !== null && String(id).trim())
+        .map(String));
+    return (Array.isArray(registros) ? registros : []).filter(registro =>
+        ![registro?.id, registro?.legacyId].some(id =>
+            id !== undefined && id !== null && ids.has(String(id))
+        )
+    );
+}
+
 module.exports = {
     normalizarTextoCalendario,
     extrairNomeEventoCalendario,
@@ -305,6 +319,7 @@ module.exports = {
     chaveEventoCalendario,
     criarRegistroArquivado,
     criarResumoBloqueioArquivo,
+    filtrarRegistrosArquivadosExcluidos,
     correspondeEventoEtapa,
     dataFinalCalendario
 };
