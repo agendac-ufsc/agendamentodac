@@ -41,6 +41,7 @@ const {
     chaveEventoCalendario,
     criarRegistroArquivado,
     criarResumoBloqueioArquivo,
+    filtrarRegistrosArquivadosExcluidos,
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
@@ -4598,6 +4599,7 @@ app.delete('/api/agendamentos-selecionados', async (req, res) => {
     if (!senhaFornecida || senhaFornecida !== senhaAdmin) {
         return res.status(403).json({ success: false, error: 'Senha administrativa incorreta.' });
     }
+    const removerDoArquivo = req.body?.removerDoArquivo === true;
 
     const entradas = Array.isArray(req.body?.inscricoes) ? req.body.inscricoes : [];
     let ids;
@@ -4617,32 +4619,93 @@ app.delete('/api/agendamentos-selecionados', async (req, res) => {
         return res.status(400).json({ success: false, error: 'Nenhum ID fornecido' });
     }
 
-    const falhas = [];
-    for (const entrada of ids) {
-        const id = String(entrada.id);
-        try {
-            const agendamentos = await getAgendamentos();
-            const agendamento = agendamentos.find(a => String(a.id) === id);
-            if (!agendamento) {
-                if (Array.isArray(entrada.calendarDates) && entrada.calendarDates.length > 0) {
-                    if (!googleAuthClient) await initGoogleAuth();
-                    await deleteLegacyCalendarEvents(entrada);
-                }
-                // Mantém o mesmo comportamento da exclusão individual para
-                // registros legados que existem apenas na planilha.
-                await addToBlacklist(id);
-                continue;
-            }
-            const resultado = await deleteAgendamentoById(agendamento.id);
-            if (resultado === false) falhas.push(id);
-        } catch (error) {
-            falhas.push(id);
-            console.error(`❌ [Exclusão em lote] Erro no ID ${id}:`, error.message);
+    let archiveLockToken = null;
+    if (removerDoArquivo) {
+        if (!redis) {
+            return res.status(503).json({ success: false, error: 'Armazenamento de inscrições indisponível.' });
+        }
+        archiveLockToken = randomUUID();
+        const locked = await redis.set(ARQUIVAMENTO_LOCK_KEY, archiveLockToken, { nx: true, ex: 600 });
+        if (!locked) {
+            return res.status(409).json({
+                success: false,
+                error: 'O arquivo está sendo atualizado. Tente excluir novamente em instantes.'
+            });
         }
     }
 
-    console.log(`✅ [Exclusão em lote] Processados: ${ids.length}; falhas: ${falhas.length}`);
-    res.json({ success: falhas.length === 0, processados: ids.length, falhas });
+    const falhas = [];
+    let registrosRemovidosDoArquivo = 0;
+    let erroAtualizacaoArquivo = '';
+    try {
+        for (const entrada of ids) {
+            const id = String(entrada.id);
+            try {
+                const agendamentos = await getAgendamentos();
+                const agendamento = agendamentos.find(a => String(a.id) === id);
+                if (!agendamento) {
+                    const datasCalendario = Array.isArray(entrada.calendarDates) ? entrada.calendarDates : [];
+                    if (removerDoArquivo && datasCalendario.length === 0) {
+                        falhas.push(id);
+                        console.warn(`⚠️ [Exclusão do arquivo] Dados de calendário indisponíveis para o ID ${id}; registro preservado.`);
+                        continue;
+                    }
+                    if (datasCalendario.length > 0) {
+                        if (!googleAuthClient) await initGoogleAuth();
+                        await deleteLegacyCalendarEvents(entrada);
+                    }
+                    // Mantém o mesmo comportamento da exclusão individual para
+                    // registros legados que existem apenas na planilha.
+                    await addToBlacklist(id);
+                    continue;
+                }
+                const resultado = await deleteAgendamentoById(agendamento.id);
+                if (resultado === false) falhas.push(id);
+            } catch (error) {
+                falhas.push(id);
+                console.error(`❌ [Exclusão em lote] Erro no ID ${id}:`, error.message);
+            }
+        }
+
+        if (removerDoArquivo) {
+            const falhasSet = new Set(falhas);
+            const entradasExcluidas = ids.filter(entrada => !falhasSet.has(String(entrada.id)));
+            if (entradasExcluidas.length) {
+                try {
+                    const arquivadas = await getArchiveRecords();
+                    const restantes = filtrarRegistrosArquivadosExcluidos(arquivadas, entradasExcluidas);
+                    registrosRemovidosDoArquivo = arquivadas.length - restantes.length;
+                    if (registrosRemovidosDoArquivo > 0) await atualizarInscricoesArquivadas(restantes);
+                } catch (error) {
+                    erroAtualizacaoArquivo = 'Cadastro excluído, mas não foi possível atualizar o Arquivo. Atualize a página e confira o resultado.';
+                    for (const entrada of entradasExcluidas) {
+                        const id = String(entrada.id);
+                        if (!falhasSet.has(id)) {
+                            falhasSet.add(id);
+                            falhas.push(id);
+                        }
+                    }
+                    console.error('❌ [Exclusão do arquivo] Falha ao atualizar os registros arquivados:', error.message);
+                }
+            }
+        }
+
+        console.log(`✅ [Exclusão em lote] Processados: ${ids.length}; falhas: ${falhas.length}`);
+        res.json({
+            success: falhas.length === 0,
+            processados: ids.length,
+            falhas,
+            registrosRemovidosDoArquivo,
+            ...(erroAtualizacaoArquivo ? { error: erroAtualizacaoArquivo } : {})
+        });
+    } finally {
+        if (archiveLockToken) {
+            const lockAtual = await redis.get(ARQUIVAMENTO_LOCK_KEY).catch(() => null);
+            if (String(lockAtual || '') === archiveLockToken) {
+                await redis.del(ARQUIVAMENTO_LOCK_KEY).catch(() => null);
+            }
+        }
+    }
 });
 
 // Exclusão por ID. A rota /api/admin/inscricoes/:id é a preferida no Vercel,
