@@ -47,6 +47,7 @@ const {
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
+const { schedulesConflict } = require('./schedule-time-conflicts');
 
 const app = express();
 app.use(cors());
@@ -1110,18 +1111,18 @@ app.post('/api/admin/termo-responsavel', async (req, res) => {
 app.get('/api/disponibilidade', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
-        const { start, end, local } = req.query;
-        const calId = CALENDAR_IDS[(local || 'teatro').toLowerCase()] || CALENDAR_IDS.teatro;
-        const response = await calendar.events.list({
+        const { start, end } = req.query;
+        const calendarIds = [...new Set(Object.values(CALENDAR_IDS).filter(Boolean))];
+        const responses = await Promise.all(calendarIds.map(calendarId => calendar.events.list({
             auth: googleAuthClient,
-            calendarId: calId,
+            calendarId,
             timeMin: start || new Date().toISOString(),
             timeMax: end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
             singleEvents: true,
             orderBy: 'startTime',
             maxResults: 2500
-        });
-        const ocupados = response.data.items.map(event => {
+        })));
+        const ocupados = responses.flatMap(response => (response.data.items || []).map(event => {
             const creatorEmail = event.creator && event.creator.email ? event.creator.email : '';
             const hasExtProp = event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.dac_source === 'sistema';
             const isSistema = hasExtProp || (SERVICE_ACCOUNT_EMAIL && creatorEmail === SERVICE_ACCOUNT_EMAIL);
@@ -1132,7 +1133,7 @@ app.get('/api/disponibilidade', async (req, res) => {
                 description: event.description || '',
                 source: isSistema ? 'sistema' : 'manual'
             };
-        });
+        })).sort((a, b) => String(a.start).localeCompare(String(b.start)));
         res.json(ocupados);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao consultar calendário' });
@@ -2784,34 +2785,12 @@ app.post('/api/agendar', async (req, res) => {
         // Validar conflitos de horário quando disputa não é permitida
         if (!PERMITIR_DISPUTA) {
             const existentes = await getAgendamentos();
-            const toMin = (h) => { const [hh, mm] = (h || '00:00').split(':').map(Number); return hh * 60 + (mm || 0); };
-            const parseSlot = (horario) => {
-                const partes = (horario || '').split('-').map(s => s.trim());
-                return { start: toMin(partes[0]), end: toMin(partes[1] || partes[0]) };
-            };
-            // Buffer de 30 min: dois eventos conflitam se um começa antes de 30 min após o outro terminar
-            const overlaps = (a, b) => a.start < b.end + 30 && a.end + 30 > b.start;
             const conflito = existentes.some(ex => {
                 if (ehRascunhoUnificado(ex)) return false;
-                if ((ex.local || 'teatro') !== localKey) return false;
-                if (!ex.etapas) return false;
-                for (const tipo of Object.keys(etapas)) {
-                    if (!ex.etapas[tipo]) continue;
-                    const novas = Array.isArray(etapas[tipo]) ? etapas[tipo] : [etapas[tipo]];
-                    const existEtapas = Array.isArray(ex.etapas[tipo]) ? ex.etapas[tipo] : [ex.etapas[tipo]];
-                    for (const nova of novas) {
-                        if (!nova?.data || !nova?.horario) continue;
-                        for (const exist of existEtapas) {
-                            if (!exist?.data || !exist?.horario) continue;
-                            if (nova.data !== exist.data) continue;
-                            if (overlaps(parseSlot(nova.horario), parseSlot(exist.horario))) return true;
-                        }
-                    }
-                }
-                return false;
+                return schedulesConflict(etapas, ex.etapas);
             });
             if (conflito) {
-                return res.status(409).json({ error: 'Este horário já está ocupado. A disputa de horários está desativada.' });
+                return res.status(409).json({ error: 'Este horário já está ocupado em um dos espaços. A disputa de horários está desativada.' });
             }
         }
         const calId = CALENDAR_IDS[localKey] || CALENDAR_IDS.teatro;
