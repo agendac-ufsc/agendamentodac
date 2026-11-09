@@ -42,6 +42,8 @@ const {
     criarRegistroArquivado,
     criarResumoBloqueioArquivo,
     filtrarRegistrosArquivadosExcluidos,
+    obterBlobUrlUploadInscricao,
+    filtrarUploadsBlobExcluidos,
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
@@ -1553,6 +1555,168 @@ async function atualizarInscricoesArquivadas(registros) {
     await redis.set(INSCRICOES_ARQUIVADAS_KEY, registros);
 }
 
+function blobNaoEncontrado(error) {
+    const status = Number(
+        error?.status
+        || error?.statusCode
+        || error?.response?.status
+        || error?.cause?.status
+        || error?.cause?.statusCode
+        || 0
+    );
+    return status === 404 || /\bnot found\b|does not exist/i.test(String(error?.message || ''));
+}
+
+async function excluirBlobArquivado(url) {
+    try {
+        await deleteBlob(url, blobOptions());
+        return true;
+    } catch (error) {
+        if (blobNaoEncontrado(error)) return true;
+        try {
+            await headBlob(url, blobOptions());
+            return false;
+        } catch (headError) {
+            return blobNaoEncontrado(headError);
+        }
+    }
+}
+
+async function limparUploadsBlobInscricao(id, quantidadeEsperada = 0) {
+    const idNormalizado = String(id || '');
+    const inscricao = (await getAgendamentos())
+        .find(item => String(item.id) === idNormalizado);
+    if (!inscricao) {
+        return {
+            status: 'source_missing',
+            deleted: 0,
+            pending: Math.max(Number(quantidadeEsperada) || 0, 1),
+            unmanaged: 0
+        };
+    }
+
+    const documentos = Array.isArray(inscricao.documentos) ? inscricao.documentos : [];
+    const documentosBlob = documentos
+        .map(documento => ({ documento, url: obterBlobUrlUploadInscricao(documento, idNormalizado) }))
+        .filter(item => item.url);
+    const urls = [...new Set(documentosBlob.map(item => item.url))];
+    const unmanaged = documentos.length - documentosBlob.length;
+    if (!urls.length) {
+        return { status: 'complete', deleted: 0, pending: 0, unmanaged };
+    }
+    if (!blobStorageReady) {
+        return { status: 'pending', deleted: 0, pending: urls.length, unmanaged };
+    }
+
+    const deletedUrls = new Set();
+    let failed = 0;
+    for (let index = 0; index < urls.length; index += 5) {
+        const lote = urls.slice(index, index + 5);
+        const resultados = await Promise.all(lote.map(async url => {
+            try {
+                return { url, deleted: await excluirBlobArquivado(url) };
+            } catch (error) {
+                console.warn(`⚠️ [Arquivo] Não foi possível limpar anexos Blob da inscrição ${idNormalizado}:`, error.message);
+                return { url, deleted: false };
+            }
+        }));
+        for (const resultado of resultados) {
+            if (resultado.deleted) deletedUrls.add(resultado.url);
+            else failed++;
+        }
+    }
+
+    if (deletedUrls.size) {
+        const atualizada = (await getAgendamentos())
+            .find(item => String(item.id) === idNormalizado);
+        if (!atualizada) {
+            return {
+                status: 'source_missing',
+                deleted: deletedUrls.size,
+                pending: Math.max(urls.length - deletedUrls.size, 1),
+                unmanaged
+            };
+        }
+        const documentosAtuais = Array.isArray(atualizada.documentos) ? atualizada.documentos : [];
+        const documentosRestantes = filtrarUploadsBlobExcluidos(documentosAtuais, idNormalizado, deletedUrls);
+        const atualizado = await updateAgendamento(idNormalizado, { documentos: documentosRestantes });
+        if (!atualizado) {
+            console.warn(`⚠️ [Arquivo] Anexos removidos, mas não foi possível limpar as referências da inscrição ${idNormalizado}.`);
+            return { status: 'pending', deleted: deletedUrls.size, pending: urls.length, unmanaged };
+        }
+    }
+
+    return {
+        status: failed ? 'pending' : 'complete',
+        deleted: deletedUrls.size,
+        pending: failed,
+        unmanaged
+    };
+}
+
+async function processarLimpezaUploadsArquivados(arquivadas) {
+    const pendentes = arquivadas.filter(registro => {
+        const total = Number(registro?.uploadedFileCount ?? registro?.preservedFileCount) || 0;
+        return registro?.archiveStatus === 'archived'
+            && total > 0
+            && !['complete', 'blocked'].includes(registro?.attachmentsCleanupStatus);
+    });
+    const resumo = { processed: 0, deleted: 0, pending: 0, blocked: 0, unmanaged: 0, metadataSaveFailed: false };
+
+    for (const registro of pendentes) {
+        let limpeza;
+        try {
+            limpeza = await limparUploadsBlobInscricao(
+                registro.id,
+                Number(registro.uploadedFileCount ?? registro.preservedFileCount) || 0
+            );
+        } catch (error) {
+            limpeza = {
+                status: 'pending',
+                deleted: 0,
+                pending: Number(registro.uploadedFileCount ?? registro.preservedFileCount) || 1,
+                unmanaged: 0
+            };
+            console.warn(`⚠️ [Arquivo] Falha na limpeza dos anexos da inscrição ${registro.id}:`, error.message);
+        }
+
+        const status = limpeza.status === 'source_missing' ? 'blocked' : limpeza.status;
+        const index = arquivadas.findIndex(item =>
+            String(item.id) === String(registro.id)
+            || (registro.legacyId && String(item.legacyId || '') === String(registro.legacyId))
+        );
+        if (index >= 0) {
+            const registroAtual = arquivadas[index];
+            const { preservedFileCount, preservedFileBytes, ...registroSemCamposLegados } = registroAtual;
+            arquivadas[index] = {
+                ...registroSemCamposLegados,
+                uploadedFileCount: Number(registroSemCamposLegados.uploadedFileCount ?? preservedFileCount) || 0,
+                uploadedFileBytes: Number(registroSemCamposLegados.uploadedFileBytes ?? preservedFileBytes) || 0,
+                attachmentsCleanupStatus: status,
+                attachmentsCleanupAt: new Date().toISOString(),
+                attachmentsDeletedFileCount: limpeza.deleted,
+                attachmentsCleanupPendingCount: limpeza.pending,
+                attachmentsCleanupUnmanagedCount: limpeza.unmanaged
+            };
+        }
+        resumo.processed++;
+        resumo.deleted += limpeza.deleted;
+        resumo.unmanaged += limpeza.unmanaged;
+        if (status === 'blocked') resumo.blocked += limpeza.pending;
+        else resumo.pending += limpeza.pending;
+    }
+
+    if (pendentes.length) {
+        try {
+            await atualizarInscricoesArquivadas(arquivadas);
+        } catch (error) {
+            resumo.metadataSaveFailed = true;
+            console.error('❌ [Arquivo] Não foi possível salvar o resultado da limpeza dos anexos:', error.message);
+        }
+    }
+    return resumo;
+}
+
 async function executarArquivamento(idsSolicitados = null, limite = Infinity) {
     if (!redis) throw new Error('Armazenamento das inscrições indisponível.');
     const lockToken = randomUUID();
@@ -1582,11 +1746,16 @@ async function executarArquivamento(idsSolicitados = null, limite = Infinity) {
                 fileName: String(documento.nome || 'documento'),
                 size: Number(documento.tamanho) || 0
             }));
+            const documentosBlob = candidato._documents.filter(documento =>
+                obterBlobUrlUploadInscricao(documento, candidato.id)
+            );
             const concluido = {
                 ...registroBase,
                 archiveStatus: 'archived',
-                preservedFileCount: documentos.length,
-                preservedFileBytes: documentos.reduce((total, item) => total + item.size, 0)
+                uploadedFileCount: documentos.length,
+                uploadedFileBytes: documentos.reduce((total, item) => total + item.size, 0),
+                attachmentsCleanupStatus: documentosBlob.length ? 'pending' : 'complete',
+                attachmentsCleanupUnmanagedCount: documentos.length - documentosBlob.length
             };
             const idxExistente = arquivadas.findIndex(item =>
                 String(item.id) === candidato.id
@@ -1594,9 +1763,16 @@ async function executarArquivamento(idsSolicitados = null, limite = Infinity) {
             );
             if (idxExistente >= 0) arquivadas[idxExistente] = concluido;
             else arquivadas.push(concluido);
-            resultados.push({ id: candidato.id, archived: true, preservedFiles: documentos.length });
+            resultados.push({ id: candidato.id, archived: true, uploadedFileCount: documentos.length });
         }
         if (resultados.length) await atualizarInscricoesArquivadas(arquivadas);
+        const limpezaUploads = await processarLimpezaUploadsArquivados(arquivadas);
+        for (const resultado of resultados) {
+            const registro = arquivadas.find(item => String(item.id) === String(resultado.id));
+            resultado.attachmentsCleanupStatus = registro?.attachmentsCleanupStatus || 'complete';
+            resultado.attachmentsDeletedFileCount = registro?.attachmentsDeletedFileCount || 0;
+            resultado.attachmentsCleanupPendingCount = registro?.attachmentsCleanupPendingCount || 0;
+        }
 
         return {
             success: naoElegiveis.length === 0 && resultados.every(item => item.archived),
@@ -1605,6 +1781,7 @@ async function executarArquivamento(idsSolicitados = null, limite = Infinity) {
             failed: resultados.filter(item => !item.archived).length,
             rejectedIds: naoElegiveis,
             results: resultados,
+            attachmentsCleanup: limpezaUploads,
             nextCheckAt: previa.nextCheckAt,
             blocked: previa.blocked,
             blockedCount: previa.blockedCount
@@ -4093,6 +4270,7 @@ app.post('/api/admin/arquivamento/sincronizar', requireAdminSession, async (_req
             processed: resultado.processed,
             archived: resultado.archived,
             failed: resultado.failed,
+            attachmentsCleanup: resultado.attachmentsCleanup,
             nextCheckAt: resultado.nextCheckAt
         };
         await redis.set('inscricoes_arquivamento_ultima_execucao', ultimaExecucao);
@@ -4103,6 +4281,7 @@ app.post('/api/admin/arquivamento/sincronizar', requireAdminSession, async (_req
         res.json({
             records: registros,
             archived: resultado.archived,
+            attachmentsCleanup: resultado.attachmentsCleanup,
             nextCheckAt: resultado.nextCheckAt,
             blocked: resultado.blocked,
             blockedCount: resultado.blockedCount
