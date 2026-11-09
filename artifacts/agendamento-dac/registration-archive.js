@@ -309,6 +309,36 @@ function filtrarRegistrosArquivadosExcluidos(registros, entradas) {
     );
 }
 
+function obterBlobUrlUploadInscricao(documento, inscricaoId) {
+    const id = String(inscricaoId || '').trim();
+    const pathname = String(documento?.pathname || '').trim().replace(/^\/+/, '');
+    const blobUrl = String(documento?.blobUrl || '').trim();
+    if (!id || !blobUrl || !pathname.startsWith(`inscricoes/${id}/`)) return null;
+
+    try {
+        const parsedUrl = new URL(blobUrl);
+        if (parsedUrl.protocol !== 'https:' || !parsedUrl.hostname.toLowerCase().endsWith('.blob.vercel-storage.com')) {
+            return null;
+        }
+        const urlPathname = decodeURIComponent(parsedUrl.pathname.replace(/^\/+/, ''));
+        if (urlPathname !== pathname) return null;
+    } catch {
+        return null;
+    }
+    return blobUrl;
+}
+
+function filtrarUploadsBlobExcluidos(documentos, inscricaoId, urlsExcluidas) {
+    const urls = Array.isArray(urlsExcluidas)
+        ? urlsExcluidas
+        : (urlsExcluidas instanceof Set ? [...urlsExcluidas] : []);
+    const excluir = new Set(urls.map(String));
+    return (Array.isArray(documentos) ? documentos : []).filter(documento => {
+        const url = obterBlobUrlUploadInscricao(documento, inscricaoId);
+        return !url || !excluir.has(url);
+    });
+}
+
 module.exports = {
     normalizarTextoCalendario,
     extrairNomeEventoCalendario,
@@ -320,6 +350,8 @@ module.exports = {
     criarRegistroArquivado,
     criarResumoBloqueioArquivo,
     filtrarRegistrosArquivadosExcluidos,
+    obterBlobUrlUploadInscricao,
+    filtrarUploadsBlobExcluidos,
     correspondeEventoEtapa,
     dataFinalCalendario
 };
