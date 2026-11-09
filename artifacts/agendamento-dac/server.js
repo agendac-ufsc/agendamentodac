@@ -1121,16 +1121,19 @@ app.get('/api/disponibilidade', async (req, res) => {
     try {
         const { start, end } = req.query;
         const calendarIds = [...new Set(Object.values(CALENDAR_IDS).filter(Boolean))];
-        const responses = await Promise.all(calendarIds.map(calendarId => calendar.events.list({
-            auth: googleAuthClient,
+        const responses = await Promise.all(calendarIds.map(async calendarId => ({
             calendarId,
-            timeMin: start || new Date().toISOString(),
-            timeMax: end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-            singleEvents: true,
-            orderBy: 'startTime',
-            maxResults: 2500
+            response: await calendar.events.list({
+                auth: googleAuthClient,
+                calendarId,
+                timeMin: start || new Date().toISOString(),
+                timeMax: end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+                singleEvents: true,
+                orderBy: 'startTime',
+                maxResults: 2500
+            })
         })));
-        const ocupados = responses.flatMap(response => (response.data.items || []).map(event => {
+        const ocupados = responses.flatMap(({ calendarId, response }) => (response.data.items || []).map(event => {
             const creatorEmail = event.creator && event.creator.email ? event.creator.email : '';
             const hasExtProp = event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.dac_source === 'sistema';
             const isSistema = hasExtProp || (SERVICE_ACCOUNT_EMAIL && creatorEmail === SERVICE_ACCOUNT_EMAIL);
@@ -1139,6 +1142,7 @@ app.get('/api/disponibilidade', async (req, res) => {
                 end: event.end.dateTime || event.end.date,
                 summary: event.summary,
                 description: event.description || '',
+                local: calendarId === CALENDAR_IDS.igrejinha ? 'igrejinha' : 'teatro',
                 source: isSistema ? 'sistema' : 'manual'
             };
         })).sort((a, b) => String(a.start).localeCompare(String(b.start)));
