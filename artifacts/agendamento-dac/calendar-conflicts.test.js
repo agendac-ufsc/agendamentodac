@@ -13,15 +13,21 @@ test('parseTimeRange aceita os formatos atuais e legado', () => {
     assert.equal(parseTimeRange('19:00 às 18:00'), null);
 });
 
-test('schedulesConflict detecta sobreposição entre etapas diferentes e espaços distintos', () => {
-    const solicitada = {
-        evento: { data: '2026-11-20', horario: '13:30 às 15:00', local: 'teatro' }
-    };
-    const existente = {
-        montagem: { data: '2026-11-20', horario: '14:00 às 16:00', local: 'igrejinha' }
-    };
+test('schedulesConflict mantém o conflito entre locais como padrão', () => {
+    const solicitada = { evento: { data: '2026-11-20', horario: '13:30 às 15:00' } };
+    const existente = { montagem: { data: '2026-11-20', horario: '14:00 às 16:00' } };
 
     assert.equal(schedulesConflict(solicitada, existente), true);
+});
+
+test('schedulesConflict separa os locais quando a unificação está desativada', () => {
+    const solicitada = { evento: { data: '2026-11-20', horario: '13:30 às 15:00' } };
+    const existente = { montagem: { data: '2026-11-20', horario: '14:00 às 16:00' } };
+    const opcoes = { compareDifferentLocations: false, firstLocation: 'teatro', secondLocation: 'Igrejinha da UFSC' };
+
+    assert.equal(schedulesConflict(solicitada, existente, undefined, opcoes), false);
+    assert.equal(schedulesConflict(solicitada, existente, undefined, { ...opcoes, secondLocation: 'Teatro Carmen Fossari' }), true);
+    assert.equal(schedulesConflict(solicitada, existente, undefined, { ...opcoes, secondLocation: null }), true);
 });
 
 test('schedulesConflict permite outra data e horários além da margem de segurança', () => {
@@ -76,5 +82,24 @@ for (const file of ['index-teste.html', 'index.html']) {
         assert.equal(classify([eventoSistema], 13 * 60 + 30, 15 * 60).sistema, true);
         assert.equal(classify([eventoSistema], 16 * 60 + 30, 17 * 60 + 30).sistema, false);
         assert.equal(classify([eventoManual], 13 * 60 + 30, 15 * 60).manual, true);
+    });
+
+    test(`${file} separa disponibilidade entre locais quando configurado`, () => {
+        const html = fs.readFileSync(path.join(__dirname, file), 'utf8');
+        const filterSource = extractFunction(html, 'getCalendarEventsForLocal');
+        const filterByLocal = vm.runInNewContext(`(${filterSource})`);
+        const classifySource = extractFunction(html, 'getCalendarConflictStatus');
+        const classify = vm.runInNewContext(`(${classifySource})`);
+        const eventos = [
+            { start: '2026-11-20T14:00:00-03:00', end: '2026-11-20T16:00:00-03:00', source: 'sistema', local: 'igrejinha' },
+            { start: '2026-11-20T14:00:00-03:00', end: '2026-11-20T16:00:00-03:00', source: 'manual', local: 'Teatro Carmen Fossari' }
+        ];
+
+        const teatroSeparado = filterByLocal(eventos, 'teatro', false);
+        assert.equal(teatroSeparado.length, 1);
+        assert.equal(classify(teatroSeparado, 13 * 60 + 30, 15 * 60).manual, true);
+        assert.equal(classify(teatroSeparado, 13 * 60 + 30, 15 * 60).sistema, false);
+        assert.equal(classify(filterByLocal(eventos, 'teatro', true), 13 * 60 + 30, 15 * 60).sistema, true);
+        assert.equal(filterByLocal(eventos, 'Igrejinha da UFSC', false).length, 1);
     });
 }

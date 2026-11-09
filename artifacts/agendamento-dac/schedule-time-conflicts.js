@@ -35,7 +35,21 @@ function flattenStageItems(stages) {
         .filter(item => item && typeof item === 'object');
 }
 
-function schedulesConflict(firstStages, secondStages, bufferMinutes = DEFAULT_CONFLICT_BUFFER_MINUTES) {
+function normalizeScheduleLocation(value) {
+    const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized.includes('igrej')) return 'igrejinha';
+    if (normalized.includes('teatro')) return 'teatro';
+    return normalized;
+}
+
+function schedulesConflict(firstStages, secondStages, bufferMinutes = DEFAULT_CONFLICT_BUFFER_MINUTES, locationOptions = {}) {
+    if (locationOptions.compareDifferentLocations === false) {
+        const firstLocation = normalizeScheduleLocation(locationOptions.firstLocation);
+        const secondLocation = normalizeScheduleLocation(locationOptions.secondLocation);
+        if (firstLocation && secondLocation && firstLocation !== secondLocation) return false;
+    }
+
     const firstItems = flattenStageItems(firstStages);
     const secondItems = flattenStageItems(secondStages);
 

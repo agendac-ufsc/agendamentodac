@@ -571,6 +571,7 @@ const drive = google.drive({ version: 'v3' });
 let SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
 let FORMS_LINK = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
 let PERMITIR_DISPUTA = true; // Padrão é permitir disputa conforme comportamento atual
+let UNIFICAR_ESPACOS = true; // Preserva a regra atual entre Teatro e Igrejinha
 let HORARIOS_LIMITES = {
     ensaio: { inicio: '08:00', fim: '21:00' },
     montagem: { inicio: '08:00', fim: '21:00' },
@@ -665,6 +666,7 @@ const getConfigs = async (caller = 'unknown') => {
                 SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
                 FORMS_LINK = configs.formsLink || FORMS_LINK;
                 PERMITIR_DISPUTA = normalizarBooleano(configs.permitirDisputa, true);
+                UNIFICAR_ESPACOS = normalizarBooleano(configs.unificarEspacos, true);
                 SOMENTE_FINSEMANA = normalizarBooleano(configs.somenteFinaisDeSemana, false);
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
                 DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
@@ -699,6 +701,7 @@ const getConfigs = async (caller = 'unknown') => {
                     spreadsheetId: SPREADSHEET_ID,
                     formsLink: FORMS_LINK,
                     permitirDisputa: PERMITIR_DISPUTA,
+                    unificarEspacos: UNIFICAR_ESPACOS,
                     somenteFinaisDeSemana: SOMENTE_FINSEMANA,
                     horariosLimites: HORARIOS_LIMITES,
                     datasBloqueadas: DATAS_BLOQUEADAS,
@@ -725,6 +728,7 @@ const getConfigs = async (caller = 'unknown') => {
         spreadsheetId: SPREADSHEET_ID,
         formsLink: FORMS_LINK,
         permitirDisputa: PERMITIR_DISPUTA,
+        unificarEspacos: UNIFICAR_ESPACOS,
         somenteFinaisDeSemana: SOMENTE_FINSEMANA,
         horariosLimites: HORARIOS_LIMITES,
         datasBloqueadas: DATAS_BLOQUEADAS,
@@ -768,6 +772,9 @@ const saveConfigs = async (configs) => {
         FORMS_LINK = configs.formsLink || FORMS_LINK;
         if (configs.permitirDisputa !== undefined) {
             PERMITIR_DISPUTA = configs.permitirDisputa;
+        }
+        if (configs.unificarEspacos !== undefined) {
+            UNIFICAR_ESPACOS = normalizarBooleano(configs.unificarEspacos, true);
         }
         if (configs.somenteFinaisDeSemana !== undefined) {
             SOMENTE_FINSEMANA = configs.somenteFinaisDeSemana;
@@ -819,6 +826,7 @@ const saveConfigs = async (configs) => {
                 spreadsheetId: cleanSpreadsheetId,
                 formsLink: FORMS_LINK,
                 permitirDisputa: PERMITIR_DISPUTA,
+                unificarEspacos: UNIFICAR_ESPACOS,
                 somenteFinaisDeSemana: SOMENTE_FINSEMANA,
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS,
@@ -1006,7 +1014,7 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
@@ -1014,7 +1022,7 @@ app.post('/api/admin/config', async (req, res) => {
     if (modoInscricao === 'duas-etapas' && String(modoInscricaoEmergencia || '').trim() !== MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
         return res.status(403).json({ success: false, error: 'O modo de 2 etapas está bloqueado. Informe a chave de emergência autorizada.' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
@@ -2787,7 +2795,11 @@ app.post('/api/agendar', async (req, res) => {
             const existentes = await getAgendamentos();
             const conflito = existentes.some(ex => {
                 if (ehRascunhoUnificado(ex)) return false;
-                return schedulesConflict(etapas, ex.etapas);
+                return schedulesConflict(etapas, ex.etapas, undefined, {
+                    compareDifferentLocations: UNIFICAR_ESPACOS,
+                    firstLocation: localKey,
+                    secondLocation: ex.local
+                });
             });
             if (conflito) {
                 return res.status(409).json({ error: 'Este horário já está ocupado em um dos espaços. A disputa de horários está desativada.' });

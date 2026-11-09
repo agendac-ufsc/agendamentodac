@@ -634,6 +634,14 @@
                     <label class="toggle-switch"><input type="checkbox" id="cfgDisputa"><span class="ts"></span></label>
                 </div>
 
+                <div class="regra-row">
+                    <div>
+                        <h4>Unificar horários entre Teatro e Igrejinha</h4>
+                        <p>Se ativo, horários ocupados em um local também ficam ocupados no outro. Desative para manter as agendas independentes.</p>
+                    </div>
+                    <label class="toggle-switch"><input type="checkbox" id="cfgUnificarEspacos"><span class="ts"></span></label>
+                </div>
+
                 <!-- Somente Qui–Dom -->
                 <div class="regra-row">
                     <div>
@@ -3613,6 +3621,8 @@ async function loadConfigs() {
          setChk('cfgMostrarBotoesDesativados', c.mostrarBotoesDesativados !== false);
         const disp = document.getElementById('cfgDisputa');
         if (disp) disp.checked = c.permitirDisputa !== false;
+        const unificar = document.getElementById('cfgUnificarEspacos');
+        if (unificar) unificar.checked = c.unificarEspacos !== false;
         const sfin = document.getElementById('cfgSomenteFinSemana');
         if (sfin) sfin.checked = !!c.somenteFinaisDeSemana;
         const hl = c.horariosLimites || {};
@@ -3717,6 +3727,7 @@ async function saveConfigs() {
             ensaio:  { ativo: !!document.getElementById('cfgBtnEnsaioAtivo')?.checked,  texto: (document.getElementById('cfgBtnEnsaioTexto')?.value || '').trim() || 'Agendar Apenas Ensaio', dataInicio: (document.getElementById('cfgBtnEnsaioDataInicio')?.value || '') || null }
         },
         permitirDisputa: document.getElementById('cfgDisputa').checked,
+        unificarEspacos: document.getElementById('cfgUnificarEspacos').checked,
         somenteFinaisDeSemana: document.getElementById('cfgSomenteFinSemana').checked,
         horariosLimites: {
             ensaio:     { fim: document.getElementById('h-ensaio-fim').value },

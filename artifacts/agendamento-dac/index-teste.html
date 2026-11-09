@@ -1607,6 +1607,7 @@
         let currentStepContext = null;
         let googleEvents = [];
         let permitirDisputa = true;
+        let unificarEspacos = true;
         let horariosLimites = {
             ensaio: { fim: '17:00' },
             montagem: { fim: '21:00' },
@@ -1635,6 +1636,7 @@
                 if (configRes.ok) {
                     const config = await configRes.json();
                     permitirDisputa = config.permitirDisputa !== false;
+                    unificarEspacos = config.unificarEspacos !== false;
                     somenteFinaisDeSemana = !!config.somenteFinaisDeSemana;
                     if (config.horariosLimites) horariosLimites = config.horariosLimites;
                     datasBloqueadas = config.datasBloqueadas || [];
@@ -1791,6 +1793,24 @@
             });
         }
 
+        function getCalendarEventsForLocal(events, selectedLocal, unifyLocations) {
+            const items = Array.from(events || []);
+            if (unifyLocations !== false) return items;
+
+            const normalizeLocal = value => {
+                const normalized = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+                if (normalized.includes('igrej')) return 'igrejinha';
+                if (normalized.includes('teatro')) return 'teatro';
+                return normalized;
+            };
+            const selected = normalizeLocal(selectedLocal);
+            if (!selected) return items;
+            return items.filter(event => {
+                const eventLocal = normalizeLocal(event && event.local);
+                return !eventLocal || eventLocal === selected;
+            });
+        }
+
         function getCalendarConflictStatus(events, startMinutes, endMinutes, bufferMinutes = 30) {
             const status = { manual: false, sistema: false };
             if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
@@ -1896,7 +1916,7 @@
                         });
                         if (isUserSelected) d.classList.add('user-selected');
 
-                        const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+                        const eventsOnDay = getCalendarEventsForLocal(googleEvents.filter(e => e.start.startsWith(dateStr)), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos);
                         const toMinutes = value => {
                             const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
                             return match ? Number(match[1]) * 60 + Number(match[2]) : null;
@@ -1968,7 +1988,7 @@
             if (!sel.date) return;
 
             const dateStr = sel.date.toISOString().split('T')[0];
-            const eventsOnDay = googleEvents.filter(e => e.start.startsWith(dateStr));
+            const eventsOnDay = getCalendarEventsForLocal(googleEvents.filter(e => e.start.startsWith(dateStr)), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos);
 
             const hLimit = horariosLimites[step] || { fim: '21:00' };
             const minTime = 800;
@@ -2132,7 +2152,7 @@
             const end = sel.end ? sel.end.split(':').map(Number) : null;
             const conflito = start && end
                 ? getCalendarConflictStatus(
-                    googleEvents.filter(event => event.start.startsWith(dateStr)),
+                    getCalendarEventsForLocal(googleEvents.filter(event => event.start.startsWith(dateStr)), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos),
                     start[0] * 60 + start[1],
                     end[0] * 60 + end[1]
                 )
