@@ -6,6 +6,8 @@ const {
     criarRegistroArquivado,
     criarResumoBloqueioArquivo,
     filtrarRegistrosArquivadosExcluidos,
+    obterBlobUrlUploadInscricao,
+    filtrarUploadsBlobExcluidos,
     extrairNomeEventoCalendario,
     normalizarTextoCalendario,
     correspondeEventoEtapa,
@@ -363,5 +365,52 @@ test('remove registros arquivados pelos IDs atuais ou legados', () => {
             { id: '' }
         ]),
         [{ id: 'site_3', legacyId: '' }]
+    );
+});
+
+test('limita a limpeza aos uploads Blob da inscrição e preserva outros arquivos', () => {
+    const url = 'https://store.private.blob.vercel-storage.com/inscricoes/site_123/arquivo.pdf';
+    assert.equal(obterBlobUrlUploadInscricao({
+        pathname: 'inscricoes/site_123/arquivo.pdf',
+        blobUrl: url
+    }, 'site_123'), url);
+    assert.equal(obterBlobUrlUploadInscricao({
+        pathname: 'inscricoes/site_999/arquivo.pdf',
+        blobUrl: url
+    }, 'site_123'), null);
+    assert.equal(obterBlobUrlUploadInscricao({
+        pathname: 'inscricoes/site_123/outro.pdf',
+        blobUrl: url
+    }, 'site_123'), null);
+    assert.equal(obterBlobUrlUploadInscricao({
+        pathname: 'termos/assinados/termo.pdf',
+        blobUrl: 'https://store.private.blob.vercel-storage.com/termos/assinados/termo.pdf'
+    }, 'site_123'), null);
+    assert.equal(obterBlobUrlUploadInscricao({
+        pathname: 'inscricoes/site_123/arquivo.pdf',
+        url: 'https://drive.google.com/file/d/documento'
+    }, 'site_123'), null);
+});
+
+test('remove só os blobs confirmados e preserva termo assinado e links externos', () => {
+    const remover = 'https://store.private.blob.vercel-storage.com/inscricoes/site_123/arquivo.pdf';
+    const manter = {
+        id: 'other',
+        pathname: 'inscricoes/site_123/outro.pdf',
+        blobUrl: 'https://store.private.blob.vercel-storage.com/inscricoes/site_123/outro.pdf'
+    };
+    const termo = {
+        pathname: 'termos/assinados/termo.pdf',
+        blobUrl: 'https://store.private.blob.vercel-storage.com/termos/assinados/termo.pdf'
+    };
+    const externo = { url: 'https://drive.google.com/file/d/documento' };
+    assert.deepEqual(
+        filtrarUploadsBlobExcluidos([
+            { pathname: 'inscricoes/site_123/arquivo.pdf', blobUrl: remover },
+            manter,
+            termo,
+            externo
+        ], 'site_123', new Set([remover])),
+        [manter, termo, externo]
     );
 });
