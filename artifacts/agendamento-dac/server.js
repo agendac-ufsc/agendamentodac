@@ -47,7 +47,12 @@ const {
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
-const { schedulesConflict } = require('./schedule-time-conflicts');
+const {
+    schedulesConflict,
+    shouldBlockScheduleConflict,
+    classifyCalendarEventSource,
+    createOfficializedCalendarBlocks
+} = require('./schedule-time-conflicts');
 
 const app = express();
 app.use(cors());
@@ -1120,32 +1125,58 @@ app.get('/api/disponibilidade', async (req, res) => {
     if (!googleAuthClient) await initGoogleAuth();
     try {
         const { start, end } = req.query;
+        const timeMin = start || new Date().toISOString();
+        const timeMax = end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
         const calendarIds = [...new Set(Object.values(CALENDAR_IDS).filter(Boolean))];
-        const responses = await Promise.all(calendarIds.map(async calendarId => ({
-            calendarId,
-            response: await calendar.events.list({
-                auth: googleAuthClient,
+        const [responses, agendamentos] = await Promise.all([
+            Promise.all(calendarIds.map(async calendarId => ({
                 calendarId,
-                timeMin: start || new Date().toISOString(),
-                timeMax: end || new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
-                singleEvents: true,
-                orderBy: 'startTime',
-                maxResults: 2500
-            })
-        })));
-        const ocupados = responses.flatMap(({ calendarId, response }) => (response.data.items || []).map(event => {
-            const creatorEmail = event.creator && event.creator.email ? event.creator.email : '';
-            const hasExtProp = event.extendedProperties && event.extendedProperties.private && event.extendedProperties.private.dac_source === 'sistema';
-            const isSistema = hasExtProp || (SERVICE_ACCOUNT_EMAIL && creatorEmail === SERVICE_ACCOUNT_EMAIL);
+                response: await calendar.events.list({
+                    auth: googleAuthClient,
+                    calendarId,
+                    timeMin,
+                    timeMax,
+                    singleEvents: true,
+                    orderBy: 'startTime',
+                    maxResults: 2500
+                })
+            }))),
+            getAgendamentos()
+        ]);
+        const officializedRegistrationIds = new Set(
+            agendamentos
+                .filter(item => item?.horariosOficializados === true && item?.id)
+                .map(item => String(item.id))
+        );
+        const eventosCalendario = responses.flatMap(({ response }) => response.data.items || []);
+        const idsComEventoNoCalendario = new Set(eventosCalendario
+            .map(event => String(event.extendedProperties?.private?.dac_inscricao_id || '').trim())
+            .filter(Boolean));
+        const inicioConsulta = Date.parse(timeMin);
+        const fimConsulta = Date.parse(timeMax);
+        const bloqueiosOficializadosSemId = agendamentos
+            .filter(item => item?.horariosOficializados === true && item?.id
+                && !idsComEventoNoCalendario.has(String(item.id)))
+            .flatMap(createOfficializedCalendarBlocks)
+            .filter(event => {
+                const eventStart = Date.parse(event.start);
+                const eventEnd = Date.parse(event.end);
+                return Number.isFinite(eventStart) && Number.isFinite(eventEnd)
+                    && eventEnd > inicioConsulta && eventStart < fimConsulta;
+            });
+        const ocupados = [
+            ...responses.flatMap(({ calendarId, response }) => (response.data.items || []).map(event => {
             return {
                 start: event.start.dateTime || event.start.date,
                 end: event.end.dateTime || event.end.date,
                 summary: event.summary,
                 description: event.description || '',
                 local: calendarId === CALENDAR_IDS.igrejinha ? 'igrejinha' : 'teatro',
-                source: isSistema ? 'sistema' : 'manual'
+                source: classifyCalendarEventSource(event, officializedRegistrationIds, SERVICE_ACCOUNT_EMAIL)
             };
-        })).sort((a, b) => String(a.start).localeCompare(String(b.start)));
+            })),
+            ...bloqueiosOficializadosSemId
+        ].sort((a, b) => String(a.start).localeCompare(String(b.start)));
         res.json(ocupados);
     } catch (error) {
         res.status(500).json({ error: 'Erro ao consultar calendário' });
@@ -2794,20 +2825,24 @@ app.post('/api/agendar', async (req, res) => {
             }
         }
 
-        // Validar conflitos de horário quando disputa não é permitida
-        if (!PERMITIR_DISPUTA) {
-            const existentes = await getAgendamentos();
-            const conflito = existentes.some(ex => {
-                if (ehRascunhoUnificado(ex)) return false;
-                return schedulesConflict(etapas, ex.etapas, undefined, {
-                    compareDifferentLocations: UNIFICAR_ESPACOS,
-                    firstLocation: localKey,
-                    secondLocation: ex.local
-                });
+        // Horários oficializados nunca voltam a disputar, mesmo com a disputa
+        // geral ativada. Quando a disputa está desativada, todos os registros
+        // de sistema continuam sendo tratados como conflito.
+        const existentes = await getAgendamentos();
+        const conflito = existentes.some(ex => {
+            if (ehRascunhoUnificado(ex) || !shouldBlockScheduleConflict(ex, PERMITIR_DISPUTA)) return false;
+            return schedulesConflict(etapas, ex.etapas, undefined, {
+                compareDifferentLocations: UNIFICAR_ESPACOS,
+                firstLocation: localKey,
+                secondLocation: ex.local
             });
-            if (conflito) {
-                return res.status(409).json({ error: 'Este horário já está ocupado em um dos espaços. A disputa de horários está desativada.' });
-            }
+        });
+        if (conflito) {
+            return res.status(409).json({
+                error: PERMITIR_DISPUTA
+                    ? 'Um ou mais horários selecionados já foram oficializados e não podem receber outra inscrição.'
+                    : 'Este horário já está ocupado em um dos espaços. A disputa de horários está desativada.'
+            });
         }
         const calId = CALENDAR_IDS[localKey] || CALENDAR_IDS.teatro;
         const localNome = localKey === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari';
@@ -4313,6 +4348,87 @@ app.get('/api/admin/arquivadas/:id/termo.pdf', requireAdminSession, async (req, 
     } catch (error) {
         console.error('❌ [Arquivo] Falha ao abrir PDF do termo:', error.message);
         res.status(500).send('Não foi possível abrir o PDF do termo.');
+    }
+});
+
+app.post('/api/admin/oficializar-inscricoes', requireAdminSession, async (req, res) => {
+    const idsRecebidos = Array.isArray(req.body?.ids) ? req.body.ids : [];
+    const ids = [...new Set(idsRecebidos.map(id => String(id || '').trim()).filter(Boolean))];
+    const oficializar = req.body?.horariosOficializados;
+
+    if (ids.length === 0 || ids.length > 100 || typeof oficializar !== 'boolean') {
+        return res.status(400).json({ success: false, error: 'Selecione inscrições válidas para atualizar.' });
+    }
+    if (!redis) {
+        return res.status(503).json({ success: false, error: 'O armazenamento de inscrições está indisponível.' });
+    }
+
+    try {
+        const agendamentos = await getAgendamentos();
+        const agendamentosPorId = new Map(agendamentos.map(item => [String(item.id), item]));
+        const selecionados = ids.map(id => agendamentosPorId.get(id));
+        if (selecionados.some(item => !item)) {
+            return res.status(404).json({
+                success: false,
+                error: 'Uma ou mais inscrições não estão disponíveis para oficialização. Atualize o painel; eventos manuais do calendário já permanecem bloqueados.'
+            });
+        }
+        if (selecionados.some(item =>
+            ehRascunhoUnificado(item)
+            || item.calendarSynced !== true
+            || !cronogramaValido(item.etapas)
+        )) {
+            return res.status(409).json({
+                success: false,
+                error: 'Uma ou mais inscrições ainda não têm um cronograma completo sincronizado com o calendário.'
+            });
+        }
+
+        if (oficializar && !selecionados.every(item => item.horariosOficializados === true)) {
+            const idsSelecionados = new Set(ids);
+            for (let index = 0; index < selecionados.length; index++) {
+                const candidata = selecionados[index];
+                const conflitoNaSelecao = selecionados.slice(0, index).some(outra =>
+                    schedulesConflict(candidata.etapas, outra.etapas, undefined, {
+                        compareDifferentLocations: UNIFICAR_ESPACOS,
+                        firstLocation: candidata.local,
+                        secondLocation: outra.local
+                    })
+                );
+                const conflitoOficializado = agendamentos.some(outra =>
+                    !idsSelecionados.has(String(outra.id))
+                    && outra.horariosOficializados === true
+                    && !ehRascunhoUnificado(outra)
+                    && schedulesConflict(candidata.etapas, outra.etapas, undefined, {
+                        compareDifferentLocations: UNIFICAR_ESPACOS,
+                        firstLocation: candidata.local,
+                        secondLocation: outra.local
+                    })
+                );
+                if (conflitoNaSelecao || conflitoOficializado) {
+                    return res.status(409).json({
+                        success: false,
+                        error: 'Os horários selecionados coincidem entre si ou com outro evento já oficializado. Selecione uma combinação sem conflito.'
+                    });
+                }
+            }
+        }
+
+        const idsSelecionados = new Set(ids);
+        const atualizados = agendamentos.map(item => idsSelecionados.has(String(item.id))
+            ? { ...item, horariosOficializados: oficializar }
+            : item
+        );
+        await redis.set(AGENDAMENTOS_KEY, atualizados);
+
+        return res.json({
+            success: true,
+            horariosOficializados: oficializar,
+            updated: ids.length
+        });
+    } catch (error) {
+        console.error('❌ [Oficialização] Falha ao atualizar horários:', error.message);
+        return res.status(500).json({ success: false, error: 'Não foi possível atualizar a oficialização dos horários.' });
     }
 });
 

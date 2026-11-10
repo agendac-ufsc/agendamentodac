@@ -283,8 +283,9 @@
                 <option value="completo">Termo digital completo</option>
                 <option value="incompleto">Termo digital incompleto</option>
             </select>
-            <button class="btn-top btn-orange" id="btnEnviarTermos" onclick="enviarTermosSelecionados()" style="display:none">
-                <i class="fas fa-paper-plane"></i> Enviar Termos (<span id="countSelecionados">0</span>)
+            <button class="btn-top" id="btnOficializarHorarios" onclick="alternarOficializacaoSelecionadas()" style="display:none;background:#0f766e;color:#fff;border-color:#0f766e">
+                <i id="iconeOficializar" class="fas fa-calendar-check"></i>
+                <span id="textoOficializar">Oficializar horários</span> (<span id="countSelecionados">0</span>)
             </button>
         </div>
         <div class="results-count" id="resultsCount"></div>
@@ -1788,6 +1789,10 @@ function renderTabela() {
         const p = item.primeiraEtapa;
         const originalIndex = allUnificados.indexOf(item);
         const idInscricao = p.id ? String(p.id) : '';
+        const horariosOficializados = p.horariosOficializados === true;
+        const oficializacaoBadge = horariosOficializados
+            ? '<span class="status-badge st-completo" title="Os horários desta inscrição estão bloqueados para novas disputas" style="margin-left:6px">Oficializado</span>'
+            : '';
 
         let etapasHtml = '';
         if (p.etapas) {
@@ -1912,7 +1917,7 @@ function renderTabela() {
             <td class="check-col"><input type="checkbox" class="insc-checkbox insc-check" data-index="${originalIndex}" ${inscricoesSelecionadas.has(idInscricao) ? 'checked' : ''} onchange="updateSelCount()"></td>
             <td style="color:#888;font-size:12px">${(fi+1).toString().padStart(2,'0')}</td>
             <td>
-                <div style="font-weight:700;color:#333">${(p.evento||'SEM EVENTO').toUpperCase()}</div>
+                <div style="font-weight:700;color:#333">${(p.evento||'SEM EVENTO').toUpperCase()}${oficializacaoBadge}</div>
                 <div style="font-size:11px;color:#888;margin-top:2px">${p.nome||''} &middot; ${p.email||''}</div>
                 ${termoAceite}
             </td>
@@ -1935,8 +1940,23 @@ function updateSelCount() {
         else inscricoesSelecionadas.delete(String(id));
     });
     const checked = inscricoesSelecionadas.size;
+    const selecionadas = [...inscricoesSelecionadas]
+        .map(id => allUnificados.find(item => String(item?.primeiraEtapa?.id || '') === String(id))?.primeiraEtapa)
+        .filter(Boolean);
+    const todasOficializadas = selecionadas.length > 0
+        && selecionadas.every(item => item.horariosOficializados === true);
     document.getElementById('countSelecionados').textContent = checked;
-    document.getElementById('btnEnviarTermos').style.display = checked > 0 && userRole === 'admin' ? 'flex' : 'none';
+    const btnOficializar = document.getElementById('btnOficializarHorarios');
+    btnOficializar.style.display = checked > 0 && userRole === 'admin' ? 'flex' : 'none';
+    document.getElementById('textoOficializar').textContent = todasOficializadas
+        ? 'Reverter oficialização'
+        : 'Oficializar horários';
+    document.getElementById('iconeOficializar').className = todasOficializadas
+        ? 'fas fa-rotate-left'
+        : 'fas fa-calendar-check';
+    btnOficializar.title = todasOficializadas
+        ? 'Os horários selecionados voltarão a participar de disputas conforme as regras atuais'
+        : 'Bloquear os horários selecionados para novas disputas';
     const btnExcluir = document.getElementById('btnExcluirInscricoes');
     if (btnExcluir && userRole === 'admin') {
         btnExcluir.innerHTML = checked > 0
@@ -3007,30 +3027,57 @@ async function enviarLinksTermoMassa() {
     }
 }
 
-async function enviarTermosSelecionados() {
-    const checks = document.querySelectorAll('.insc-check:checked');
-    if (checks.length === 0) { alert('Selecione ao menos uma inscrição.'); return; }
-    if (!(await showConfirmDialog(`Enviar termos para ${checks.length} proponente(s)?`))) return;
+function obterInscricoesSelecionadas() {
+    return [...inscricoesSelecionadas]
+        .map(id => allUnificados.find(item => String(item?.primeiraEtapa?.id || '') === String(id))?.primeiraEtapa)
+        .filter(item => item?.id);
+}
 
-    const inscricoes = [];
-    checks.forEach(c => {
-        const idx = parseInt(c.dataset.index);
-        const p = allUnificados[idx]?.primeiraEtapa;
-        if (p) inscricoes.push({ nome: p.nome, email: p.email, evento: p.evento, local: p.local||'teatro' });
-    });
+async function alternarOficializacaoSelecionadas() {
+    const inscricoes = obterInscricoesSelecionadas();
+    const ids = [...new Set(inscricoes.map(item => String(item.id)))];
+    if (!ids.length) { alert('Selecione ao menos uma inscrição.'); return; }
 
+    const reverter = inscricoes.length === ids.length
+        && inscricoes.every(item => item.horariosOficializados === true);
+    const oficializar = !reverter;
+    const mensagem = oficializar
+        ? `Oficializar os horários de ${ids.length} inscrição(ões)?\n\nTodas as etapas selecionadas ficarão bloqueadas para novas inscrições, mesmo com a disputa de horários permitida.`
+        : `Reverter a oficialização de ${ids.length} inscrição(ões)?\n\nOs horários voltarão a participar da disputa conforme as regras atuais. Bloqueios manuais do calendário continuam valendo.`;
+    if (!(await showConfirmDialog(mensagem))) return;
+
+    const btn = document.getElementById('btnOficializarHorarios');
+    btn.disabled = true;
     try {
-        const r = await fetch('/api/enviar-termos-digitais', {
-            method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ inscricoes })
+        const response = await fetch('/api/admin/oficializar-inscricoes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids, horariosOficializados: oficializar })
         });
-        const d = await r.json();
-        alert(`✅ Termos enviados!\n\nEnviados: ${d.enviados}\nErros: ${d.erros}\nTotal: ${d.total}`);
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success !== true) {
+            throw new Error(result.error || 'Não foi possível atualizar a oficialização dos horários.');
+        }
+
         inscricoesSelecionadas.clear();
         document.getElementById('checkAll').checked = false;
-        toggleCheckAll();
-    } catch(e) {
-        alert('Erro ao enviar termos: ' + e.message);
+        document.querySelectorAll('.insc-check').forEach(check => { check.checked = false; });
+        const idsAtualizados = new Set(ids);
+        allUnificados.forEach(item => {
+            const inscricao = item?.primeiraEtapa;
+            if (inscricao && idsAtualizados.has(String(inscricao.id))) {
+                inscricao.horariosOficializados = oficializar;
+            }
+        });
+        renderTabela();
+        alert(oficializar
+            ? `✅ Horários oficializados para ${result.updated || ids.length} inscrição(ões).`
+            : `✅ Oficialização revertida para ${result.updated || ids.length} inscrição(ões).`);
+    } catch (error) {
+        alert('Erro ao atualizar os horários: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        updateSelCount();
     }
 }
 

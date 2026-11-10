@@ -4,7 +4,13 @@ const path = require('node:path');
 const test = require('node:test');
 const vm = require('node:vm');
 
-const { parseTimeRange, schedulesConflict } = require('./schedule-time-conflicts');
+const {
+    parseTimeRange,
+    schedulesConflict,
+    shouldBlockScheduleConflict,
+    classifyCalendarEventSource,
+    createOfficializedCalendarBlocks
+} = require('./schedule-time-conflicts');
 
 test('parseTimeRange aceita os formatos atuais e legado', () => {
     assert.deepEqual(parseTimeRange('18:00 às 19:30'), { start: 1080, end: 1170 });
@@ -42,6 +48,48 @@ test('schedulesConflict permite outra data e horários além da margem de segura
     };
 
     assert.equal(schedulesConflict(solicitada, existente), false);
+});
+
+test('horários oficializados bloqueiam conflitos mesmo com disputa permitida', () => {
+    assert.equal(shouldBlockScheduleConflict({ horariosOficializados: true }, true), true);
+    assert.equal(shouldBlockScheduleConflict({ horariosOficializados: false }, true), false);
+    assert.equal(shouldBlockScheduleConflict({ horariosOficializados: false }, false), true);
+});
+
+test('evento de inscrição oficializada é tratado como bloqueio manual', () => {
+    const event = {
+        creator: { email: 'calendar-service@example.test' },
+        extendedProperties: {
+            private: { dac_source: 'sistema', dac_inscricao_id: 'insc-42' }
+        }
+    };
+
+    assert.equal(classifyCalendarEventSource(event, new Set(), 'calendar-service@example.test'), 'sistema');
+    assert.equal(classifyCalendarEventSource(event, new Set(['insc-42']), 'calendar-service@example.test'), 'manual');
+    assert.equal(classifyCalendarEventSource({ summary: 'Evento manual' }, new Set(), 'calendar-service@example.test'), 'manual');
+});
+
+test('oficialização cria bloqueios manuais para todas as etapas quando faltam eventos vinculados', () => {
+    const blocks = createOfficializedCalendarBlocks({
+        local: 'igrejinha',
+        evento: 'Mostra Cultural',
+        etapas: {
+            ensaio: { data: '2026-12-05', horario: '09:00 às 10:30' },
+            evento: [
+                { data: '2026-12-06', horario: '14:00 às 16:00' },
+                { data: '2026-12-07', horario: '15:00 às 17:00' }
+            ]
+        }
+    });
+
+    assert.equal(blocks.length, 3);
+    assert.deepEqual(blocks.map(block => block.local), ['igrejinha', 'igrejinha', 'igrejinha']);
+    assert.deepEqual(blocks.map(block => block.source), ['manual', 'manual', 'manual']);
+    assert.deepEqual(blocks.map(block => block.start), [
+        '2026-12-05T09:00:00-03:00',
+        '2026-12-06T14:00:00-03:00',
+        '2026-12-07T15:00:00-03:00'
+    ]);
 });
 
 function extractFunction(source, name) {

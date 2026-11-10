@@ -43,6 +43,47 @@ function normalizeScheduleLocation(value) {
     return normalized;
 }
 
+function shouldBlockScheduleConflict(registration, allowCompetition) {
+    return allowCompetition !== true || registration?.horariosOficializados === true;
+}
+
+function classifyCalendarEventSource(event, officializedRegistrationIds, serviceAccountEmail = '') {
+    const privateProperties = event?.extendedProperties?.private || {};
+    const registrationId = String(privateProperties.dac_inscricao_id || '').trim();
+    if (registrationId && officializedRegistrationIds?.has(registrationId)) return 'manual';
+
+    const creatorEmail = String(event?.creator?.email || '').trim().toLowerCase();
+    const serviceEmail = String(serviceAccountEmail || '').trim().toLowerCase();
+    const isSystem = privateProperties.dac_source === 'sistema'
+        || Boolean(serviceEmail && creatorEmail === serviceEmail);
+    return isSystem ? 'sistema' : 'manual';
+}
+
+function createOfficializedCalendarBlocks(registration) {
+    const stageNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+    const local = normalizeScheduleLocation(registration?.local || registration?.localNome) || 'teatro';
+    const eventName = String(registration?.evento || 'Evento');
+
+    return Object.entries(registration?.etapas || {}).flatMap(([stage, value]) => {
+        const items = Array.isArray(value) ? value : [value];
+        return items.map((item, index) => {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(item?.data || ''))) return null;
+            const timeRange = parseTimeRange(item?.horario);
+            if (!timeRange) return null;
+            const formatTime = minutes => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+            const label = items.length > 1 ? `${stageNames[stage] || stage} ${index + 1}` : (stageNames[stage] || stage);
+            return {
+                start: `${item.data}T${formatTime(timeRange.start)}:00-03:00`,
+                end: `${item.data}T${formatTime(timeRange.end)}:00-03:00`,
+                summary: `${label}: ${eventName}`,
+                description: 'Horário oficializado no painel administrativo.',
+                local,
+                source: 'manual'
+            };
+        }).filter(Boolean);
+    });
+}
+
 function schedulesConflict(firstStages, secondStages, bufferMinutes = DEFAULT_CONFLICT_BUFFER_MINUTES, locationOptions = {}) {
     if (locationOptions.compareDifferentLocations === false) {
         const firstLocation = normalizeScheduleLocation(locationOptions.firstLocation);
@@ -70,5 +111,8 @@ module.exports = {
     DEFAULT_CONFLICT_BUFFER_MINUTES,
     intervalsConflict,
     parseTimeRange,
+    shouldBlockScheduleConflict,
+    classifyCalendarEventSource,
+    createOfficializedCalendarBlocks,
     schedulesConflict
 };
