@@ -32,6 +32,10 @@
       "dest": "/api/[...path].js"
     },
     {
+      "src": "^/api/evaluator/cancelled-inscriptions$",
+      "dest": "/api/[...path].js"
+    },
+    {
       "src": "^/api/admin/inscricoes/[^/]+$",
       "dest": "/api/admin-documents.js"
     },

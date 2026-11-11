@@ -53,6 +53,15 @@
         .panel-tab-count{min-width:22px;padding:2px 7px;border-radius:999px;background:#e2e8f0;color:#475569;font-size:11px;text-align:center}
         .panel-tab.active .panel-tab-count{background:#dbeafe;color:#1d4ed8}
         .panel-section[hidden]{display:none!important}
+        .selection-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0;padding:11px 13px;border:1px solid #fed7aa;border-radius:9px;background:#fff7ed;color:#9a3412;font-size:13px}
+        .selection-toolbar[hidden]{display:none!important}
+        .selection-toolbar-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+        .av-select-wrap{display:flex;align-items:center;justify-content:center;flex:0 0 28px}
+        .av-select-checkbox{width:18px;height:18px;accent-color:#d97706;cursor:pointer}
+        .av-card-cancelada{border-color:#fed7aa;background:#fffdfa}
+        .av-card-main-cancelada{cursor:default}
+        .av-card-main-cancelada:hover{background:transparent}
+        .av-status.cancelada{background:#ffedd5;color:#9a3412}
 
         .av-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;margin-bottom:12px;overflow:hidden;transition:border-color .2s,box-shadow .2s}
         .av-card.open{border-color:#93c5fd;box-shadow:0 4px 14px rgba(37,99,235,.09)}
@@ -260,6 +269,9 @@
             <button type="button" class="panel-tab active" id="tabBtnAvaliacoes" role="tab" aria-selected="true" aria-controls="painelAvaliacoes" onclick="alternarAbaAvaliador('avaliacoes')">
                 <i class="fas fa-clipboard-check"></i> Avaliar inscrições
             </button>
+            <button type="button" class="panel-tab" id="tabBtnCanceladas" role="tab" aria-selected="false" aria-controls="painelCanceladas" onclick="alternarAbaAvaliador('canceladas')">
+                <i class="fas fa-ban"></i> Inscrições canceladas <span class="panel-tab-count" id="canceladasTabCount">0</span>
+            </button>
             <button type="button" class="panel-tab" id="tabBtnClassificacao" role="tab" aria-selected="false" aria-controls="painelClassificacao" onclick="alternarAbaAvaliador('classificacao')">
                 <i class="fas fa-list-ol"></i> Avaliações <span class="panel-tab-count" id="classificacaoTabCount">0</span>
             </button>
@@ -282,8 +294,25 @@
                     <option value="avaliado">Já avaliei</option>
                 </select>
             </div>
+            <div id="avaliadorSelectionToolbar" class="selection-toolbar" hidden>
+                <span><strong id="avaliadorSelectedCount">0</strong> inscrição(ões) selecionada(s)</span>
+                <div class="selection-toolbar-actions">
+                    <button type="button" class="btn-top btn-danger" id="btnCancelarInscricoesAvaliador" onclick="cancelarInscricoesSelecionadasAvaliador()" disabled><i class="fas fa-ban"></i> Cancelar inscrição</button>
+                    <button type="button" class="btn-top btn-refresh" onclick="limparSelecaoInscricoesAvaliador()">Limpar seleção</button>
+                </div>
+            </div>
             <div class="results-count" id="resultsCount"></div>
             <div id="avaliacaoList"><div class="loading-msg"><i class="fas fa-spinner fa-spin"></i> Carregando...</div></div>
+        </section>
+
+        <section class="panel-section" id="painelCanceladas" role="tabpanel" aria-labelledby="tabBtnCanceladas" hidden>
+            <div class="ranking-summary">
+                <div>
+                    <h2>Inscrições canceladas</h2>
+                    <p>Propostas retiradas da fila de avaliação. O cadastro e as avaliações já feitas permanecem preservados.</p>
+                </div>
+            </div>
+            <div id="inscricoesCanceladasList"><div class="empty-msg">Nenhuma inscrição cancelada.</div></div>
         </section>
 
         <section class="panel-section" id="painelClassificacao" role="tabpanel" aria-labelledby="tabBtnClassificacao" hidden>
@@ -340,6 +369,9 @@ let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let myAssessmentsCache = null; // fallback persistente das avaliações do avaliador atual
 let openAvaliacaoIndex = null;
 let avaliadorTabAtiva = 'avaliacoes';
+let inscricoesSelecionadasAvaliador = new Set();
+let inscricoesCanceladasAvaliador = new Set();
+let cancelamentoAvaliadorEmAndamento = false;
 let viewerCanDeleteInscricoes = false;
 const RUBRICA_NIVEL_ID = '__nivel_avaliacao';
 const RUBRICA_NIVEL_ID_812 = '__nivel_avaliacao_812';
@@ -482,6 +514,12 @@ async function loadData() {
         const r = await fetch('/api/admin/dados-unificados');
         const data = await r.json();
         allUnificados = Array.isArray(data) ? data : [];
+        const canceladasResponse = await fetch('/api/evaluator/cancelled-inscriptions', { cache: 'no-store' });
+        if (!canceladasResponse.ok) throw new Error('Não foi possível carregar as inscrições canceladas.');
+        const idsCancelados = await canceladasResponse.json();
+        if (!Array.isArray(idsCancelados)) throw new Error('A lista de inscrições canceladas é inválida.');
+        inscricoesCanceladasAvaliador = new Set(idsCancelados.map(id => String(id || '').trim()).filter(Boolean));
+        inscricoesSelecionadasAvaliador.clear();
         scoresCache = {};
         // Pré-carregar avaliações em paralelo
         await Promise.all(allUnificados.map(async (item) => {
@@ -523,13 +561,131 @@ function avaliacaoFinalizada(avaliacao) {
     return Boolean(avaliacao?.finalized === true && avaliacaoCompleta(avaliacao.scoresJson || {}));
 }
 
+function obterIdInscricaoAvaliador(item) {
+    const inscricao = item?.primeiraEtapa;
+    return String(inscricao?.id || inscricao?.email || '').trim();
+}
+
+function obterInscricoesAtivas() {
+    return allUnificados.filter(item => {
+        if (!item?.primeiraEtapa) return false;
+        const id = obterIdInscricaoAvaliador(item);
+        return !id || !inscricoesCanceladasAvaliador.has(id);
+    });
+}
+
+function obterInscricoesCanceladas() {
+    return allUnificados.filter(item => {
+        const id = obterIdInscricaoAvaliador(item);
+        return Boolean(id && inscricoesCanceladasAvaliador.has(id));
+    });
+}
+
+function atualizarControlesSelecaoAvaliador() {
+    const toolbar = document.getElementById('avaliadorSelectionToolbar');
+    const count = document.getElementById('avaliadorSelectedCount');
+    const button = document.getElementById('btnCancelarInscricoesAvaliador');
+    if (!toolbar || !count || !button) return;
+    const total = inscricoesSelecionadasAvaliador.size;
+    toolbar.hidden = total === 0;
+    count.textContent = String(total);
+    button.disabled = total === 0 || cancelamentoAvaliadorEmAndamento;
+}
+
+function alternarSelecaoInscricaoAvaliador(checkbox) {
+    const id = String(checkbox?.dataset?.inscriptionId || '').trim();
+    if (!id || inscricoesCanceladasAvaliador.has(id)) {
+        if (checkbox) checkbox.checked = false;
+        return;
+    }
+    if (checkbox.checked) inscricoesSelecionadasAvaliador.add(id);
+    else inscricoesSelecionadasAvaliador.delete(id);
+    atualizarControlesSelecaoAvaliador();
+}
+
+function limparSelecaoInscricoesAvaliador() {
+    inscricoesSelecionadasAvaliador.clear();
+    document.querySelectorAll('.av-select-checkbox').forEach(checkbox => { checkbox.checked = false; });
+    atualizarControlesSelecaoAvaliador();
+}
+
+function renderInscricoesCanceladas() {
+    const container = document.getElementById('inscricoesCanceladasList');
+    const count = document.getElementById('canceladasTabCount');
+    const canceladas = obterInscricoesCanceladas();
+    if (count) count.textContent = String(canceladas.length);
+    if (!container) return;
+    if (canceladas.length === 0) {
+        container.innerHTML = '<div class="empty-msg">Nenhuma inscrição cancelada.</div>';
+        return;
+    }
+    container.innerHTML = canceladas.map(item => {
+        const p = item.primeiraEtapa;
+        const isIgrejinha = String(p.localNome || '').toLowerCase().includes('igrej');
+        return '<div class="av-card av-card-cancelada"><div class="av-card-main av-card-main-cancelada"><div class="av-info">'
+            + '<h4>' + escapeHtml(p.evento || 'SEM EVENTO').toUpperCase() + '</h4>'
+            + '<p>' + escapeHtml(p.nome || '') + ' &middot; '
+            + '<span class="local-badge ' + (isIgrejinha ? 'local-igrejinha' : 'local-teatro') + '">' + escapeHtml(p.localNome || 'Teatro') + '</span> '
+            + '<span class="av-status cancelada">Inscrição cancelada</span></p></div></div></div>';
+    }).join('');
+}
+
+async function cancelarInscricoesSelecionadasAvaliador() {
+    if (cancelamentoAvaliadorEmAndamento) return;
+    const ativos = new Set(obterInscricoesAtivas().map(obterIdInscricaoAvaliador).filter(Boolean));
+    const ids = [...inscricoesSelecionadasAvaliador].filter(id => ativos.has(id));
+    if (ids.length === 0) {
+        limparSelecaoInscricoesAvaliador();
+        return;
+    }
+    const quantidade = ids.length;
+    const descricao = quantidade === 1
+        ? 'A inscrição selecionada será movida para a aba Inscrições canceladas. O cadastro e as avaliações já feitas não serão apagados.'
+        : quantidade + ' inscrições selecionadas serão movidas para a aba Inscrições canceladas. Os cadastros e as avaliações já feitas não serão apagados.';
+    const confirmou = await showAvaliadorDialog(descricao, {
+        title: quantidade === 1 ? 'Cancelar inscrição?' : 'Cancelar inscrições?',
+        danger: true,
+        confirmLabel: quantidade === 1 ? 'Cancelar inscrição' : 'Cancelar inscrições'
+    });
+    if (!confirmou) return;
+    cancelamentoAvaliadorEmAndamento = true;
+    atualizarControlesSelecaoAvaliador();
+    try {
+        const response = await fetch('/api/evaluator/cancelled-inscriptions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ inscriptionIds: ids })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok || result.success !== true) {
+            throw new Error(result.error || 'Não foi possível cancelar as inscrições selecionadas.');
+        }
+        ids.forEach(id => inscricoesCanceladasAvaliador.add(id));
+        inscricoesSelecionadasAvaliador.clear();
+        openAvaliacaoIndex = null;
+        renderAvaliacaoList();
+        renderInscricoesCanceladas();
+        alternarAbaAvaliador('canceladas');
+    } catch (error) {
+        await showAvaliadorDialog(error.message || 'Não foi possível cancelar as inscrições selecionadas.', {
+            title: 'Não foi possível cancelar',
+            danger: true,
+            hideCancel: true,
+            confirmLabel: 'Fechar'
+        });
+    } finally {
+        cancelamentoAvaliadorEmAndamento = false;
+        atualizarControlesSelecaoAvaliador();
+    }
+}
 function renderAvaliacaoList() {
     const q = (document.getElementById('searchAvalia').value||'').toLowerCase();
     const filterLocal = document.getElementById('filterLocalAv').value;
     const filterStatus = document.getElementById('filterStatusAv').value;
     const container = document.getElementById('avaliacaoList');
 
-    const filtered = allUnificados.filter(item => {
+    const inscricoesAtivas = obterInscricoesAtivas();
+    const filtered = inscricoesAtivas.filter(item => {
         const p = item.primeiraEtapa;
         if (!p) return false;
         const myAv = obterMinhaAvaliacao(item);
@@ -541,7 +697,6 @@ function renderAvaliacaoList() {
             || (filterStatus === 'avaliado' && myAvFinalizada);
         return matchQ && matchLocal && matchStatus;
     });
-
     filtered.sort((itemA, itemB) => {
         const avaliacaoA = obterMinhaAvaliacao(itemA);
         const avaliacaoB = obterMinhaAvaliacao(itemB);
@@ -557,10 +712,12 @@ function renderAvaliacaoList() {
     });
 
     document.getElementById('resultsCount').textContent =
-        `Exibindo ${filtered.length} de ${allUnificados.length} inscrição(ões)`;
+        `Exibindo ${filtered.length} de ${inscricoesAtivas.length} inscrição(ões)`;
 
     if (filtered.length === 0) {
         container.innerHTML = '<div class="empty-msg">Nenhuma inscrição encontrada com esses filtros.</div>';
+        atualizarControlesSelecaoAvaliador();
+        renderInscricoesCanceladas();
         renderClassificacaoList();
         return;
     }
@@ -569,7 +726,7 @@ function renderAvaliacaoList() {
     filtered.forEach(item => {
         const p = item.primeiraEtapa;
         const idx = allUnificados.indexOf(item);
-        const id = p.id || p.email;
+        const id = obterIdInscricaoAvaliador(item);
         const avs = scoresCache[id] || [];
         const avaliacoesFinalizadas = avs.filter(av => avaliacaoFinalizada(av)).length;
         const myAv = obterMinhaAvaliacao(item);
@@ -584,6 +741,7 @@ function renderAvaliacaoList() {
         html += `
         <div class="av-card${aberta ? ' open' : ''}">
             <div class="av-card-main" onclick="openAvaliacao(${idx})">
+                ${id ? '<div class="av-select-wrap" onclick="event.stopPropagation()"><input type="checkbox" class="av-select-checkbox" data-inscription-id="' + escapeAttr(id) + '" aria-label="Selecionar inscrição '+ escapeAttr(p.evento || p.nome || id) + '" ' + (inscricoesSelecionadasAvaliador.has(id) ? 'checked' : '') + ' onchange="alternarSelecaoInscricaoAvaliador(this)"></div>' : ''}
                 <div class="av-info">
                     <h4>${escapeHtml(p.evento||'SEM EVENTO').toUpperCase()}</h4>
                     <p>${escapeHtml(p.nome||'')} &middot;
@@ -603,21 +761,28 @@ function renderAvaliacaoList() {
         </div>`;
     });
     container.innerHTML = html;
+    atualizarControlesSelecaoAvaliador();
+    renderInscricoesCanceladas();
     renderClassificacaoList();
 }
 
 function alternarAbaAvaliador(aba) {
-    const mostrarAvaliacoes = aba !== 'classificacao';
-    avaliadorTabAtiva = mostrarAvaliacoes ? 'avaliacoes' : 'classificacao';
-    document.getElementById('painelAvaliacoes').hidden = !mostrarAvaliacoes;
-    document.getElementById('painelClassificacao').hidden = mostrarAvaliacoes;
-    document.getElementById('tabBtnAvaliacoes').classList.toggle('active', mostrarAvaliacoes);
-    document.getElementById('tabBtnAvaliacoes').setAttribute('aria-selected', String(mostrarAvaliacoes));
-    document.getElementById('tabBtnClassificacao').classList.toggle('active', !mostrarAvaliacoes);
-    document.getElementById('tabBtnClassificacao').setAttribute('aria-selected', String(!mostrarAvaliacoes));
-    if (!mostrarAvaliacoes) renderClassificacaoList();
+    const abaAtiva = ['canceladas', 'classificacao'].includes(aba) ? aba : 'avaliacoes';
+    avaliadorTabAtiva = abaAtiva;
+    const abas = [
+        ['avaliacoes', 'painelAvaliacoes', 'tabBtnAvaliacoes'],
+        ['canceladas', 'painelCanceladas', 'tabBtnCanceladas'],
+        ['classificacao', 'painelClassificacao', 'tabBtnClassificacao']
+    ];
+    abas.forEach(([chave, painelId, botaoId]) => {
+        const ativo = abaAtiva === chave;
+        document.getElementById(painelId).hidden = !ativo;
+        document.getElementById(botaoId).classList.toggle('active', ativo);
+        document.getElementById(botaoId).setAttribute('aria-selected', String(ativo));
+    });
+    if (abaAtiva === 'canceladas') renderInscricoesCanceladas();
+    if (abaAtiva === 'classificacao') renderClassificacaoList();
 }
-
 function obterChavesAvaliacao() {
     const crit = criterios.length ? criterios : defaultCriterios();
     return ehRubricaDeNiveis(crit) ? CHAVES_RUBRICA_NIVEIS : crit.map(c => c.id);

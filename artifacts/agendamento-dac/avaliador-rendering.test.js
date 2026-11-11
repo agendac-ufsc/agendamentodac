@@ -240,3 +240,35 @@ test('centraliza as três opções no viewport quando a gaveta é aberta', () =>
     assert.match(toggleFunction, /if \(abrindo\) centralizarOpcoesRubrica\(criterionKey\)/);
     assert.match(editFunction, /centralizarOpcoesRubrica\(criterionKey\)/);
 });
+
+test('move inscrições canceladas para a aba própria e mantém as ativas na fila', () => {
+    const proposals = [
+        { primeiraEtapa: { id: 'proposal-42', evento: 'Cancelada' } },
+        { primeiraEtapa: { id: 'proposal-43', evento: 'Ativa' } },
+        { primeiraEtapa: { email: 'legacy@example.invalid', evento: 'Legada' } },
+        { primeiraEtapa: { evento: 'Sem identificador' } }
+    ];
+    const context = {
+        allUnificados: proposals,
+        inscricoesCanceladasAvaliador: new Set(['proposal-42'])
+    };
+    const helpers = vm.runInNewContext([
+        extractFunction('obterIdInscricaoAvaliador'),
+        extractFunction('obterInscricoesAtivas'),
+        extractFunction('obterInscricoesCanceladas')
+    ].join('\n') + '\n({ obterIdInscricaoAvaliador, obterInscricoesAtivas, obterInscricoesCanceladas })', context);
+    const idsAtivos = Array.from(helpers.obterInscricoesAtivas(), item => helpers.obterIdInscricaoAvaliador(item));
+    const idsCancelados = Array.from(helpers.obterInscricoesCanceladas(), item => helpers.obterIdInscricaoAvaliador(item));
+
+    assert.deepEqual(idsAtivos, ['proposal-43', 'legacy@example.invalid', '']);
+    assert.deepEqual(idsCancelados, ['proposal-42']);
+    assert.equal(proposals.length, 4, 'a separação visual não apaga os registros');
+    assert.match(html, /id="tabBtnCanceladas"/);
+    assert.match(html, /id="btnCancelarInscricoesAvaliador"/);
+});
+
+test('encaminha a API de inscrições canceladas para o servidor do projeto', () => {
+    const configPath = path.join(__dirname, '..', '..', 'vercel.json');
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    assert.ok(config.routes.some(route => route.src === '^/api/evaluator/cancelled-inscriptions$' && route.dest === '/api/[...path].js'));
+});

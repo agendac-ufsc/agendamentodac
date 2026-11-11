@@ -184,6 +184,7 @@ const assessmentStore = redis ? createAssessmentStore(redis) : null;
 const EVALUATOR_SESSION_COOKIE = 'dac_evaluator_session';
 const ADMIN_SESSION_COOKIE = 'dac_admin_session';
 const INSCRICOES_ARQUIVADAS_KEY = 'inscricoes_arquivadas_v1';
+const EVALUATOR_CANCELLED_INSCRIPTIONS_KEY = 'avaliador_inscricoes_canceladas_v1';
 const ARQUIVAMENTO_LOCK_KEY = 'inscricoes_arquivamento_lock';
 
 function obterSenhaAdminConfigurada() {
@@ -5616,6 +5617,57 @@ app.post('/api/criteria', async (req, res) => {
         res.json({ success: true });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar critérios.' });
+    }
+});
+
+async function requireEvaluatorCancellationSession(req, res) {
+    if (!isSameOriginRequest(req)) {
+        res.status(403).json({ error: 'Origem da solicitação não autorizada.' });
+        return null;
+    }
+    const session = await findEvaluatorSession(req);
+    if (session.status === 'unavailable') {
+        res.status(503).json({ error: 'Armazenamento de sessões indisponível.' });
+        return null;
+    }
+    if (session.status !== 'authenticated') {
+        res.status(401).json({ error: 'Sessão de avaliador inválida ou expirada. Entre novamente.' });
+        return null;
+    }
+    return session.evaluator;
+}
+
+app.get('/api/evaluator/cancelled-inscriptions', async (req, res) => {
+    try {
+        const evaluator = await requireEvaluatorCancellationSession(req, res);
+        if (!evaluator) return;
+        const ids = await redis.smembers(EVALUATOR_CANCELLED_INSCRIPTIONS_KEY);
+        res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        return res.json(Array.isArray(ids) ? ids.map(String) : []);
+    } catch (error) {
+        console.error('❌ [Avaliador] Falha ao carregar inscrições canceladas:', error.message);
+        return res.status(500).json({ error: 'Não foi possível carregar as inscrições canceladas.' });
+    }
+});
+
+app.post('/api/evaluator/cancelled-inscriptions', async (req, res) => {
+    try {
+        const evaluator = await requireEvaluatorCancellationSession(req, res);
+        if (!evaluator) return;
+        const rawIds = req.body?.inscriptionIds;
+        if (!Array.isArray(rawIds) || rawIds.length === 0 || rawIds.length > 500
+            || rawIds.some(id => (typeof id !== 'string' && !Number.isSafeInteger(id))
+                || !String(id).trim() || String(id).trim().length > 500)) {
+            return res.status(400).json({ success: false, error: 'Selecione inscrições válidas para cancelar.' });
+        }
+        const ids = [...new Set(rawIds.map(id => String(id).trim()))];
+        const transaction = redis.multi();
+        ids.forEach(id => transaction.sadd(EVALUATOR_CANCELLED_INSCRIPTIONS_KEY, id));
+        await transaction.exec();
+        return res.json({ success: true, cancelledCount: ids.length });
+    } catch (error) {
+        console.error('❌ [Avaliador] Falha ao cancelar inscrições:', error.message);
+        return res.status(500).json({ success: false, error: 'Não foi possível cancelar as inscrições selecionadas.' });
     }
 });
 
