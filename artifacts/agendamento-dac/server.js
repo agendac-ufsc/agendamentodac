@@ -48,8 +48,11 @@ const {
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
 const {
+    MINIMUM_REST_INTERVAL_MINUTES,
     schedulesConflict,
+    scheduleConflictsWithCalendarEvents,
     shouldBlockScheduleConflict,
+    usesMinimumRestInterval,
     classifyCalendarEventSource,
     createOfficializedCalendarBlocks
 } = require('./schedule-time-conflicts');
@@ -2797,6 +2800,50 @@ app.get('/api/cron/verificar-atividades', async (req, res) => {
     }
 });
 
+async function buscarEventosCalendarioParaReserva(etapas, local) {
+    const datas = Object.values(etapas || {})
+        .flatMap(value => Array.isArray(value) ? value : [value])
+        .map(item => String(item?.data || ''))
+        .filter(data => /^\d{4}-\d{2}-\d{2}$/.test(data))
+        .sort();
+    if (!datas.length) return [];
+
+    if (!googleAuthClient) await initGoogleAuth();
+    if (!googleAuthClient) throw new Error('Autenticação do Google Calendar indisponível.');
+
+    const localKey = String(local || 'teatro').toLowerCase();
+    const calendarIds = UNIFICAR_ESPACOS
+        ? [...new Set(Object.values(CALENDAR_IDS).filter(Boolean))]
+        : [...new Set([CALENDAR_IDS[localKey] || CALENDAR_IDS.teatro].filter(Boolean))];
+    if (!calendarIds.length) throw new Error('Nenhum calendário está configurado.');
+
+    const [year, month, day] = datas[datas.length - 1].split('-').map(Number);
+    const dataFimExclusiva = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+    const timeMin = `${datas[0]}T00:00:00-03:00`;
+    const timeMax = `${dataFimExclusiva}T00:00:00-03:00`;
+    const respostas = await Promise.all(calendarIds.map(async calendarId => ({
+        calendarId,
+        eventos: (await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId,
+            timeMin,
+            timeMax,
+            singleEvents: true,
+            orderBy: 'startTime',
+            maxResults: 2500,
+            timeout: ATIVIDADES_GOOGLE_TIMEOUT_MS
+        })).data.items || []
+    })));
+
+    return respostas.flatMap(({ calendarId, eventos }) => eventos.map(event => ({
+        start: event.start?.dateTime || event.start?.date || '',
+        end: event.end?.dateTime || event.end?.date || '',
+        status: event.status || '',
+        registrationId: String(event.extendedProperties?.private?.dac_inscricao_id || ''),
+        local: calendarId === CALENDAR_IDS.igrejinha ? 'igrejinha' : 'teatro'
+    }))).filter(event => event.start && event.end);
+}
+
 app.post('/api/agendar', async (req, res) => {
     try {
         const { nome, email, telefone, evento, etapas, local, modoTeste = false } = req.body;
@@ -2832,7 +2879,7 @@ app.post('/api/agendar', async (req, res) => {
         const existentes = await getAgendamentos();
         const conflito = existentes.some(ex => {
             if (ehRascunhoUnificado(ex) || !shouldBlockScheduleConflict(ex, PERMITIR_DISPUTA)) return false;
-            return schedulesConflict(etapas, ex.etapas, undefined, {
+            return schedulesConflict(etapas, ex.etapas, MINIMUM_REST_INTERVAL_MINUTES, {
                 compareDifferentLocations: UNIFICAR_ESPACOS,
                 firstLocation: localKey,
                 secondLocation: ex.local
@@ -2843,6 +2890,23 @@ app.post('/api/agendar', async (req, res) => {
                 error: PERMITIR_DISPUTA
                     ? 'Um ou mais horários selecionados já foram oficializados e não podem receber outra inscrição.'
                     : 'Este horário já está ocupado em um dos espaços. A disputa de horários está desativada.'
+            });
+        }
+        let eventosCalendario;
+        try {
+            eventosCalendario = await buscarEventosCalendarioParaReserva(etapas, localKey);
+        } catch (error) {
+            console.error('[Agendamento] Falha ao validar o intervalo de descanso no calendário:', error.message);
+            return res.status(503).json({
+                error: 'Não foi possível confirmar o intervalo de 1 hora no calendário. Tente novamente.'
+            });
+        }
+        if (scheduleConflictsWithCalendarEvents(etapas, eventosCalendario, MINIMUM_REST_INTERVAL_MINUTES, {
+            compareDifferentLocations: UNIFICAR_ESPACOS,
+            firstLocation: localKey
+        })) {
+            return res.status(409).json({
+                error: 'Mantenha pelo menos 1 hora livre entre este horário e outros agendamentos do espaço.'
             });
         }
         const calId = CALENDAR_IDS[localKey] || CALENDAR_IDS.teatro;
@@ -2877,6 +2941,7 @@ app.post('/api/agendar', async (req, res) => {
             local: localKey, localNome, calendarId: calId,
             timestamp: new Date().toLocaleString('pt-BR'),
             calendarSynced: false,
+            intervaloDescansoMinutos: MINIMUM_REST_INTERVAL_MINUTES,
             inscricaoTeste: modoTeste === true
         });
 
@@ -2964,6 +3029,46 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
             concluidaEm: new Date().toISOString()
         };
         const jaConcluida = agendamento.inscricaoTesteConcluida === true;
+
+        // Só rascunhos criados com a nova regra são revalidados aqui. Isso
+        // preserva inscrições que já estavam em andamento antes da publicação.
+        if (!jaConcluida && usesMinimumRestInterval(agendamento)) {
+            const etapasParaFinalizar = dados.etapas || agendamento.etapas;
+            const conflitoEmInscricoes = agendamentos.some(ex => {
+                if (String(ex.id) === id || ehRascunhoUnificado(ex) || !shouldBlockScheduleConflict(ex, PERMITIR_DISPUTA)) {
+                    return false;
+                }
+                return schedulesConflict(etapasParaFinalizar, ex.etapas, MINIMUM_REST_INTERVAL_MINUTES, {
+                    compareDifferentLocations: UNIFICAR_ESPACOS,
+                    firstLocation: agendamento.local,
+                    secondLocation: ex.local
+                });
+            });
+            if (conflitoEmInscricoes) {
+                return res.status(409).json({
+                    error: 'Mantenha pelo menos 1 hora livre entre este horário e outros agendamentos do espaço.'
+                });
+            }
+
+            let eventosCalendario;
+            try {
+                eventosCalendario = await buscarEventosCalendarioParaReserva(etapasParaFinalizar, agendamento.local);
+            } catch (error) {
+                console.error('[Inscrição unificada] Falha ao revalidar o intervalo no calendário:', error.message);
+                return res.status(503).json({
+                    error: 'Não foi possível confirmar o intervalo de 1 hora no calendário. Tente novamente.'
+                });
+            }
+            if (scheduleConflictsWithCalendarEvents(etapasParaFinalizar, eventosCalendario, MINIMUM_REST_INTERVAL_MINUTES, {
+                compareDifferentLocations: UNIFICAR_ESPACOS,
+                firstLocation: agendamento.local,
+                excludeRegistrationId: id
+            })) {
+                return res.status(409).json({
+                    error: 'O horário deixou de estar disponível. Mantenha pelo menos 1 hora livre entre agendamentos.'
+                });
+            }
+        }
 
         // O upload já persiste os metadados no Redis. Não substituir essa lista
         // por um payload parcial do navegador, pois isso apagaria arquivos

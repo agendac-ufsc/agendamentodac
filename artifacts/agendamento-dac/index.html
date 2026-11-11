@@ -729,6 +729,61 @@
             return status;
         }
 
+        function getCalendarEventTimestamp(value) {
+            const text = String(value || '').trim();
+            if (!text) return null;
+            const normalized = /^\d{4}-\d{2}-\d{2}$/.test(text)
+                ? `${text}T00:00:00-03:00`
+                : text;
+            const timestamp = Date.parse(normalized);
+            return Number.isFinite(timestamp) ? timestamp : null;
+        }
+
+        function getCalendarEventsOnDate(events, dateStr) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateStr || ''))) return [];
+            const [year, month, day] = dateStr.split('-').map(Number);
+            const nextDate = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+            const dayStart = Date.parse(`${dateStr}T00:00:00-03:00`);
+            const dayEnd = Date.parse(`${nextDate}T00:00:00-03:00`);
+            return Array.from(events || []).filter(event => {
+                const eventStart = getCalendarEventTimestamp(event && event.start);
+                const eventEnd = getCalendarEventTimestamp(event && event.end);
+                return eventStart !== null && eventEnd !== null
+                    && eventStart < dayEnd && eventEnd > dayStart;
+            });
+        }
+
+        function getCalendarRestConflictStatus(events, dateStr, startMinutes, endMinutes, bufferMinutes = 60) {
+            if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes) || endMinutes <= startMinutes) {
+                return false;
+            }
+            const [year, month, day] = String(dateStr || '').split('-').map(Number);
+            if (!year || !month || !day) return false;
+            const formatTime = minutes =>
+                `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+            const candidateStart = Date.parse(`${dateStr}T${formatTime(startMinutes)}:00-03:00`);
+            const candidateEnd = Date.parse(`${dateStr}T${formatTime(endMinutes)}:00-03:00`);
+            if (!Number.isFinite(candidateStart) || !Number.isFinite(candidateEnd)) return false;
+            const bufferMs = Math.max(0, Number(bufferMinutes) || 0) * 60 * 1000;
+            const timestampFor = value => {
+                const text = String(value || '').trim();
+                if (!text) return null;
+                const normalized = /^\d{4}-\d{2}-\d{2}$/.test(text)
+                    ? `${text}T00:00:00-03:00`
+                    : text;
+                const timestamp = Date.parse(normalized);
+                return Number.isFinite(timestamp) ? timestamp : null;
+            };
+
+            return Array.from(events || []).some(event => {
+                const eventStart = timestampFor(event && event.start);
+                const eventEnd = timestampFor(event && event.end);
+                if (eventStart === null || eventEnd === null || eventEnd <= eventStart) return false;
+                return candidateStart < eventEnd + bufferMs
+                    && candidateEnd + bufferMs > eventStart;
+            });
+        }
+
         function renderStepCalendar(step) {
             const container = document.getElementById(`calendar-${step}`);
             const sel = selections[step];
@@ -802,7 +857,7 @@
                         });
                         if (isUserSelected) d.classList.add('user-selected');
 
-                        const eventsOnDay = getCalendarEventsForLocal(googleEvents.filter(e => e.start.startsWith(dateStr)), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos);
+                        const eventsOnDay = getCalendarEventsForLocal(getCalendarEventsOnDate(googleEvents, dateStr), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos);
                         const toMinutes = value => {
                             const match = String(value || '').match(/(\d{1,2}):(\d{2})/);
                             return match ? Number(match[1]) * 60 + Number(match[2]) : null;
@@ -814,6 +869,7 @@
                         const hojeCalendario = `${agoraCalendario.getFullYear()}-${String(agoraCalendario.getMonth() + 1).padStart(2, '0')}-${String(agoraCalendario.getDate()).padStart(2, '0')}`;
                         const agoraMinutos = agoraCalendario.getHours() * 60 + agoraCalendario.getMinutes();
                         const bloqueiaIntervalo = (inicio, fim) => {
+                            if (getCalendarRestConflictStatus(eventsOnDay, dateStr, inicio, fim)) return true;
                             const conflito = getCalendarConflictStatus(eventsOnDay, inicio, fim);
                             return conflito.manual || (conflito.sistema && !permitirDisputa);
                         };
@@ -874,7 +930,7 @@
             if (!sel.date) return;
 
             const dateStr = sel.date.toISOString().split('T')[0];
-            const eventsOnDay = getCalendarEventsForLocal(googleEvents.filter(e => e.start.startsWith(dateStr)), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos);
+            const eventsOnDay = getCalendarEventsForLocal(getCalendarEventsOnDate(googleEvents, dateStr), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos);
 
             const hLimit = horariosLimites[step] || { fim: '21:00' };
             const minTime = 800;
@@ -921,6 +977,9 @@
             const selectedRangeConflict = selectedStartMinutes !== null && selectedEndMinutes !== null
                 ? getCalendarConflictStatus(eventsOnDay, selectedStartMinutes, selectedEndMinutes)
                 : { manual: false, sistema: false };
+            const selectedRangeRestConflict = selectedStartMinutes !== null && selectedEndMinutes !== null
+                ? getCalendarRestConflictStatus(eventsOnDay, dateStr, selectedStartMinutes, selectedEndMinutes)
+                : false;
 
             for (let h = 0; h <= 23; h++) {
                 for (let m = 0; m < 60; m += 30) {
@@ -957,12 +1016,19 @@
                     const proposedEnd = selectingEnd ? slotMinutes : slotMinutes + 1;
                     const slotConflict = getCalendarConflictStatus(eventsOnDay, proposedStart, proposedEnd);
                     const selectedEndpoint = time === sel.start || time === sel.end;
+                    const restConflict = getCalendarRestConflictStatus(eventsOnDay, dateStr, proposedStart, proposedEnd)
+                        || (selectedEndpoint && selectedRangeRestConflict);
                     const isBusyManual = slotConflict.manual
                         || (selectedEndpoint && selectedRangeConflict.manual);
                     const isBusySystem = slotConflict.sistema
                         || (selectedEndpoint && selectedRangeConflict.sistema);
 
-                    if (isBusyManual) {
+                    if (restConflict) {
+                        slot.classList.add('busy');
+                        slot.title = 'Mantenha pelo menos 1 hora entre agendamentos.';
+                        container.appendChild(slot);
+                        continue;
+                    } else if (isBusyManual) {
                         slot.classList.add('busy');
                         slot.title = 'Horário indisponível';
                         container.appendChild(slot);
@@ -1036,14 +1102,26 @@
             const dateStr = sel.date?.toISOString().split('T')[0];
             const start = sel.start ? sel.start.split(':').map(Number) : null;
             const end = sel.end ? sel.end.split(':').map(Number) : null;
+            const eventsOnDay = getCalendarEventsForLocal(
+                getCalendarEventsOnDate(googleEvents, dateStr),
+                document.getElementById('localSelecionado')?.value || 'teatro',
+                unificarEspacos
+            );
             const conflito = start && end
                 ? getCalendarConflictStatus(
-                    getCalendarEventsForLocal(googleEvents.filter(event => event.start.startsWith(dateStr)), document.getElementById('localSelecionado')?.value || 'teatro', unificarEspacos),
+                    eventsOnDay,
                     start[0] * 60 + start[1],
                     end[0] * 60 + end[1]
                 )
                 : { manual: false, sistema: false };
-            const horarioPermitido = !conflito.manual && (!conflito.sistema || permitirDisputa);
+            const conflitoDescanso = start && end
+                && getCalendarRestConflictStatus(
+                    eventsOnDay,
+                    dateStr,
+                    start[0] * 60 + start[1],
+                    end[0] * 60 + end[1]
+                );
+            const horarioPermitido = !conflitoDescanso && !conflito.manual && (!conflito.sistema || permitirDisputa);
             if (sel.date && sel.start && sel.end && horarioPermitido) {
                 btn.classList.add('show');
             } else {

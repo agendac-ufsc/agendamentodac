@@ -7,6 +7,9 @@ const vm = require('node:vm');
 const {
     parseTimeRange,
     schedulesConflict,
+    scheduleConflictsWithCalendarEvents,
+    usesMinimumRestInterval,
+    MINIMUM_REST_INTERVAL_MINUTES,
     shouldBlockScheduleConflict,
     classifyCalendarEventSource,
     createOfficializedCalendarBlocks
@@ -48,6 +51,44 @@ test('schedulesConflict permite outra data e horários além da margem de segura
     };
 
     assert.equal(schedulesConflict(solicitada, existente), false);
+});
+
+test('novas inscrições exigem 60 minutos de intervalo entre horários', () => {
+    const eventoAnterior = { evento: { data: '2026-11-20', horario: '12:00 às 13:00' } };
+    const trintaMinutosDepois = { evento: { data: '2026-11-20', horario: '13:30 às 14:00' } };
+    const umaHoraDepois = { evento: { data: '2026-11-20', horario: '14:00 às 15:00' } };
+    const trintaMinutosAntes = { evento: { data: '2026-11-20', horario: '10:30 às 11:30' } };
+    const umaHoraAntes = { evento: { data: '2026-11-20', horario: '10:00 às 11:00' } };
+
+    assert.equal(MINIMUM_REST_INTERVAL_MINUTES, 60);
+    assert.equal(schedulesConflict(trintaMinutosDepois, eventoAnterior, MINIMUM_REST_INTERVAL_MINUTES), true);
+    assert.equal(schedulesConflict(umaHoraDepois, eventoAnterior, MINIMUM_REST_INTERVAL_MINUTES), false);
+    assert.equal(schedulesConflict(trintaMinutosAntes, eventoAnterior, MINIMUM_REST_INTERVAL_MINUTES), true);
+    assert.equal(schedulesConflict(umaHoraAntes, eventoAnterior, MINIMUM_REST_INTERVAL_MINUTES), false);
+});
+
+test('a revalidação de descanso não afeta inscrições criadas antes da regra', () => {
+    assert.equal(usesMinimumRestInterval({}), false);
+    assert.equal(usesMinimumRestInterval({ intervaloDescansoMinutos: 30 }), false);
+    assert.equal(usesMinimumRestInterval({ intervaloDescansoMinutos: 60 }), true);
+});
+
+test('descanso é validado contra eventos do calendário, inclusive eventos de sistema', () => {
+    const evento = {
+        start: '2026-11-20T12:00:00-03:00',
+        end: '2026-11-20T13:00:00-03:00',
+        local: 'teatro',
+        source: 'sistema'
+    };
+    const trintaMinutosDepois = { evento: { data: '2026-11-20', horario: '13:30 às 14:00' } };
+    const umaHoraDepois = { evento: { data: '2026-11-20', horario: '14:00 às 15:00' } };
+
+    assert.equal(scheduleConflictsWithCalendarEvents(trintaMinutosDepois, [evento]), true);
+    assert.equal(scheduleConflictsWithCalendarEvents(umaHoraDepois, [evento]), false);
+    assert.equal(scheduleConflictsWithCalendarEvents(trintaMinutosDepois, [evento], 60, {
+        compareDifferentLocations: false,
+        firstLocation: 'igrejinha'
+    }), false);
 });
 
 test('horários oficializados bloqueiam conflitos mesmo com disputa permitida', () => {
@@ -149,5 +190,22 @@ for (const file of ['index-teste.html', 'index.html']) {
         assert.equal(classify(teatroSeparado, 13 * 60 + 30, 15 * 60).sistema, false);
         assert.equal(classify(filterByLocal(eventos, 'teatro', true), 13 * 60 + 30, 15 * 60).sistema, true);
         assert.equal(filterByLocal(eventos, 'Igrejinha da UFSC', false).length, 1);
+    });
+
+    test(`${file} bloqueia início com menos de uma hora de descanso`, () => {
+        const html = fs.readFileSync(path.join(__dirname, file), 'utf8');
+        const restSource = extractFunction(html, 'getCalendarRestConflictStatus');
+        const checkRest = vm.runInNewContext(`(${restSource})`);
+        const evento = {
+            start: '2026-11-20T12:00:00-03:00',
+            end: '2026-11-20T13:00:00-03:00',
+            source: 'sistema'
+        };
+
+        assert.equal(checkRest([evento], '2026-11-20', 13 * 60 + 30, 14 * 60), true);
+        assert.equal(checkRest([evento], '2026-11-20', 14 * 60, 15 * 60), false);
+        assert.equal(checkRest([evento], '2026-11-20', 11 * 60, 12 * 60), true);
+        assert.equal(checkRest([evento], '2026-11-20', 10 * 60, 11 * 60), false);
+        assert.equal(checkRest([{ start: '2026-11-20', end: '2026-11-21' }], '2026-11-20', 14 * 60, 15 * 60), true);
     });
 }

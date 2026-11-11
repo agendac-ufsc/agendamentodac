@@ -1,5 +1,6 @@
 const TIME_RANGE_PATTERN = /^\s*(\d{1,2}:\d{2})\s*(?:às|[-–—])\s*(\d{1,2}:\d{2})\s*$/i;
 const DEFAULT_CONFLICT_BUFFER_MINUTES = 30;
+const MINIMUM_REST_INTERVAL_MINUTES = 60;
 
 function timeToMinutes(value) {
     const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
@@ -107,12 +108,73 @@ function schedulesConflict(firstStages, secondStages, bufferMinutes = DEFAULT_CO
     });
 }
 
+function parseCalendarEventTimestamp(value) {
+    const text = String(value || '').trim();
+    if (!text) return null;
+    const normalized = /^\d{4}-\d{2}-\d{2}$/.test(text)
+        ? `${text}T00:00:00-03:00`
+        : text;
+    const timestamp = Date.parse(normalized);
+    return Number.isFinite(timestamp) ? timestamp : null;
+}
+
+function scheduleConflictsWithCalendarEvents(
+    stages,
+    events,
+    bufferMinutes = MINIMUM_REST_INTERVAL_MINUTES,
+    locationOptions = {}
+) {
+    const bufferMs = (Number.isFinite(bufferMinutes)
+        ? Math.max(0, bufferMinutes)
+        : MINIMUM_REST_INTERVAL_MINUTES) * 60 * 1000;
+    const firstLocation = normalizeScheduleLocation(locationOptions.firstLocation);
+    const excludedRegistrationId = String(locationOptions.excludeRegistrationId || '');
+    const items = flattenStageItems(stages);
+
+    return items.some(item => {
+        const date = String(item.data || '');
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+        const range = parseTimeRange(item.horario);
+        if (!range) return false;
+
+        const formatTime = minutes =>
+            `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+        const candidateStart = Date.parse(`${date}T${formatTime(range.start)}:00-03:00`);
+        const candidateEnd = Date.parse(`${date}T${formatTime(range.end)}:00-03:00`);
+        if (!Number.isFinite(candidateStart) || !Number.isFinite(candidateEnd)) return false;
+
+        return (events || []).some(event => {
+            if (!event || event.status === 'cancelled') return false;
+            if (excludedRegistrationId && String(event.registrationId || '') === excludedRegistrationId) return false;
+
+            if (locationOptions.compareDifferentLocations === false) {
+                const eventLocation = normalizeScheduleLocation(event.local);
+                if (firstLocation && eventLocation && firstLocation !== eventLocation) return false;
+            }
+
+            const eventStart = parseCalendarEventTimestamp(event.start?.dateTime || event.start?.date || event.start);
+            const eventEnd = parseCalendarEventTimestamp(event.end?.dateTime || event.end?.date || event.end);
+            if (eventStart === null || eventEnd === null || eventEnd <= eventStart) return false;
+
+            return candidateStart < eventEnd + bufferMs
+                && candidateEnd + bufferMs > eventStart;
+        });
+    });
+}
+
+function usesMinimumRestInterval(registration) {
+    return Number(registration?.intervaloDescansoMinutos) >= MINIMUM_REST_INTERVAL_MINUTES;
+}
+
 module.exports = {
     DEFAULT_CONFLICT_BUFFER_MINUTES,
+    MINIMUM_REST_INTERVAL_MINUTES,
     intervalsConflict,
     parseTimeRange,
     shouldBlockScheduleConflict,
     classifyCalendarEventSource,
     createOfficializedCalendarBlocks,
-    schedulesConflict
+    schedulesConflict,
+    scheduleConflictsWithCalendarEvents,
+    usesMinimumRestInterval
 };
