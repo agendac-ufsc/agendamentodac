@@ -63,6 +63,8 @@ function renderClassificacoes({
     };
     const context = {
         document: { getElementById: id => nodes[id] || null },
+        RUBRICA_NIVEL_ID: '__nivel_avaliacao',
+        RUBRICA_NIVEL_ID_812: '__nivel_avaliacao_812',
         viewerEmail,
         viewerCanDeleteInscricoes,
         scoresCache,
@@ -70,7 +72,6 @@ function renderClassificacoes({
         allUnificados: proposals,
         avaliacoesNecessarias,
         obterPropostasEmOrdem: () => proposals,
-        avaliacaoFinalizada: avaliacao => avaliacao?.finalized === true && avaliacao?.complete === true,
         obterNumeroProposta: () => '42',
         calcularPontuacaoObtida: scores => Number(scores?.points || 0),
         escapeHtml: valor => String(valor ?? ''),
@@ -78,7 +79,20 @@ function renderClassificacoes({
         formatarPontuacao: valor => String(valor)
     };
 
-    vm.runInNewContext(`${renderFunction[0]}\nrenderClassificacaoList();`, context);
+    const helpers = [
+        extractFunction('obterCriterioEliminatorioReprovado'),
+        extractFunction('obterDesclassificacaoProposta')
+    ].join('\n');
+    const avaliacaoFinalizada = `
+        function avaliacaoFinalizada(avaliacao) {
+            const scores = avaliacao?.scoresJson || {};
+            return Boolean(
+                obterCriterioEliminatorioReprovado(scores)
+                || (avaliacao?.finalized === true && avaliacao?.complete === true)
+            );
+        }
+    `;
+    vm.runInNewContext(`${helpers}\n${avaliacaoFinalizada}\n${renderFunction[0]}\nrenderClassificacaoList();`, context);
     return nodes;
 }
 
@@ -183,6 +197,28 @@ test('mostra avaliações dos outros mesmo quando o avaliador atual ainda não a
     assert.doesNotMatch(nodes.classificacaoRows.innerHTML, /ranking-classification-input/);
 });
 
+test('mostra a reprovação eliminatória no ranking e bloqueia classificação manual', () => {
+    const nodes = renderClassificacoes({
+        viewerEmail: 'outro@exemplo.invalid',
+        proposals: [proposal],
+        scoresCache: {
+            'proposal-42': [{
+                evaluatorEmail: 'avaliadora@exemplo.invalid',
+                inscriptionId: 'proposal-42',
+                finalized: true,
+                complete: false,
+                scoresJson: { __nivel_avaliacao_812: 0 },
+                classification: 'Reprovada'
+            }]
+        }
+    });
+
+    assert.match(nodes.classificacaoRows.innerHTML, /class="proposal-score">\s*—/);
+    assert.match(nodes.classificacaoRows.innerHTML, /Reprovada pelo item 8\.1\.2/);
+    assert.match(nodes.classificacaoRows.innerHTML, /Reprovada · item 8\.1\.2/);
+    assert.doesNotMatch(nodes.classificacaoRows.innerHTML, /ranking-classification-input/);
+});
+
 test('a lixeira da classificação só aparece para avaliador autorizado', () => {
     const common = {
         viewerEmail: 'avaliadora@exemplo.invalid',
@@ -224,6 +260,71 @@ test('libera critérios de avaliação em sequência somente após salvar o ante
     assert.equal(functions.criterioBloqueado(keys[2], secondScoreSaved), false);
     assert.equal(functions.criterioBloqueado(keys[3], secondScoreSaved), true);
     assert.equal(functions.obterPrimeiroCriterioPendente(secondScoreSaved), keys[2]);
+});
+
+test('selecionar não atende em 8.1.1 ou 8.1.2 salva a reprovação imediatamente', () => {
+    function selecionarNivel(criterionKey, value) {
+        const scores = {};
+        const saves = [];
+        const context = {
+            RUBRICA_NIVEL_ID: '__nivel_avaliacao',
+            RUBRICA_NIVEL_ID_812: '__nivel_avaliacao_812',
+            currentAvaliacaoIndex: 0,
+            currentAvaliacaoScores: scores,
+            allUnificados: [{ primeiraEtapa: { id: 'proposal-42' } }],
+            desclassificacaoAutomaticaEmAndamento: null,
+            criterioBloqueado: () => false,
+            obterScoresSalvosAvaliadorAtual: () => ({}),
+            obterSufixoRubrica: key => key.replace('__nivel_avaliacao', ''),
+            obterEstadoRubrica: () => ({}),
+            document: { getElementById: () => ({ dataset: { savedValue: '' } }) },
+            renderAvaliacaoList: () => {},
+            salvarAvaliacao: key => saves.push(key)
+        };
+        const helpers = [
+            extractFunction('obterCriterioEliminatorioReprovado'),
+            extractFunction('setRubricaNivel')
+        ].join('\n');
+        const functions = vm.runInNewContext(
+            `${helpers}\n({ setRubricaNivel })`,
+            context
+        );
+
+        functions.setRubricaNivel(criterionKey, 'A', value, 'Não atende o critério');
+        return { saves, scores, pending: context.desclassificacaoAutomaticaEmAndamento };
+    }
+
+    const item811 = selecionarNivel('__nivel_avaliacao', 0);
+    const item812 = selecionarNivel('__nivel_avaliacao_812', 0);
+    const atendeParcialmente = selecionarNivel('__nivel_avaliacao', 1);
+
+    assert.deepEqual(item811.saves, ['__nivel_avaliacao']);
+    assert.equal(item811.pending, 'proposal-42:__nivel_avaliacao');
+    assert.deepEqual(item812.saves, ['__nivel_avaliacao_812']);
+    assert.equal(item812.pending, 'proposal-42:__nivel_avaliacao_812');
+    assert.deepEqual(atendeParcialmente.saves, []);
+});
+
+test('bloqueia as rubricas após reprovação eliminatória salva ou recém-selecionada', () => {
+    const source = [
+        extractFunction('obterCriterioEliminatorioReprovado'),
+        extractFunction('obterDesclassificacaoProposta'),
+        extractFunction('podeContinuarAvaliacao')
+    ].join('\n');
+    const functions = vm.runInNewContext(
+        `${source}\n({ podeContinuarAvaliacao })`,
+        {
+            RUBRICA_NIVEL_ID: '__nivel_avaliacao',
+            RUBRICA_NIVEL_ID_812: '__nivel_avaliacao_812'
+        }
+    );
+
+    assert.equal(functions.podeContinuarAvaliacao({ status: 'aprovado' }, [], { __nivel_avaliacao: 0 }), false);
+    assert.equal(functions.podeContinuarAvaliacao({ status: 'aprovado' }, [
+        { scoresJson: { __nivel_avaliacao_812: 0 } }
+    ], { __nivel_avaliacao: 2 }), false);
+    assert.equal(functions.podeContinuarAvaliacao({ status: 'aprovado' }, [], { __nivel_avaliacao: 1 }), true);
+    assert.equal(functions.podeContinuarAvaliacao({ status: 'reprovado' }, [], {}), false);
 });
 
 test('mostra visual bloqueado e impede interação até o critério anterior ser salvo', () => {

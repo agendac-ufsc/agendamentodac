@@ -23,6 +23,10 @@ const { createHmac, randomUUID, randomInt, timingSafeEqual } = require('crypto')
 const { Readable } = require('stream');
 const { createAssessmentStore } = require('./assessment-store');
 const {
+    encontrarCriterioEliminatorioReprovado,
+    encontrarDesclassificacaoProposta
+} = require('./evaluation-disqualification');
+const {
     EVALUATOR_SESSION_TTL_SECONDS,
     authenticateEvaluatorSession,
     canDeleteInscricoes,
@@ -5820,6 +5824,13 @@ app.post('/api/save-assessment', async (req, res) => {
     if (!redis) return res.status(503).json({ error: 'Armazenamento de avaliações indisponível.' });
     try {
         const avaliacoes = await assessmentStore.getByInscription(inscriptionId);
+        const desclassificacaoExistente = encontrarDesclassificacaoProposta(avaliacoes);
+        if (desclassificacaoExistente) {
+            return res.status(409).json({
+                error: `Inscrição reprovada automaticamente pelo item ${desclassificacaoExistente.item}. As demais avaliações foram encerradas.`,
+                disqualification: desclassificacaoExistente
+            });
+        }
         const emailNormalizado = String(evaluatorEmail).trim().toLowerCase();
         const idx = avaliacoes.findIndex(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado);
         const scoresAnteriores = idx >= 0 && avaliacoes[idx].scoresJson && typeof avaliacoes[idx].scoresJson === 'object'
@@ -5829,10 +5840,13 @@ app.post('/api/save-assessment', async (req, res) => {
         const criteriosRaw = await redis.get('criterios');
         const criteriosAtivos = parseRedisValue(criteriosRaw) || CRITERIOS_DEFAULT;
         const rubricaNiveis = ehRubricaDeNiveis(criteriosAtivos);
+        const desclassificacao = rubricaNiveis
+            ? encontrarCriterioEliminatorioReprovado(scoresAtualizados)
+            : null;
         const chavesAvaliacao = rubricaNiveis
             ? RUBRICA_NIVEL_CHAVES
             : criteriosAtivos.map(criterio => criterio.id);
-        if (finalize === true) {
+        if (finalize === true && !desclassificacao) {
             const niveisValidos = criteriosAtivos.map(criterio => Number(criterio.peso));
             const incompletos = chavesAvaliacao.filter(chave => {
                 const valor = scoresJson[chave];
@@ -5850,7 +5864,7 @@ app.post('/api/save-assessment', async (req, res) => {
         const updatedAt = new Date().toISOString();
         // Salvar um critério mantém a avaliação em andamento; só o salvamento
         // geral explícito pode concluí-la, mesmo quando ela já foi finalizada.
-        const finalized = finalize === true;
+        const finalized = finalize === true || Boolean(desclassificacao);
         const entry = {
             ...(idx >= 0 ? avaliacoes[idx] : {}),
             inscriptionId,
@@ -5860,7 +5874,8 @@ app.post('/api/save-assessment', async (req, res) => {
             finalizedAt: finalized ? updatedAt : null,
             updatedAt,
             inscriptionSnapshot: normalizarSnapshotAvaliacao(inscriptionSnapshot)
-                || (idx >= 0 ? avaliacoes[idx].inscriptionSnapshot : null)
+                || (idx >= 0 ? avaliacoes[idx].inscriptionSnapshot : null),
+            ...(desclassificacao ? { classification: 'Reprovada' } : {})
         };
         await assessmentStore.save(entry);
         const savedAssessments = await assessmentStore.getByInscription(inscriptionId);
@@ -5873,7 +5888,12 @@ app.post('/api/save-assessment', async (req, res) => {
         if (!savedEntry || !scoresConfirmed || savedEntry.finalized !== entry.finalized) {
             return res.status(500).json({ error: 'Não foi possível confirmar a persistência da avaliação.' });
         }
-        res.json({ success: true, finalized: savedEntry.finalized, finalizedAt: savedEntry.finalizedAt || null });
+        res.json({
+            success: true,
+            finalized: savedEntry.finalized,
+            finalizedAt: savedEntry.finalizedAt || null,
+            disqualification: desclassificacao
+        });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar avaliação.' });
     }
@@ -5893,6 +5913,13 @@ app.post('/api/save-assessment-classification', async (req, res) => {
     if (!redis) return res.status(503).json({ error: 'Armazenamento de avaliações indisponível.' });
     try {
         const avaliacoes = await assessmentStore.getByInscription(inscriptionId);
+        const desclassificacao = encontrarDesclassificacaoProposta(avaliacoes);
+        if (desclassificacao) {
+            return res.status(409).json({
+                error: `A inscrição foi reprovada automaticamente pelo item ${desclassificacao.item}.`,
+                disqualification: desclassificacao
+            });
+        }
         const emailNormalizado = String(evaluatorEmail).trim().toLowerCase();
         const idx = avaliacoes.findIndex(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado);
         if (idx < 0) return res.status(404).json({ error: 'Avaliação do avaliador não encontrada.' });

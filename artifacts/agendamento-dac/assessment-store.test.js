@@ -1,6 +1,10 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { createAssessmentStore } = require('./assessment-store');
+const {
+    encontrarCriterioEliminatorioReprovado,
+    encontrarDesclassificacaoProposta
+} = require('./evaluation-disqualification');
 
 class MemoryRedis {
     constructor() {
@@ -160,4 +164,22 @@ test('exclui todas as avaliações de uma inscrição sem afetar as demais do av
         ['manter-99']
     );
     assert.deepEqual(await store.getByEvaluator('segundo@exemplo.org'), []);
+});
+
+test('identifica reprovação automática somente nos itens 8.1.1 e 8.1.2 com nota zero', () => {
+    assert.equal(encontrarCriterioEliminatorioReprovado({ __nivel_avaliacao: 0 })?.item, '8.1.1');
+    assert.equal(encontrarCriterioEliminatorioReprovado({ __nivel_avaliacao_812: '0' })?.item, '8.1.2');
+    assert.equal(encontrarCriterioEliminatorioReprovado({ __nivel_avaliacao: 1 }), null);
+    assert.equal(encontrarCriterioEliminatorioReprovado({ __nivel_avaliacao: '' }), null);
+    assert.equal(encontrarCriterioEliminatorioReprovado({ __nivel_avaliacao_813: 0 }), null);
+});
+
+test('reprovação registrada por qualquer avaliador encerra a proposta', () => {
+    const desclassificacao = encontrarDesclassificacaoProposta([
+        { evaluatorEmail: 'primeiro@exemplo.invalid', scoresJson: { __nivel_avaliacao: 2 } },
+        { evaluatorEmail: 'segundo@exemplo.invalid', scoresJson: { __nivel_avaliacao_812: 0 } }
+    ]);
+
+    assert.equal(desclassificacao?.item, '8.1.2');
+    assert.equal(encontrarDesclassificacaoProposta(null), null);
 });

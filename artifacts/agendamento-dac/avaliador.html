@@ -36,6 +36,8 @@
         .btn-refresh{background:#2563eb;color:#fff}
         .btn-avaliado{background:#15803d;color:#fff}
         .btn-avaliado:hover{background:#166534;opacity:1}
+        .btn-reprovada{background:#b91c1c;color:#fff}
+        .btn-reprovada:hover{background:#991b1b;opacity:1}
         .btn-logout{background:#eee;color:#555;border:1px solid #ddd}
 
         .content-wrap{padding:24px;max-width:1100px;margin:0 auto}
@@ -132,6 +134,8 @@
         .ranking-empty{text-align:center;color:#64748b;padding:24px!important}
         .av-status{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#fef3c7;color:#92400e;margin-left:8px}
         .av-status.done{background:#d1fae5;color:#065f46}
+        .av-status.rejected{background:#fee2e2;color:#991b1b}
+        .ranking-disqualification{display:inline-block;padding:7px 9px;border:1px solid #fecaca;border-radius:6px;background:#fef2f2;color:#991b1b;font-weight:800}
         .local-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
         .local-teatro{background:#ede9fe;color:#7c3aed}
         .local-igrejinha{background:#dcfce7;color:#15803d}
@@ -368,6 +372,7 @@ let currentAvaliacaoScores = {};
 let scoresCache = {}; // {inscricaoId: [avaliacoes]}
 let myAssessmentsCache = null; // fallback persistente das avaliações do avaliador atual
 let openAvaliacaoIndex = null;
+let desclassificacaoAutomaticaEmAndamento = null;
 let avaliadorTabAtiva = 'avaliacoes';
 let inscricoesSelecionadasAvaliador = new Set();
 let inscricoesCanceladasAvaliador = new Set();
@@ -564,7 +569,41 @@ function obterMinhaAvaliacao(item) {
 }
 
 function avaliacaoFinalizada(avaliacao) {
-    return Boolean(avaliacao?.finalized === true && avaliacaoCompleta(avaliacao.scoresJson || {}));
+    const scores = avaliacao?.scoresJson || {};
+    return Boolean(
+        obterCriterioEliminatorioReprovado(scores)
+        || (avaliacao?.finalized === true && avaliacaoCompleta(scores))
+    );
+}
+
+function obterCriterioEliminatorioReprovado(scores = {}) {
+    if (!scores || typeof scores !== 'object' || Array.isArray(scores)) return null;
+
+    for (const criterio of [
+        { scoreKey: RUBRICA_NIVEL_ID, item: '8.1.1' },
+        { scoreKey: RUBRICA_NIVEL_ID_812, item: '8.1.2' }
+    ]) {
+        const valor = scores[criterio.scoreKey];
+        if (valor === undefined || valor === null || String(valor).trim() === '') continue;
+        if (Number(valor) === 0) return criterio;
+    }
+
+    return null;
+}
+
+function obterDesclassificacaoProposta(avaliacoes = []) {
+    if (!Array.isArray(avaliacoes)) return null;
+    for (const avaliacao of avaliacoes) {
+        const criterio = obterCriterioEliminatorioReprovado(avaliacao?.scoresJson);
+        if (criterio) return criterio;
+    }
+    return null;
+}
+
+function podeContinuarAvaliacao(resultadoItem817, avaliacoes = [], scoresAtuais = {}) {
+    return resultadoItem817?.status === 'aprovado'
+        && !obterDesclassificacaoProposta(avaliacoes)
+        && !obterCriterioEliminatorioReprovado(scoresAtuais);
 }
 
 function obterIdInscricaoAvaliador(item) {
@@ -735,14 +774,22 @@ function renderAvaliacaoList() {
         const id = obterIdInscricaoAvaliador(item);
         const avs = scoresCache[id] || [];
         const avaliacoesFinalizadas = avs.filter(av => avaliacaoFinalizada(av)).length;
+        const desclassificacao = obterDesclassificacaoProposta(avs);
         const myAv = obterMinhaAvaliacao(item);
         const myAvFinalizada = avaliacaoFinalizada(myAv);
         const myAvProntaParaFinalizar = Boolean(myAv && avaliacaoCompleta(myAv.scoresJson || {}));
         const isIgrejinha = (p.localNome||'').toLowerCase().includes('igrej');
         const minhaPontuacao = myAv ? calcularPontuacaoObtida(myAv.scoresJson || {}) : null;
-        const statusBadge = myAvFinalizada
-            ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
-            : `<span class="av-status">${myAvProntaParaFinalizar ? 'Pronta para confirmar' : (myAv ? 'Em andamento' : 'Pendente')}</span>`;
+        const statusBadge = desclassificacao
+            ? `<span class="av-status rejected"><i class="fas fa-ban"></i> Reprovada · item ${escapeHtml(desclassificacao.item)}</span>`
+            : (myAvFinalizada
+                ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
+                : `<span class="av-status">${myAvProntaParaFinalizar ? 'Pronta para confirmar' : (myAv ? 'Em andamento' : 'Pendente')}</span>`);
+        const botaoAvaliacao = desclassificacao
+            ? { classe: 'btn-reprovada', icone: 'fa-ban', rotulo: 'Ver reprovação', aria: `Ver reprovação automática pelo item ${desclassificacao.item}` }
+            : (myAvFinalizada
+                ? { classe: 'btn-avaliado', icone: 'fa-check-circle', rotulo: 'Avaliado', aria: 'Editar avaliação' }
+                : { classe: 'btn-refresh', icone: 'fa-star', rotulo: 'Avaliar', aria: 'Avaliar inscrição' });
         const aberta = openAvaliacaoIndex === idx;
         html += `
         <div class="av-card${aberta ? ' open' : ''}">
@@ -758,8 +805,8 @@ function renderAvaliacaoList() {
                 </div>
                 <div class="av-actions">
                     ${minhaPontuacao !== null ? `<span class="av-score" title="Pontuação acumulada">${formatarPontuacao(minhaPontuacao)}/${formatarPontuacaoMaxima()} pts</span>` : ''}
-                    <button class="btn-top ${myAvFinalizada ? 'btn-avaliado' : 'btn-refresh'}" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}" aria-label="${myAvFinalizada ? 'Editar avaliação' : 'Avaliar inscrição'}" title="${myAvFinalizada ? 'Clique para editar a avaliação' : 'Avaliar inscrição'}">
-                        <i class="fas ${myAvFinalizada ? 'fa-check-circle' : 'fa-star'}"></i> ${myAvFinalizada ? 'Avaliado' : 'Avaliar'}
+                    <button class="btn-top ${botaoAvaliacao.classe}" onclick="event.stopPropagation(); openAvaliacao(${idx})" aria-expanded="${aberta ? 'true' : 'false'}" aria-label="${escapeAttr(botaoAvaliacao.aria)}" title="${escapeAttr(botaoAvaliacao.aria)}">
+                        <i class="fas ${botaoAvaliacao.icone}"></i> ${escapeHtml(botaoAvaliacao.rotulo)}
                     </button>
                 </div>
             </div>
@@ -909,6 +956,7 @@ function renderClassificacaoList() {
     }
 
     const avaliadas = [...avaliacoesPorInscricao.entries()].flatMap(([id, registros]) => {
+        const desclassificacao = obterDesclassificacaoProposta(registros);
         const avaliacoesFinalizadas = registros.filter(avaliacaoFinalizada);
         if (!avaliacoesFinalizadas.length) return [];
         const itemAtual = propostasPorId.get(id);
@@ -937,7 +985,8 @@ function renderClassificacaoList() {
             avaliacaoDoUsuario,
             numeroProposta,
             quantidadeAvaliacoes: avaliacoesFinalizadas.length,
-            pontuacao
+            pontuacao,
+            desclassificacao
         }];
     });
 
@@ -952,16 +1001,20 @@ function renderClassificacaoList() {
     const totalNecessario = Number.isFinite(quantidadeNecessaria) && quantidadeNecessaria > 0
         ? quantidadeNecessaria
         : 1;
-    tbody.innerHTML = avaliadas.map(({ id, p, avaliacaoDoUsuario, numeroProposta, quantidadeAvaliacoes, pontuacao }) => {
+    tbody.innerHTML = avaliadas.map(({ id, p, avaliacaoDoUsuario, numeroProposta, quantidadeAvaliacoes, pontuacao, desclassificacao }) => {
         const quantidadeFinalizada = quantidadeAvaliacoes === 1
             ? '1 avaliação finalizada'
             : `${quantidadeAvaliacoes} avaliações finalizadas`;
-        const statusAvaliacoes = quantidadeAvaliacoes >= totalNecessario
-            ? `${quantidadeFinalizada} (mínimo ${totalNecessario})`
-            : `${quantidadeAvaliacoes}/${totalNecessario} avaliações finalizadas`;
+        const statusAvaliacoes = desclassificacao
+            ? `Reprovada pelo item ${desclassificacao.item}`
+            : (quantidadeAvaliacoes >= totalNecessario
+                ? `${quantidadeFinalizada} (mínimo ${totalNecessario})`
+                : `${quantidadeAvaliacoes}/${totalNecessario} avaliações finalizadas`);
         const classificacao = avaliacaoDoUsuario?.classification || '';
         const nomeProposta = p.evento || p.nome || `Inscrição ${id}`;
-        const campoClassificacao = avaliacaoDoUsuario
+        const campoClassificacao = desclassificacao
+            ? `<span class="ranking-disqualification" role="status">Reprovada · item ${escapeHtml(desclassificacao.item)}</span>`
+            : (avaliacaoDoUsuario
             ? `<input class="ranking-classification-input" type="text" maxlength="100"
                     data-inscription-id="${escapeHtml(id)}"
                     data-saved-value="${escapeHtml(classificacao)}"
@@ -969,7 +1022,7 @@ function renderClassificacaoList() {
                     placeholder="Digite e pressione Enter para salvar"
                     aria-label="Classificação da proposta ${escapeHtml(numeroProposta)}">
                 <span class="ranking-save-status" aria-live="polite">Enter salva · Esc cancela</span>`
-            : '<span class="ranking-save-status" title="A classificação pode ser editada após sua própria avaliação.">— · disponível após sua avaliação</span>';
+            : '<span class="ranking-save-status" title="A classificação pode ser editada após sua própria avaliação.">— · disponível após sua avaliação</span>');
         const acaoExcluir = viewerCanDeleteInscricoes
             ? `<td class="ranking-delete-cell">
                     <button type="button" class="ranking-delete-button"
@@ -986,7 +1039,7 @@ function renderClassificacaoList() {
             <td class="proposal-number">${escapeHtml(numeroProposta)}</td>
             <td>${escapeHtml(nomeProposta)}</td>
             <td class="proposal-score">
-                ${escapeHtml(formatarPontuacao(pontuacao))}
+                ${desclassificacao ? '—' : escapeHtml(formatarPontuacao(pontuacao))}
                 <small class="ranking-score-meta">${escapeHtml(statusAvaliacoes)}</small>
             </td>
             <td class="ranking-classification-cell">${campoClassificacao}</td>
@@ -1548,9 +1601,24 @@ function avaliarItem817(etapas = {}) {
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
     const resultadoItem817 = avaliarItem817(p.etapas);
-    const mostrarRubricas = resultadoItem817.status === 'aprovado';
+    const id = obterIdInscricaoAvaliador(item);
     const indiceItem = allUnificados.indexOf(item);
     const scoresEmEdicao = currentAvaliacaoIndex === indiceItem ? currentAvaliacaoScores : existingScores;
+    const avaliacoesInscricao = Array.isArray(scoresCache[id]) ? scoresCache[id] : [];
+    const desclassificacaoSalva = obterDesclassificacaoProposta(avaliacoesInscricao);
+    const desclassificacaoAtual = obterCriterioEliminatorioReprovado(scoresEmEdicao);
+    const desclassificacao = desclassificacaoSalva || desclassificacaoAtual;
+    const desclassificacaoLocalPendente = Boolean(desclassificacaoAtual && !desclassificacaoSalva);
+    const chaveDesclassificacao = desclassificacaoAtual
+        ? `${id}:${desclassificacaoAtual.scoreKey}`
+        : '';
+    const salvandoDesclassificacao = desclassificacaoLocalPendente
+        && desclassificacaoAutomaticaEmAndamento === chaveDesclassificacao;
+    const mostrarRubricas = podeContinuarAvaliacao(
+        resultadoItem817,
+        avaliacoesInscricao,
+        scoresEmEdicao
+    );
     const itensAvaliados = contarCriteriosAvaliados(scoresEmEdicao);
     const totalItens = obterChavesAvaliacao().length;
     const avaliacaoCompletaAgora = avaliacaoCompleta(scoresEmEdicao);
@@ -1612,6 +1680,14 @@ function renderDrawerContent(item, existingScores = {}) {
                 <span>${escapeHtml(resultadoItem817.detalhe)}</span>
             </div>
         </div>
+        ${desclassificacao ? `
+        <div class="drawer-schedule-eligibility" role="status" aria-live="polite" data-eliminatory-item="${escapeAttr(desclassificacao.item)}" style="margin-top:12px;padding:11px 13px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b">
+            <strong>Item ${escapeHtml(desclassificacao.item)} — Reprovada</strong>
+            <span>A inscrição foi desclassificada. Os demais critérios não serão avaliados.</span>
+            ${desclassificacaoLocalPendente ? (salvandoDesclassificacao
+                ? '<span aria-live="polite">Salvando a reprovação...</span>'
+                : `<button type="button" class="btn-rubric-save" onclick="tentarSalvarDesclassificacao('${escapeAttr(desclassificacaoAtual.scoreKey)}')">Tentar salvar reprovação</button>`) : ''}
+        </div>` : ''}
         ${mostrarRubricas ? `
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID, `
             <div class="drawer-criterion">
@@ -1843,7 +1919,30 @@ function setRubricaNivel(criterionKey, criterioId, valor, nome) {
     const mesmaAvaliaçãoSalva = valorSalvo !== '' && Number(valorSalvo) === Number(valor);
     estado.editando = !mesmaAvaliaçãoSalva;
     estado.opcoesAbertas = !mesmaAvaliaçãoSalva;
+    const desclassificacao = obterCriterioEliminatorioReprovado({
+        [criterionKey]: Number(valor)
+    });
+    if (desclassificacao) {
+        const inscricao = allUnificados[currentAvaliacaoIndex]?.primeiraEtapa || {};
+        const id = String(inscricao.id || inscricao.email || '').trim();
+        desclassificacaoAutomaticaEmAndamento = `${id}:${desclassificacao.scoreKey}`;
+    }
     renderAvaliacaoList();
+    if (desclassificacao) void salvarAvaliacao(criterionKey);
+}
+
+function tentarSalvarDesclassificacao(criterionKey) {
+    if (currentAvaliacaoIndex === null) return;
+    if (!obterCriterioEliminatorioReprovado({ [criterionKey]: currentAvaliacaoScores?.[criterionKey] })) return;
+
+    const inscricao = allUnificados[currentAvaliacaoIndex]?.primeiraEtapa || {};
+    const id = String(inscricao.id || inscricao.email || '').trim();
+    const tentativa = `${id}:${criterionKey}`;
+    if (desclassificacaoAutomaticaEmAndamento === tentativa) return;
+
+    desclassificacaoAutomaticaEmAndamento = tentativa;
+    renderAvaliacaoList();
+    void salvarAvaliacao(criterionKey);
 }
 
 async function openAvaliacao(idx) {
@@ -1893,7 +1992,15 @@ async function salvarAvaliacao(criterionKey = null) {
     if (currentAvaliacaoIndex === null) return;
     const p = allUnificados[currentAvaliacaoIndex].primeiraEtapa;
     const id = p.id || p.email;
+    const criterioEliminatorioAtual = obterCriterioEliminatorioReprovado(currentAvaliacaoScores);
+    const chaveTentativaDesclassificacao = criterioEliminatorioAtual
+        ? `${id}:${criterioEliminatorioAtual.scoreKey}`
+        : '';
     if (!viewerEmail) {
+        if (desclassificacaoAutomaticaEmAndamento === chaveTentativaDesclassificacao) {
+            desclassificacaoAutomaticaEmAndamento = null;
+            renderAvaliacaoList();
+        }
         await showAvaliadorDialog('Sessão expirada. Faça login novamente.', {
             title: 'Sessão expirada',
             confirmLabel: 'OK',
@@ -1966,6 +2073,8 @@ async function salvarAvaliacao(criterionKey = null) {
         });
         const d = await r.json();
         if (d.success) {
+            const desclassificacaoSalva = d.disqualification
+                || obterCriterioEliminatorioReprovado(scoresParaSalvar);
             // Atualizar a pontuação exibida imediatamente após o salvamento.
             const avaliacoesAtuais = Array.isArray(scoresCache[id]) ? [...scoresCache[id]] : [];
             const indiceMinhaAvaliacao = avaliacoesAtuais.findIndex(
@@ -1979,9 +2088,10 @@ async function salvarAvaliacao(criterionKey = null) {
                 scoresJson: { ...(avaliacaoAnterior.scoresJson || {}), ...scoresParaSalvar },
                 finalized: d.finalized === true,
                 finalizedAt: d.finalizedAt || null,
-                updatedAt: new Date().toISOString()
+                updatedAt: new Date().toISOString(),
+                ...(desclassificacaoSalva ? { classification: 'Reprovada' } : {})
             };
-            const proximoCriterioPendente = salvarCriterio
+            const proximoCriterioPendente = salvarCriterio && !desclassificacaoSalva
                 ? obterPrimeiroCriterioPendente(avaliacaoSalva.scoresJson)
                 : null;
             if (indiceMinhaAvaliacao >= 0) {
@@ -2010,6 +2120,10 @@ async function salvarAvaliacao(criterionKey = null) {
             );
             if (indicePersistida >= 0) myAssessmentsCache[indicePersistida] = avaliacaoPersistida;
             else myAssessmentsCache.push(avaliacaoPersistida);
+            if (chaveTentativaDesclassificacao
+                && desclassificacaoAutomaticaEmAndamento === chaveTentativaDesclassificacao) {
+                desclassificacaoAutomaticaEmAndamento = null;
+            }
             const avaliacaoConcluidaAgora = !salvarCriterio
                 && d.finalized === true
                 && !avaliacaoFinalizada(avaliacaoAnterior);
@@ -2031,12 +2145,16 @@ async function salvarAvaliacao(criterionKey = null) {
             }
             renderAvaliacaoList();
             if (proximoCriterioPendente) centralizarEtapaAvaliacao(proximoCriterioPendente);
-            const mensagemSucesso = avaliacaoConcluidaAgora
-                ? 'Avaliação concluída e salva com sucesso!'
-                : (salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!');
-            const tituloSucesso = avaliacaoConcluidaAgora
-                ? 'Avaliação concluída'
-                : (salvarCriterio ? 'Critério salvo' : 'Avaliação salva');
+            const mensagemSucesso = desclassificacaoSalva
+                ? `Proposta reprovada automaticamente pelo item ${desclassificacaoSalva.item}. Os demais critérios não serão avaliados.`
+                : (avaliacaoConcluidaAgora
+                    ? 'Avaliação concluída e salva com sucesso!'
+                    : (salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!'));
+            const tituloSucesso = desclassificacaoSalva
+                ? 'Proposta reprovada'
+                : (avaliacaoConcluidaAgora
+                    ? 'Avaliação concluída'
+                    : (salvarCriterio ? 'Critério salvo' : 'Avaliação salva'));
             await showAvaliadorDialog(mensagemSucesso, {
                 title: tituloSucesso,
                 confirmLabel: 'OK',
@@ -2044,6 +2162,20 @@ async function salvarAvaliacao(criterionKey = null) {
                 success: true
             });
         } else {
+            if (r.status === 409) {
+                try {
+                    const atualizacoes = await fetch(`/api/assessments/${encodeURIComponent(id)}`);
+                    const avaliacoesDaInscricao = await atualizacoes.json();
+                    if (atualizacoes.ok && Array.isArray(avaliacoesDaInscricao)) {
+                        scoresCache[id] = avaliacoesDaInscricao;
+                    }
+                } catch (erro) {}
+            }
+            if (chaveTentativaDesclassificacao
+                && desclassificacaoAutomaticaEmAndamento === chaveTentativaDesclassificacao) {
+                desclassificacaoAutomaticaEmAndamento = null;
+            }
+            renderAvaliacaoList();
             await showAvaliadorDialog('Erro ao salvar: ' + (d.error || ''), {
                 title: 'Não foi possível salvar',
                 confirmLabel: 'OK',
@@ -2052,6 +2184,11 @@ async function salvarAvaliacao(criterionKey = null) {
             });
         }
     } catch(e) {
+        if (chaveTentativaDesclassificacao
+            && desclassificacaoAutomaticaEmAndamento === chaveTentativaDesclassificacao) {
+            desclassificacaoAutomaticaEmAndamento = null;
+        }
+        renderAvaliacaoList();
         await showAvaliadorDialog('Erro de conexão: ' + e.message, {
             title: 'Erro de conexão',
             confirmLabel: 'OK',
