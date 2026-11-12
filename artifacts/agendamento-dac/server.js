@@ -48,6 +48,11 @@ const {
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
 const {
+    normalizeEvaluationMode,
+    normalizeManualEvaluationCount,
+    resolveRequiredEvaluationCount
+} = require('./evaluation-threshold');
+const {
     MINIMUM_REST_INTERVAL_MINUTES,
     schedulesConflict,
     scheduleConflictsWithCalendarEvents,
@@ -589,6 +594,7 @@ let HORARIOS_LIMITES = {
 let DATAS_BLOQUEADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 let AVALIACOES_NECESSARIAS = 3;
+let AVALIACOES_NECESSARIAS_MODO = 'automatico';
 // O modo unificado é o padrão permanente. O modo de 2 etapas só pode ser
 // ativado com a chave explícita de emergência abaixo.
 const MODO_2_ETAPAS_CHAVE_EMERGENCIA = 'DAC-EMERGENCIA-MODO-2-ETAPAS';
@@ -607,6 +613,26 @@ let MENSAGEM_DIVULGACAO = MENSAGEM_DIVULGACAO_PADRAO;
 let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
 const CONFIG_KEY = 'agendamentos_config';
+async function obterNumeroAvaliadoresCadastrados() {
+    if (!redis) return null;
+    try {
+        const avaliadores = parseRedisValue(await redis.get('avaliadores'));
+        return Array.isArray(avaliadores) ? avaliadores.length : 0;
+    } catch (error) {
+        console.warn('[Avaliações] Não foi possível contar os avaliadores cadastrados:', error.message);
+        return null;
+    }
+}
+
+async function obterAvaliacoesNecessariasEfetivas(configs = {}) {
+    const numeroAvaliadores = await obterNumeroAvaliadoresCadastrados();
+    return resolveRequiredEvaluationCount({
+        mode: configs.avaliacoesNecessariasModo ?? AVALIACOES_NECESSARIAS_MODO,
+        manualCount: configs.avaliacoesNecessarias ?? AVALIACOES_NECESSARIAS,
+        evaluatorCount: numeroAvaliadores
+    });
+}
+
 const normalizarModoInscricao = (modo, chaveEmergencia = '') => {
     if (modo === 'unificado') return 'unificado';
     if (modo === 'duas-etapas' && String(chaveEmergencia).trim() === MODO_2_ETAPAS_CHAVE_EMERGENCIA) return 'duas-etapas';
@@ -682,9 +708,9 @@ const getConfigs = async (caller = 'unknown') => {
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
                 MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
                 if (configs.avaliacoesNecessarias !== undefined) {
-                    const n = parseInt(configs.avaliacoesNecessarias, 10);
-                    if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
+                    AVALIACOES_NECESSARIAS = normalizeManualEvaluationCount(configs.avaliacoesNecessarias);
                 }
+                AVALIACOES_NECESSARIAS_MODO = normalizeEvaluationMode(configs.avaliacoesNecessariasModo);
                 if (typeof configs.responsavelTermoNome === 'string' && configs.responsavelTermoNome.trim()) {
                     RESPONSAVEL_TERMO_NOME = configs.responsavelTermoNome.trim();
                 }
@@ -717,6 +743,7 @@ const getConfigs = async (caller = 'unknown') => {
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                     modoInscricao: MODO_INSCRICAO,
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+                    avaliacoesNecessariasModo: AVALIACOES_NECESSARIAS_MODO,
                     responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
                     botoesHome: BOTOES_HOME,
                     mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
@@ -744,6 +771,7 @@ const getConfigs = async (caller = 'unknown') => {
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
         modoInscricao: MODO_INSCRICAO,
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+        avaliacoesNecessariasModo: AVALIACOES_NECESSARIAS_MODO,
         responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
         botoesHome: BOTOES_HOME,
         mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
@@ -801,8 +829,10 @@ const saveConfigs = async (configs) => {
             MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
         }
         if (configs.avaliacoesNecessarias !== undefined) {
-            const n = parseInt(configs.avaliacoesNecessarias, 10);
-            if (Number.isFinite(n) && n > 0) AVALIACOES_NECESSARIAS = Math.min(n, 20);
+            AVALIACOES_NECESSARIAS = normalizeManualEvaluationCount(configs.avaliacoesNecessarias);
+        }
+        if (configs.avaliacoesNecessariasModo !== undefined) {
+            AVALIACOES_NECESSARIAS_MODO = normalizeEvaluationMode(configs.avaliacoesNecessariasModo);
         }
         if (configs.responsavelTermoNome !== undefined) {
             const nome = String(configs.responsavelTermoNome || '').trim();
@@ -843,6 +873,7 @@ const saveConfigs = async (configs) => {
                 modoInscricao: MODO_INSCRICAO,
                 ...(MODO_INSCRICAO === 'duas-etapas' ? { modoInscricaoEmergencia: MODO_2_ETAPAS_CHAVE_EMERGENCIA } : {}),
                 avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+                avaliacoesNecessariasModo: AVALIACOES_NECESSARIAS_MODO,
                 responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
                 botoesHome: BOTOES_HOME,
                 mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
@@ -1018,12 +1049,13 @@ app.get('/api/debug', async (req, res) => {
 // Rota para obter configurações (pública para o site poder pegar o link do forms)
 app.get('/api/config', async (req, res) => {
     const configs = await getConfigs('GET /api/config');
-    res.json(configs);
+    const avaliacoesNecessariasEfetivas = await obterAvaliacoesNecessariasEfetivas(configs);
+    res.json({ ...configs, avaliacoesNecessariasEfetivas });
 });
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
@@ -1031,7 +1063,7 @@ app.post('/api/admin/config', async (req, res) => {
     if (modoInscricao === 'duas-etapas' && String(modoInscricaoEmergencia || '').trim() !== MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
         return res.status(403).json({ success: false, error: 'O modo de 2 etapas está bloqueado. Informe a chave de emergência autorizada.' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, responsavelTermoNome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
@@ -5896,7 +5928,15 @@ app.get('/api/admin/relatorio-avaliacoes', async (req, res) => {
         ];
         const cfgRaw = redis ? await redis.get('agendamentos_config') : null;
         const cfg = parseRedisValue(cfgRaw) || {};
-        const necessarias = parseInt(cfg.avaliacoesNecessarias || 3);
+        const avaliadoresRaw = redis ? await redis.get('avaliadores') : null;
+        const avaliadoresCadastrados = parseRedisValue(avaliadoresRaw);
+        const necessarias = resolveRequiredEvaluationCount({
+            mode: cfg.avaliacoesNecessariasModo,
+            manualCount: cfg.avaliacoesNecessarias,
+            evaluatorCount: redis
+                ? (Array.isArray(avaliadoresCadastrados) ? avaliadoresCadastrados.length : 0)
+                : null
+        });
         const rubricaNiveis = ehRubricaDeNiveis(criterios);
         const criteriosRelatorio = rubricaNiveis
             ? [{ id: RUBRICA_NIVEL_ID, nome: 'Pontuação da avaliação', peso: 1 }]
