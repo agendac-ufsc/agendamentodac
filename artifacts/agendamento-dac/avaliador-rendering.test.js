@@ -3,6 +3,7 @@ const path = require('node:path');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+const { resolveRequiredEvaluationCount } = require('./evaluation-threshold');
 
 const html = fs.readFileSync(path.join(__dirname, 'avaliador.html'), 'utf8');
 const renderFunction = html.match(/function renderClassificacaoList\(\)\s*\{[\s\S]*?\n\}/);
@@ -51,6 +52,7 @@ function renderClassificacoes({
     scoresCache,
     myAssessmentsCache = [],
     proposals,
+    avaliacoesNecessarias = 3,
     viewerCanDeleteInscricoes = false
 }) {
     const nodes = {
@@ -66,7 +68,7 @@ function renderClassificacoes({
         scoresCache,
         myAssessmentsCache,
         allUnificados: proposals,
-        avaliacoesNecessarias: 3,
+        avaliacoesNecessarias,
         obterPropostasEmOrdem: () => proposals,
         avaliacaoFinalizada: avaliacao => avaliacao?.finalized === true && avaliacao?.complete === true,
         obterNumeroProposta: () => '42',
@@ -89,7 +91,7 @@ const proposal = {
     }
 };
 
-test('agrupa as avaliações finalizadas de todos os avaliadores e soma as pontuações', () => {
+test('agrupa as avaliações finalizadas e calcula a média das pontuações', () => {
     assert.ok(renderFunction, 'renderClassificacaoList() deve existir no painel');
     const ownAssessment = {
         evaluatorEmail: 'avaliadora@exemplo.invalid',
@@ -128,10 +130,36 @@ test('agrupa as avaliações finalizadas de todos os avaliadores e soma as pontu
     assert.equal(nodes.classificacaoTabCount.textContent, '1');
     assert.equal(nodes.classificacaoTotal.textContent, '1');
     assert.match(nodes.classificacaoRows.innerHTML, /Proposta de teste/);
-    assert.match(nodes.classificacaoRows.innerHTML, /class="proposal-score">\s*14/);
+    assert.match(nodes.classificacaoRows.innerHTML, /class="proposal-score">\s*7/);
     assert.match(nodes.classificacaoRows.innerHTML, /2\/3 avaliações finalizadas/);
     assert.match(nodes.classificacaoRows.innerHTML, /data-saved-value="Finalista"/);
     assert.doesNotMatch(nodes.classificacaoRows.innerHTML, />23</);
+});
+
+test('o mínimo automático acompanha os avaliadores cadastrados e nunca fica abaixo de um', () => {
+    assert.equal(resolveRequiredEvaluationCount({ mode: 'automatico', manualCount: 3, evaluatorCount: 1 }), 1);
+    assert.equal(resolveRequiredEvaluationCount({ mode: 'automatico', manualCount: 3, evaluatorCount: 4 }), 4);
+    assert.equal(resolveRequiredEvaluationCount({ mode: 'automatico', manualCount: 3, evaluatorCount: 0 }), 1);
+});
+
+test('o modo manual mantém o número fixo e a classificação exibe média com um avaliador', () => {
+    assert.equal(resolveRequiredEvaluationCount({ mode: 'manual', manualCount: 2, evaluatorCount: 4 }), 2);
+    const nodes = renderClassificacoes({
+        viewerEmail: 'avaliadora@exemplo.invalid',
+        avaliacoesNecessarias: 1,
+        proposals: [proposal],
+        scoresCache: {
+            'proposal-42': [{
+                evaluatorEmail: 'avaliadora@exemplo.invalid',
+                inscriptionId: 'proposal-42',
+                finalized: true,
+                complete: true,
+                scoresJson: { points: 8 }
+            }]
+        }
+    });
+    assert.match(nodes.classificacaoRows.innerHTML, /class="proposal-score">\s*8/);
+    assert.match(nodes.classificacaoRows.innerHTML, /1 avaliação finalizada \(mínimo 1\)/);
 });
 
 test('mostra avaliações dos outros mesmo quando o avaliador atual ainda não avaliou a proposta', () => {
