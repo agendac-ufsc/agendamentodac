@@ -1475,8 +1475,80 @@ function renderDocumentosRestantesDrawer(item) {
     return renderDocumentosDrawer({ ...item, primeiraEtapa: { ...p, documentos } });
 }
 
+function avaliarItem817(etapas = {}) {
+    const diasReservados = new Set();
+    let existeDataInvalida = false;
+    const grupos = etapas && typeof etapas === 'object' ? Object.values(etapas) : [];
+
+    grupos.forEach(grupo => {
+        const itens = Array.isArray(grupo) ? grupo : [grupo];
+        itens.forEach(item => {
+            if (!item) return;
+            const valor = typeof item === 'string' ? item : item.data;
+            const texto = String(valor || '').trim();
+            let correspondencia = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+            if (!correspondencia) {
+                const brasileira = texto.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+                if (brasileira) correspondencia = [brasileira[0], brasileira[3], brasileira[2], brasileira[1]];
+            }
+            if (!correspondencia) {
+                existeDataInvalida = true;
+                return;
+            }
+
+            const ano = Number(correspondencia[1]);
+            const mes = Number(correspondencia[2]);
+            const dia = Number(correspondencia[3]);
+            const data = new Date(Date.UTC(ano, mes - 1, dia));
+            if (data.getUTCFullYear() !== ano || data.getUTCMonth() !== mes - 1 || data.getUTCDate() !== dia) {
+                existeDataInvalida = true;
+                return;
+            }
+            diasReservados.add(Math.floor(data.getTime() / 86400000));
+        });
+    });
+
+    if (existeDataInvalida || diasReservados.size === 0) {
+        return {
+            status: 'nao-verificavel',
+            detalhe: 'Não foi possível confirmar todas as datas de reserva. Confira o cronograma; os demais critérios ficam bloqueados.'
+        };
+    }
+
+    const diasOrdenados = [...diasReservados].sort((a, b) => a - b);
+    let sequenciaAtual = 1;
+    let maiorSequencia = 1;
+    for (let indice = 1; indice < diasOrdenados.length; indice += 1) {
+        sequenciaAtual = diasOrdenados[indice] === diasOrdenados[indice - 1] + 1
+            ? sequenciaAtual + 1
+            : 1;
+        maiorSequencia = Math.max(maiorSequencia, sequenciaAtual);
+    }
+
+    const motivos = [];
+    if (diasOrdenados.length > 6) {
+        motivos.push(`${diasOrdenados.length} dias de reserva no total (limite: 6)`);
+    }
+    if (maiorSequencia > 3) {
+        motivos.push(`${maiorSequencia} dias seguidos (limite: 3)`);
+    }
+    if (motivos.length) {
+        return {
+            status: 'reprovado',
+            detalhe: `Inscrição desclassificada: ${motivos.join(' e ')}. Os demais critérios não são exibidos.`
+        };
+    }
+
+    return {
+        status: 'aprovado',
+        detalhe: `${diasOrdenados.length} ${diasOrdenados.length === 1 ? 'dia reservado' : 'dias reservados'}; maior sequência de ${maiorSequencia}.`
+    };
+}
+
 function renderDrawerContent(item, existingScores = {}) {
     const p = item?.primeiraEtapa || {};
+    const resultadoItem817 = avaliarItem817(p.etapas);
+    const mostrarRubricas = resultadoItem817.status === 'aprovado';
     const indiceItem = allUnificados.indexOf(item);
     const scoresEmEdicao = currentAvaliacaoIndex === indiceItem ? currentAvaliacaoScores : existingScores;
     const itensAvaliados = contarCriteriosAvaliados(scoresEmEdicao);
@@ -1535,7 +1607,12 @@ function renderDrawerContent(item, existingScores = {}) {
         <div class="drawer-section">
             <h4><i class="fas fa-calendar-days"></i> Cronograma agendado</h4>
             ${eventos.length ? `<ul class="drawer-event-list">${eventos.map(({etapa, tipo}) => `<li>${escapeHtml(formatarEtapaDrawer(etapa, tipo))}</li>`).join('')}</ul>` : '<div class="drawer-empty">Sem etapas agendadas via site.</div>'}
+            <div class="drawer-schedule-eligibility" role="status" aria-live="polite" data-item-817-status="${resultadoItem817.status}" style="margin-top:12px;padding:11px 13px;border:1px solid ${resultadoItem817.status === 'aprovado' ? '#bbf7d0' : resultadoItem817.status === 'reprovado' ? '#fecaca' : '#fde68a'};border-radius:8px;background:${resultadoItem817.status === 'aprovado' ? '#f0fdf4' : resultadoItem817.status === 'reprovado' ? '#fef2f2' : '#fffbeb'};color:${resultadoItem817.status === 'aprovado' ? '#166534' : resultadoItem817.status === 'reprovado' ? '#991b1b' : '#92400e'}">
+                <strong>Item 8.1.7 — ${resultadoItem817.status === 'aprovado' ? 'Aprovado' : resultadoItem817.status === 'reprovado' ? 'Reprovado' : 'Não verificável'}</strong>
+                <span>${escapeHtml(resultadoItem817.detalhe)}</span>
+            </div>
         </div>
+        ${mostrarRubricas ? `
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID, `
             <div class="drawer-criterion">
                 <div class="drawer-criterion-title">8.1.1 Caráter artístico-cultural da proposta conforme descrito no item 5.5 deste edital.</div>
@@ -1608,6 +1685,7 @@ function renderDrawerContent(item, existingScores = {}) {
                 <i class="fas fa-save"></i> Salvar avaliação
             </button>
         </div>
+        ` : ''}
         </div>`;
     return html;
 }
