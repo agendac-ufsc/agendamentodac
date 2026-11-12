@@ -33,6 +33,7 @@ function createSequentialEvaluationFlow(scoresSalvos = {}) {
     const nodes = {};
     const context = {
         CHAVES_RUBRICA_NIVEIS: keys,
+        RUBRICA_NIVEL_ID_812: keys[1],
         ehRubricaDeNiveis: () => true,
         criterioTemNotaValida: (scores, key) => [0, 1, 2].includes(Number(scores?.[key])),
         obterSufixoRubrica: key => key === keys[0] ? '811' : key.replace('__nivel_avaliacao_', ''),
@@ -244,11 +245,12 @@ test('a lixeira da classificação só aparece para avaliador autorizado', () =>
     assert.equal(autorizado.rankingDeleteHeading.hidden, false);
 });
 
-test('libera critérios de avaliação em sequência somente após salvar o anterior', () => {
+test('libera 8.1.1 e 8.1.2 juntos e mantém os critérios seguintes em sequência', () => {
     const { functions, keys } = createSequentialEvaluationFlow();
 
     assert.equal(functions.criterioBloqueado(keys[0], {}), false);
-    assert.equal(functions.criterioBloqueado(keys[1], {}), true);
+    assert.equal(functions.criterioBloqueado(keys[1], {}), false);
+    assert.equal(functions.criterioBloqueado(keys[2], {}), true);
     assert.equal(functions.obterPrimeiroCriterioPendente({}), keys[0]);
 
     const firstScoreSaved = { [keys[0]]: 0 };
@@ -256,10 +258,19 @@ test('libera critérios de avaliação em sequência somente após salvar o ante
     assert.equal(functions.criterioBloqueado(keys[2], firstScoreSaved), true);
     assert.equal(functions.obterPrimeiroCriterioPendente(firstScoreSaved), keys[1]);
 
+    const secondScoreOnly = { [keys[1]]: 1 };
+    assert.equal(functions.criterioBloqueado(keys[1], secondScoreOnly), false);
+    assert.equal(functions.criterioBloqueado(keys[2], secondScoreOnly), true);
+
     const secondScoreSaved = { ...firstScoreSaved, [keys[1]]: 1 };
     assert.equal(functions.criterioBloqueado(keys[2], secondScoreSaved), false);
     assert.equal(functions.criterioBloqueado(keys[3], secondScoreSaved), true);
     assert.equal(functions.obterPrimeiroCriterioPendente(secondScoreSaved), keys[2]);
+
+    const thirdScoreSaved = { ...secondScoreSaved, [keys[2]]: 2 };
+    assert.equal(functions.criterioBloqueado(keys[3], thirdScoreSaved), false);
+    assert.equal(functions.criterioBloqueado(keys[4], thirdScoreSaved), true);
+    assert.equal(functions.obterPrimeiroCriterioPendente(thirdScoreSaved), keys[3]);
 });
 
 test('selecionar não atende em 8.1.1 ou 8.1.2 salva a reprovação imediatamente', () => {
@@ -334,7 +345,7 @@ test('mostra visual bloqueado e impede interação até o critério anterior ser
 
     assert.match(htmlBloqueado, /class="drawer-criterion-step is-locked"/);
     assert.match(htmlBloqueado, /aria-disabled="true" inert/);
-    assert.match(htmlBloqueado, /Salve o critério anterior para liberar este item/);
+    assert.match(htmlBloqueado, /Salve os critérios anteriores para liberar este item/);
     assert.match(htmlLiberado, /class="drawer-criterion-step"/);
     assert.match(htmlLiberado, /aria-disabled="false"/);
     assert.doesNotMatch(htmlLiberado, /\sinert/);

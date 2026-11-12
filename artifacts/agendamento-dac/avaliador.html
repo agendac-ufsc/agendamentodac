@@ -863,7 +863,7 @@ function avaliacaoCompleta(scores = {}) {
 function criterioBloqueado(criterionKey, scoresSalvos = {}) {
     if (!ehRubricaDeNiveis()) return false;
     const indice = CHAVES_RUBRICA_NIVEIS.indexOf(criterionKey);
-    if (indice <= 0) return false;
+    if (indice <= 0 || criterionKey === RUBRICA_NIVEL_ID_812) return false;
     return CHAVES_RUBRICA_NIVEIS
         .slice(0, indice)
         .some(chave => !criterioTemNotaValida(scoresSalvos, chave));
@@ -878,7 +878,7 @@ function renderEtapaAvaliacao(existingScores, criterionKey, content) {
     const bloqueado = criterioBloqueado(criterionKey, existingScores);
     const sufixo = obterSufixoRubrica(criterionKey);
     return `<div class="drawer-criterion-step${bloqueado ? ' is-locked' : ''}" id="criterion-step-${sufixo}" data-criterion-step="${sufixo}" aria-disabled="${bloqueado ? 'true' : 'false'}"${bloqueado ? ' inert' : ''}>
-        ${bloqueado ? '<div class="drawer-criterion-step-lock-note"><i class="fas fa-lock"></i> Salve o critério anterior para liberar este item.</div>' : ''}
+        ${bloqueado ? '<div class="drawer-criterion-step-lock-note"><i class="fas fa-lock"></i> Salve os critérios anteriores para liberar este item.</div>' : ''}
         ${content}
     </div>`;
 }
