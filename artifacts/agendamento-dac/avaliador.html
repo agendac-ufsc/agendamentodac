@@ -319,7 +319,7 @@
             <div class="ranking-summary">
                 <div>
                     <h2>Avaliações concluídas</h2>
-                    <p><span id="classificacaoTotal">0</span> proposta(s) com pelo menos uma avaliação finalizada. A pontuação soma os avaliadores e fica parcial até atingir o número necessário. Edite sua classificação e pressione Enter para salvar.</p>
+                    <p><span id="classificacaoTotal">0</span> proposta(s) com pelo menos uma avaliação finalizada. A pontuação mostra a média das avaliações finalizadas e fica parcial até atingir o número necessário. Edite sua classificação e pressione Enter para salvar.</p>
                 </div>
             </div>
             <div class="ranking-table-wrap">
@@ -494,9 +494,15 @@ async function loadConfig() {
     try {
         const r = await fetch('/api/config');
         const c = await r.json();
-        avaliacoesNecessarias = parseInt(c.avaliacoesNecessarias || 3, 10);
+        avaliacoesNecessarias = Number.parseInt(c.avaliacoesNecessariasEfetivas, 10)
+            || Number.parseInt(c.avaliacoesNecessarias, 10)
+            || 3;
+        const quantidade = avaliacoesNecessarias;
+        const regra = c.avaliacoesNecessariasModo === 'manual'
+            ? `${quantidade} ${quantidade === 1 ? 'avaliação finalizada' : 'avaliações finalizadas'}`
+            : `${quantidade} ${quantidade === 1 ? 'avaliação finalizada' : 'avaliações finalizadas'} (uma por avaliador cadastrado)`;
         document.getElementById('infoBannerText').textContent =
-            `Cada inscrição precisa de ${avaliacoesNecessarias} avaliação(ões) para ser considerada concluída.`;
+            `Cada inscrição precisa de ${regra} para ser considerada concluída.`;
     } catch (e) {}
 }
 
@@ -920,10 +926,11 @@ function renderClassificacaoList() {
         const avaliacaoDoUsuario = registros.find(avaliacao =>
             String(avaliacao?.evaluatorEmail || '').trim().toLowerCase() === viewerEmail.toLowerCase()
         ) || null;
-        const pontuacao = avaliacoesFinalizadas.reduce((total, avaliacao) => {
+        const somaPontuacao = avaliacoesFinalizadas.reduce((total, avaliacao) => {
             const nota = Number(calcularPontuacaoObtida(avaliacao.scoresJson || {}));
             return total + (Number.isFinite(nota) ? nota : 0);
         }, 0);
+        const pontuacao = somaPontuacao / avaliacoesFinalizadas.length;
         return [{
             id,
             p,
@@ -946,8 +953,11 @@ function renderClassificacaoList() {
         ? quantidadeNecessaria
         : 1;
     tbody.innerHTML = avaliadas.map(({ id, p, avaliacaoDoUsuario, numeroProposta, quantidadeAvaliacoes, pontuacao }) => {
+        const quantidadeFinalizada = quantidadeAvaliacoes === 1
+            ? '1 avaliação finalizada'
+            : `${quantidadeAvaliacoes} avaliações finalizadas`;
         const statusAvaliacoes = quantidadeAvaliacoes >= totalNecessario
-            ? `${quantidadeAvaliacoes} finalizadas (mínimo ${totalNecessario})`
+            ? `${quantidadeFinalizada} (mínimo ${totalNecessario})`
             : `${quantidadeAvaliacoes}/${totalNecessario} avaliações finalizadas`;
         const classificacao = avaliacaoDoUsuario?.classification || '';
         const nomeProposta = p.evento || p.nome || `Inscrição ${id}`;
