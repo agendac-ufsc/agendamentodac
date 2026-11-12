@@ -479,9 +479,16 @@
             <div class="card-header">
                 <h3 style="font-size:16px;color:#444;display:flex;align-items:center;gap:8px"><i class="fas fa-user-check" style="color:#2563eb"></i> Regras de Avaliação</h3>
             </div>
-            <label class="form-label" style="font-size:13px;color:#444;font-weight:600">Avaliações Necessárias por Inscrição</label>
-            <input type="number" id="cfgAvaliacoesNecessarias" class="form-input" min="1" max="20" value="3" style="max-width:140px">
-            <p style="font-size:12px;color:#888;margin-top:8px">Define o número de avaliações para uma inscrição ser considerada "concluída".</p>
+            <label class="form-label" for="cfgAvaliacoesNecessariasModo" style="font-size:13px;color:#444;font-weight:600">Como definir as avaliações necessárias</label>
+            <select id="cfgAvaliacoesNecessariasModo" class="form-input" style="max-width:520px" onchange="atualizarRegraAvaliacoes()">
+                <option value="automatico">Automático — uma avaliação de cada avaliador cadastrado</option>
+                <option value="manual">Manual — definir um número fixo</option>
+            </select>
+            <div id="cfgAvaliacoesNecessariasManualWrap" style="margin-top:12px">
+                <label class="form-label" for="cfgAvaliacoesNecessarias" style="font-size:12px;color:#555;font-weight:600">Número fixo no modo manual</label>
+                <input type="number" id="cfgAvaliacoesNecessarias" class="form-input" min="1" max="20" value="3" style="max-width:140px">
+            </div>
+            <p id="cfgAvaliacoesNecessariasDescricao" style="font-size:12px;color:#666;margin-top:8px">No modo automático, o mínimo acompanha a quantidade de avaliadores cadastrados.</p>
             <button class="btn-top btn-purple" style="margin-top:14px;background:#2563eb;border-color:#2563eb" onclick="saveAvaliacoesNecessarias()"><i class="fas fa-save"></i> Salvar Regra de Avaliação</button>
         </div>
     </div>
@@ -1024,6 +1031,8 @@ let archiveSelectedIds = new Set();
 let archiveLoadPromise = null;
 let criterios = [];
 let avaliadores = [];
+let avaliacoesNecessariasModo = 'automatico';
+let avaliacoesNecessariasEfetivas = 1;
 let datasBloqueadas = [];
 let adminDataRefreshTimer = null;
 let userRole = null; // 'admin' | 'viewer'
@@ -1211,7 +1220,7 @@ function switchTab(name) {
     document.querySelectorAll('.tab-btn').forEach(b => {
         if (b.textContent.toLowerCase().includes(kw)) b.classList.add('active');
     });
-    if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); }
+    if (name === 'avaliadores') { loadAvaliadores(); loadCriteria(); loadConfigs(); }
     if (name === 'arquivo') loadArchives();
     if (name === 'config') loadConfigs();
     if (name === 'relatorio') loadRelatorio();
@@ -3417,6 +3426,10 @@ async function loadAvaliadores() {
     try {
         const r = await fetch('/api/evaluators');
         avaliadores = await r.json();
+        if (avaliacoesNecessariasModo === 'automatico' && Array.isArray(avaliadores)) {
+            avaliacoesNecessariasEfetivas = Math.max(1, avaliadores.length);
+            atualizarRegraAvaliacoes();
+        }
         renderAvaliadores();
     } catch(e) { document.getElementById('avaliadoresList').innerHTML = '<div class="error-msg">Erro ao carregar avaliadores.</div>'; }
 }
@@ -3652,6 +3665,14 @@ async function loadConfigs() {
         atualizarDescricaoModoInscricao();
         const an = document.getElementById('cfgAvaliacoesNecessarias');
         if (an) an.value = c.avaliacoesNecessarias || 3;
+        const modoAvaliacoes = document.getElementById('cfgAvaliacoesNecessariasModo');
+        if (modoAvaliacoes) {
+            avaliacoesNecessariasModo = modoAvaliacoes.value = c.avaliacoesNecessariasModo || 'automatico';
+        }
+        avaliacoesNecessariasEfetivas = Number.parseInt(c.avaliacoesNecessariasEfetivas, 10)
+            || Number.parseInt(c.avaliacoesNecessarias, 10)
+            || 1;
+        atualizarRegraAvaliacoes();
         const bh = c.botoesHome || {};
         const i = bh.interno || { ativo: false, texto: 'Edital Interno' };
         const e = bh.externo || { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' };
@@ -3745,15 +3766,43 @@ function switchCfgTab(name) {
     if (name === 'config') loadConfigs();
 }
 
+function atualizarRegraAvaliacoes() {
+    const modoEl = document.getElementById('cfgAvaliacoesNecessariasModo');
+    const manualWrap = document.getElementById('cfgAvaliacoesNecessariasManualWrap');
+    const numeroEl = document.getElementById('cfgAvaliacoesNecessarias');
+    const descricao = document.getElementById('cfgAvaliacoesNecessariasDescricao');
+    if (!modoEl || !numeroEl || !descricao) return;
+    avaliacoesNecessariasModo = modoEl.value === 'manual' ? 'manual' : 'automatico';
+    const automatico = avaliacoesNecessariasModo === 'automatico';
+    numeroEl.disabled = automatico;
+    if (manualWrap) manualWrap.style.opacity = automatico ? '0.55' : '1';
+    if (automatico) {
+        const quantidade = Math.max(1, Number(avaliacoesNecessariasEfetivas) || 1);
+        descricao.textContent = `Automático: são necessárias ${quantidade} ${quantidade === 1 ? 'avaliação finalizada' : 'avaliações finalizadas'}, uma por avaliador cadastrado. Com 1 avaliador, basta 1 avaliação.`;
+    } else {
+        descricao.textContent = 'Manual: a inscrição será concluída ao atingir o número fixo definido acima (de 1 a 20).';
+    }
+}
+
 async function saveAvaliacoesNecessarias() {
-    const v = parseInt(document.getElementById('cfgAvaliacoesNecessarias').value || '3', 10);
+    const modo = document.getElementById('cfgAvaliacoesNecessariasModo')?.value === 'manual' ? 'manual' : 'automatico';
+    const v = Number.parseInt(document.getElementById('cfgAvaliacoesNecessarias').value, 10);
+    if (modo === 'manual' && (!Number.isFinite(v) || v < 1 || v > 20)) {
+        alert('Informe um número de avaliações entre 1 e 20.');
+        return;
+    }
     const num = (Number.isFinite(v) && v > 0) ? Math.min(v, 20) : 3;
     try {
         const cur = await fetch('/api/config').then(r => r.json());
-        const body = { ...cur, avaliacoesNecessarias: num };
+        const body = { ...cur, avaliacoesNecessarias: num, avaliacoesNecessariasModo: modo };
         const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
         const d = await r.json();
-        if (d.success) alert('Regra de avaliação salva!'); else alert('Erro ao salvar.');
+        if (r.ok && d.success) {
+            await Promise.all([loadConfigs(), loadAvaliadores()]);
+            alert('Regra de avaliação salva!');
+        } else {
+            alert('Erro ao salvar: ' + (d.error || 'Falha desconhecida.'));
+        }
     } catch(e) { alert('Erro de conexão: ' + e.message); }
 }
 
@@ -3764,6 +3813,7 @@ async function saveConfigs() {
         tituloPaginaAgendamento: (document.getElementById('cfgTituloPagina')?.value || '').trim() || 'Inscrição de Projeto',
         modoInscricao: 'unificado',
         avaliacoesNecessarias: parseInt(document.getElementById('cfgAvaliacoesNecessarias')?.value || '3', 10) || 3,
+        avaliacoesNecessariasModo: document.getElementById('cfgAvaliacoesNecessariasModo')?.value === 'manual' ? 'manual' : 'automatico',
         responsavelTermoNome: (document.getElementById('termoResponsavelNome')?.value || '').trim() || 'Andréa Búrigo Ventura',
         mensagemBotoesDesativados: (document.getElementById('cfgMensagemBotoesDesativados')?.value || '').trim() || 'As inscrições estão encerradas no momento.',
         mensagemDivulgacao: (document.getElementById('cfgMensagemDivulgacao')?.value || '').trim() || MENSAGEM_DIVULGACAO_PADRAO_ADMIN,
