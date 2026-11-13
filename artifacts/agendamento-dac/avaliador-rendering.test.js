@@ -62,7 +62,8 @@ function renderClassificacoes({
         classificacaoRows: { innerHTML: '', querySelectorAll: () => [] },
         classificacaoTabCount: { textContent: '' },
         classificacaoTotal: { textContent: '' },
-        rankingDeleteHeading: { hidden: true }
+        rankingDeleteHeading: { hidden: true },
+        btnGerarPdfHomologadas: { hidden: true }
     };
     const context = {
         document: { getElementById: id => nodes[id] || null },
@@ -84,7 +85,8 @@ function renderClassificacoes({
 
     const helpers = [
         extractFunction('obterCriterioEliminatorioReprovado'),
-        extractFunction('obterDesclassificacaoProposta')
+        extractFunction('obterDesclassificacaoProposta'),
+        extractFunction('obterClassificacoesAvaliadas')
     ].join('\n');
     const avaliacaoFinalizada = `
         function avaliacaoFinalizada(avaliacao) {
@@ -95,7 +97,10 @@ function renderClassificacoes({
             );
         }
     `;
-    vm.runInNewContext(`${helpers}\n${avaliacaoFinalizada}\n${renderFunction[0]}\nrenderClassificacaoList();`, context);
+    vm.runInNewContext(
+        `${helpers}\n${avaliacaoFinalizada}\n${renderFunction[0]}\nrenderClassificacaoList();`,
+        context
+    );
     return nodes;
 }
 
@@ -240,11 +245,99 @@ test('a lixeira da classificação só aparece para avaliador autorizado', () =>
     const semPermissao = renderClassificacoes(common);
     assert.doesNotMatch(semPermissao.classificacaoRows.innerHTML, /ranking-delete-button/);
     assert.equal(semPermissao.rankingDeleteHeading.hidden, true);
+    assert.equal(semPermissao.btnGerarPdfHomologadas.hidden, true);
+    assert.match(html, /\.ranking-pdf-button\[hidden\]\{display:none\}/);
 
     const autorizado = renderClassificacoes({ ...common, viewerCanDeleteInscricoes: true });
     assert.match(autorizado.classificacaoRows.innerHTML, /ranking-delete-button/);
     assert.match(autorizado.classificacaoRows.innerHTML, /data-inscription-id="proposal-42"/);
     assert.equal(autorizado.rankingDeleteHeading.hidden, false);
+    assert.equal(autorizado.btnGerarPdfHomologadas.hidden, false);
+});
+
+test('o PDF inclui aprovadas após o mínimo e reprovações eliminatórias imediatas', () => {
+    const homologadas = vm.runInNewContext(
+        `${extractFunction('obterInscricoesHomologadas')}\nobterInscricoesHomologadas(avaliadas)`,
+        {
+            avaliacoesNecessarias: 3,
+            avaliadas: [
+                { id: 'aprovada-parcial', quantidadeAvaliacoes: 2, desclassificacao: null },
+                { id: 'aprovada-final', quantidadeAvaliacoes: 3, desclassificacao: null },
+                { id: 'reprovada', quantidadeAvaliacoes: 1, desclassificacao: { item: '8.1.2' } }
+            ]
+        }
+    );
+
+    assert.deepEqual(
+        Array.from(homologadas, item => item.id),
+        ['aprovada-final', 'reprovada']
+    );
+});
+
+test('não abre a pré-visualização do PDF sem permissão para excluir inscrições', async () => {
+    let abasAbertas = 0;
+    const gerarPdf = vm.runInNewContext(
+        `${extractFunction('gerarPdfInscricoesHomologadas').replace(/^function /, 'async function ')}\ngerarPdfInscricoesHomologadas`,
+        {
+            viewerCanDeleteInscricoes: false,
+            window: { open: () => { abasAbertas += 1; } }
+        }
+    );
+
+    await gerarPdf();
+    assert.equal(abasAbertas, 0);
+});
+
+test('abre o PDF como pré-visualização em uma nova aba sem iniciar download', async () => {
+    let openedUrl = '';
+    let outputType = '';
+    let saveCalled = false;
+    const previewWindow = {
+        location: { replace: url => { openedUrl = url; } },
+        close: () => {}
+    };
+    class MockJsPDF {
+        constructor() {
+            this.internal = { pageSize: { getWidth: () => 297, getHeight: () => 210 } };
+        }
+        setProperties() {}
+        setFont() {}
+        setFontSize() {}
+        setTextColor() {}
+        text() {}
+        addPage() {}
+        setPage() {}
+        getNumberOfPages() { return 1; }
+        output(type) {
+            outputType = type;
+            return { type };
+        }
+        save() { saveCalled = true; }
+    }
+    const gerarPdf = vm.runInNewContext(
+        `${extractFunction('gerarPdfInscricoesHomologadas').replace(/^function /, 'async function ')}\ngerarPdfInscricoesHomologadas`,
+        {
+            viewerCanDeleteInscricoes: true,
+            window: {
+                open: (url, target) => {
+                    assert.equal(url, 'about:blank');
+                    assert.equal(target, '_blank');
+                    return previewWindow;
+                },
+                jspdf: { jsPDF: MockJsPDF }
+            },
+            URL: { createObjectURL: blob => { assert.equal(blob.type, 'blob'); return 'blob:preview'; } },
+            obterInscricoesHomologadas: () => [],
+            formatarPontuacao: String,
+            showAvaliadorDialog: async () => {}
+        }
+    );
+
+    await gerarPdf();
+    assert.equal(openedUrl, 'blob:preview');
+    assert.equal(outputType, 'blob');
+    assert.equal(saveCalled, false);
+    assert.equal(previewWindow.opener, null);
 });
 
 test('libera 8.1.1 e 8.1.2 juntos e mantém os critérios seguintes em sequência', () => {

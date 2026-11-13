@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Painel do Avaliador - DAC</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -112,6 +114,8 @@
         .ranking-summary{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin:4px 0 14px}
         .ranking-summary h2{font-size:17px;color:#1e3a8a;margin:0 0 4px}
         .ranking-summary p{font-size:12px;color:#64748b}
+        .ranking-pdf-button{flex-shrink:0}
+        .ranking-pdf-button[hidden]{display:none}
         .ranking-table-wrap{overflow:auto;border:1px solid #cbd5e1;border-radius:10px;background:#fff}
         .ranking-table{width:100%;min-width:680px;border-collapse:collapse;font-size:13px}
         .ranking-table th{padding:12px 14px;background:linear-gradient(135deg,#1e3a8a,#2563eb);color:#fff;text-align:left;font-weight:800;border:1px solid #3b82f6}
@@ -325,6 +329,9 @@
                     <h2>Avaliações concluídas</h2>
                     <p><span id="classificacaoTotal">0</span> proposta(s) com pelo menos uma avaliação finalizada. A pontuação mostra a média das avaliações finalizadas e fica parcial até atingir o número necessário. Edite sua classificação e pressione Enter para salvar.</p>
                 </div>
+                <button type="button" class="btn-top btn-refresh ranking-pdf-button" id="btnGerarPdfHomologadas" onclick="gerarPdfInscricoesHomologadas()" hidden>
+                    <i class="far fa-file-pdf" aria-hidden="true"></i> Gerar PDF de homologadas
+                </button>
             </div>
             <div class="ranking-table-wrap">
                 <table class="ranking-table">
@@ -960,11 +967,7 @@ function obterNumeroProposta(item, propostasOrdenadas) {
     return indice >= 0 ? String(indice + 1) : '—';
 }
 
-function renderClassificacaoList() {
-    const tbody = document.getElementById('classificacaoRows');
-    if (!tbody) return;
-    const deleteHeading = document.getElementById('rankingDeleteHeading');
-    if (deleteHeading) deleteHeading.hidden = !viewerCanDeleteInscricoes;
+function obterClassificacoesAvaliadas() {
     const propostasOrdenadas = obterPropostasEmOrdem();
     const propostasPorId = new Map();
     const avaliacoesPorInscricao = new Map();
@@ -1024,6 +1027,27 @@ function renderClassificacaoList() {
             desclassificacao
         }];
     });
+    return avaliadas;
+}
+
+function obterInscricoesHomologadas(avaliadas = obterClassificacoesAvaliadas()) {
+    const quantidadeNecessaria = Number.parseInt(avaliacoesNecessarias, 10);
+    const totalNecessario = Number.isFinite(quantidadeNecessaria) && quantidadeNecessaria > 0
+        ? quantidadeNecessaria
+        : 1;
+    return avaliadas.filter(({ quantidadeAvaliacoes, desclassificacao }) =>
+        Boolean(desclassificacao) || quantidadeAvaliacoes >= totalNecessario
+    );
+}
+
+function renderClassificacaoList() {
+    const tbody = document.getElementById('classificacaoRows');
+    if (!tbody) return;
+    const deleteHeading = document.getElementById('rankingDeleteHeading');
+    if (deleteHeading) deleteHeading.hidden = !viewerCanDeleteInscricoes;
+    const pdfButton = document.getElementById('btnGerarPdfHomologadas');
+    if (pdfButton) pdfButton.hidden = !viewerCanDeleteInscricoes;
+    const avaliadas = obterClassificacoesAvaliadas();
 
     document.getElementById('classificacaoTabCount').textContent = String(avaliadas.length);
     document.getElementById('classificacaoTotal').textContent = String(avaliadas.length);
@@ -1103,6 +1127,122 @@ function renderClassificacaoList() {
             }
         });
     });
+}
+
+async function gerarPdfInscricoesHomologadas() {
+    if (!viewerCanDeleteInscricoes) return;
+    const previewWindow = window.open('about:blank', '_blank');
+    if (!previewWindow) {
+        await showAvaliadorDialog('Permita a abertura de novas abas para visualizar o PDF.', {
+            title: 'Pré-visualização bloqueada',
+            hideCancel: true,
+            confirmLabel: 'OK'
+        });
+        return;
+    }
+
+    try {
+        const { jsPDF } = window.jspdf || {};
+        if (!jsPDF) throw new Error('A biblioteca de PDF não foi carregada. Atualize a página e tente novamente.');
+        const inscricoes = obterInscricoesHomologadas();
+        const aprovadas = inscricoes.filter(item => !item.desclassificacao);
+        const reprovadas = inscricoes.filter(item => Boolean(item.desclassificacao));
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        const margem = 14;
+        const larguraPagina = doc.internal.pageSize.getWidth();
+        const alturaPagina = doc.internal.pageSize.getHeight();
+        const dataGeracao = new Date().toLocaleString('pt-BR');
+        doc.setProperties({ title: 'Inscrições homologadas — DAC/UFSC' });
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(17);
+        doc.text('Inscrições homologadas', margem, 18);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('DAC/UFSC · Gerado em ' + dataGeracao, margem, 25);
+        doc.text(
+            `Aprovadas: ${aprovadas.length} · Reprovadas: ${reprovadas.length}`,
+            margem,
+            31
+        );
+
+        let cursorY = 41;
+        const adicionarSecao = (titulo, registros, resultado) => {
+            if (cursorY > alturaPagina - 35) {
+                doc.addPage();
+                cursorY = 18;
+            }
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(12);
+            doc.text(`${titulo} (${registros.length})`, margem, cursorY);
+            cursorY += 4;
+            if (registros.length === 0) {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.text('Nenhuma inscrição nesta categoria.', margem, cursorY + 4);
+                cursorY += 14;
+                return;
+            }
+
+            doc.autoTable({
+                startY: cursorY,
+                margin: { left: margem, right: margem },
+                head: [['Nº', 'Proposta', 'Proponente', 'Local', 'Avaliações', resultado.titulo]],
+                body: registros.map(item => [
+                    item.numeroProposta || '—',
+                    item.p?.evento || item.p?.nome || `Inscrição ${item.id}`,
+                    item.p?.nome || '—',
+                    item.p?.localNome || item.p?.local || '—',
+                    String(item.quantidadeAvaliacoes),
+                    resultado.valor(item)
+                ]),
+                styles: { font: 'helvetica', fontSize: 8, cellPadding: 2.2, overflow: 'linebreak' },
+                headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold' },
+                alternateRowStyles: { fillColor: [248, 251, 255] },
+                columnStyles: { 0: { cellWidth: 16 }, 4: { cellWidth: 25 }, 5: { cellWidth: 40 } },
+                didDrawPage: () => {
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(8);
+                    doc.setTextColor(100);
+                    doc.text(
+                        'DAC/UFSC · Inscrições homologadas',
+                        margem,
+                        alturaPagina - 8
+                    );
+                }
+            });
+            cursorY = doc.lastAutoTable.finalY + 12;
+        };
+
+        adicionarSecao('Aprovadas', aprovadas, {
+            titulo: 'Pontuação média',
+            valor: item => `${formatarPontuacao(item.pontuacao)} pts`
+        });
+        adicionarSecao('Reprovadas', reprovadas, {
+            titulo: 'Motivo',
+            valor: item => `Critério eliminatório ${item.desclassificacao.item}`
+        });
+
+        const totalPaginas = doc.getNumberOfPages();
+        for (let pagina = 1; pagina <= totalPaginas; pagina += 1) {
+            doc.setPage(pagina);
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(8);
+            doc.setTextColor(100);
+            doc.text(`Página ${pagina} de ${totalPaginas}`, larguraPagina - margem, alturaPagina - 8, { align: 'right' });
+        }
+
+        const pdfUrl = URL.createObjectURL(doc.output('blob'));
+        previewWindow.opener = null;
+        previewWindow.location.replace(pdfUrl);
+    } catch (error) {
+        previewWindow.close();
+        await showAvaliadorDialog(error.message || 'Não foi possível gerar o PDF.', {
+            title: 'Erro ao gerar PDF',
+            danger: true,
+            hideCancel: true,
+            confirmLabel: 'OK'
+        });
+    }
 }
 
 async function excluirInscricaoAvaliacao(id, nomeProposta, button) {
