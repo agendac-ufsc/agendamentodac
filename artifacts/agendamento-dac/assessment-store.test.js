@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const { createAssessmentStore } = require('./assessment-store');
 const {
     encontrarCriterioEliminatorioReprovado,
-    encontrarDesclassificacaoProposta
+    encontrarDesclassificacaoProposta,
+    podeCorrigirDesclassificacao
 } = require('./evaluation-disqualification');
 
 class MemoryRedis {
@@ -182,4 +183,97 @@ test('reprovação registrada por qualquer avaliador encerra a proposta', () => 
 
     assert.equal(desclassificacao?.item, '8.1.2');
     assert.equal(encontrarDesclassificacaoProposta(null), null);
+});
+
+test('permite ao avaliador corrigir somente o item eliminatório que ele próprio reprovou', () => {
+    const avaliacoes = [
+        {
+            evaluatorEmail: 'primeiro@exemplo.invalid',
+            scoresJson: { __nivel_avaliacao: 0, __nivel_avaliacao_812: 1 }
+        },
+        {
+            evaluatorEmail: 'segundo@exemplo.invalid',
+            scoresJson: { __nivel_avaliacao: 2 }
+        }
+    ];
+
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        ' PRIMEIRO@EXEMPLO.INVALID ',
+        { __nivel_avaliacao: 1, __nivel_avaliacao_label: 'Atende parcialmente' },
+        false
+    ), true);
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'primeiro@exemplo.invalid',
+        { __nivel_avaliacao_812: 2 },
+        false
+    ), false);
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'segundo@exemplo.invalid',
+        { __nivel_avaliacao: 1 },
+        false
+    ), false);
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'primeiro@exemplo.invalid',
+        { __nivel_avaliacao_812: 1 },
+        false
+    ), false);
+    assert.equal(podeCorrigirDesclassificacao(
+        [{
+            evaluatorEmail: 'primeiro@exemplo.invalid',
+            scoresJson: { __nivel_avaliacao: 0, __nivel_avaliacao_812: 0 }
+        }],
+        'primeiro@exemplo.invalid',
+        { __nivel_avaliacao_812: 2 },
+        false
+    ), true);
+});
+
+test('não permite finalizar nem alterar vários critérios durante correção da reprovação', () => {
+    const avaliacoes = [{
+        evaluatorEmail: 'avaliadora@exemplo.invalid',
+        scoresJson: { __nivel_avaliacao_812: 0 }
+    }];
+
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'avaliadora@exemplo.invalid',
+        { __nivel_avaliacao_812: 1 },
+        true
+    ), false);
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'avaliadora@exemplo.invalid',
+        { __nivel_avaliacao_812: 1, __nivel_avaliacao: 2 },
+        false
+    ), false);
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'avaliadora@exemplo.invalid',
+        { __nivel_avaliacao_812: 9 },
+        false
+    ), false);
+    assert.equal(podeCorrigirDesclassificacao(
+        avaliacoes,
+        'avaliadora@exemplo.invalid',
+        { __nivel_avaliacao_812: '' },
+        false
+    ), false);
+});
+
+test('recalcula a reprovação após uma correção e mantém outras reprovações ativas', () => {
+    const corrigida = [
+        { evaluatorEmail: 'primeiro@exemplo.invalid', scoresJson: { __nivel_avaliacao: 1 } },
+        { evaluatorEmail: 'segundo@exemplo.invalid', scoresJson: { __nivel_avaliacao_812: 2 } }
+    ];
+    const aindaReprovada = [
+        ...corrigida,
+        { evaluatorEmail: 'terceiro@exemplo.invalid', scoresJson: { __nivel_avaliacao_812: 0 } }
+    ];
+
+    assert.equal(encontrarDesclassificacaoProposta(corrigida), null);
+    assert.equal(encontrarDesclassificacaoProposta(aindaReprovada)?.item, '8.1.2');
 });

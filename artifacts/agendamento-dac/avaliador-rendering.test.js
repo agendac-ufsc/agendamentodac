@@ -33,10 +33,12 @@ function createSequentialEvaluationFlow(scoresSalvos = {}) {
     const nodes = {};
     const context = {
         CHAVES_RUBRICA_NIVEIS: keys,
+        RUBRICA_NIVEL_ID: keys[0],
         RUBRICA_NIVEL_ID_812: keys[1],
         ehRubricaDeNiveis: () => true,
         criterioTemNotaValida: (scores, key) => [0, 1, 2].includes(Number(scores?.[key])),
         obterSufixoRubrica: key => key === keys[0] ? '811' : key.replace('__nivel_avaliacao_', ''),
+        estaCorrigindoDesclassificacao: () => false,
         obterScoresSalvosAvaliadorAtual: () => scoresSalvos,
         requestAnimationFrame: callback => callback(),
         document: {
@@ -284,6 +286,7 @@ test('selecionar não atende em 8.1.1 ou 8.1.2 salva a reprovação imediatament
             currentAvaliacaoScores: scores,
             allUnificados: [{ primeiraEtapa: { id: 'proposal-42' } }],
             desclassificacaoAutomaticaEmAndamento: null,
+            estaCorrigindoDesclassificacao: () => false,
             criterioBloqueado: () => false,
             obterScoresSalvosAvaliadorAtual: () => ({}),
             obterSufixoRubrica: key => key.replace('__nivel_avaliacao', ''),
@@ -336,6 +339,41 @@ test('bloqueia as rubricas após reprovação eliminatória salva ou recém-sele
     ], { __nivel_avaliacao: 2 }), false);
     assert.equal(functions.podeContinuarAvaliacao({ status: 'aprovado' }, [], { __nivel_avaliacao: 1 }), true);
     assert.equal(functions.podeContinuarAvaliacao({ status: 'reprovado' }, [], {}), false);
+    assert.equal(functions.podeContinuarAvaliacao(
+        { status: 'aprovado' },
+        [{ scoresJson: { __nivel_avaliacao: 0 } }],
+        { __nivel_avaliacao: 0 },
+        { __nivel_avaliacao: 0 }
+    ), true);
+    assert.equal(functions.podeContinuarAvaliacao(
+        { status: 'aprovado' },
+        [{ scoresJson: { __nivel_avaliacao: 0 } }],
+        { __nivel_avaliacao: 2 },
+        { __nivel_avaliacao: 2 }
+    ), false);
+});
+
+test('durante a correção, libera apenas o item eliminatório reprovado pelo avaliador', () => {
+    const { functions, keys } = createSequentialEvaluationFlow();
+    const scoresSalvos = { [keys[0]]: 0 };
+    assert.equal(functions.criterioBloqueado(keys[0], scoresSalvos, true), false);
+    assert.equal(functions.criterioBloqueado(keys[1], scoresSalvos, true), true);
+    assert.equal(functions.criterioBloqueado(keys[2], scoresSalvos, true), true);
+
+    const itemCorrigivel = functions.renderEtapaAvaliacao(
+        scoresSalvos,
+        keys[0],
+        '<button>Editar</button>',
+        true
+    );
+    const itemBloqueado = functions.renderEtapaAvaliacao(
+        scoresSalvos,
+        keys[2],
+        '<button>Avaliar</button>',
+        true
+    );
+    assert.match(itemCorrigivel, /aria-disabled="false"/);
+    assert.match(itemBloqueado, /class="drawer-criterion-step is-locked"/);
 });
 
 test('mostra visual bloqueado e impede interação até o critério anterior ser salvo', () => {

@@ -26,7 +26,47 @@ function encontrarDesclassificacaoProposta(avaliacoes = []) {
     return null;
 }
 
+function podeCorrigirDesclassificacao(avaliacoes = [], evaluatorEmail, scoresJson, finalize) {
+    if (!encontrarDesclassificacaoProposta(avaliacoes)
+        || !Array.isArray(avaliacoes)
+        || !scoresJson
+        || typeof scoresJson !== 'object'
+        || Array.isArray(scoresJson)
+        || finalize === true) {
+        return false;
+    }
+
+    const emailNormalizado = String(evaluatorEmail || '').trim().toLowerCase();
+    if (!emailNormalizado) return false;
+
+    const avaliacaoPropria = avaliacoes.find(
+        avaliacao => String(avaliacao?.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado
+    );
+    if (!avaliacaoPropria) return false;
+
+    const chavesEnviadas = Object.keys(scoresJson);
+    const chavesDeNota = chavesEnviadas.filter(chave => !chave.endsWith('_label'));
+    if (chavesDeNota.length !== 1) return false;
+
+    const chaveCorrigida = chavesDeNota[0];
+    const criterioProprioReprovado = CRITERIOS_ELIMINATORIOS.find(
+        criterio => criterio.scoreKey === chaveCorrigida
+            && Number(avaliacaoPropria.scoresJson?.[criterio.scoreKey]) === 0
+    );
+    if (!criterioProprioReprovado
+        || chavesEnviadas.some(chave => chave !== chaveCorrigida && chave !== `${chaveCorrigida}_label`)) {
+        return false;
+    }
+
+    const notaCorrigida = scoresJson[chaveCorrigida];
+    if (notaCorrigida === null || notaCorrigida === undefined || String(notaCorrigida).trim() === '') {
+        return false;
+    }
+    return [0, 1, 2].includes(Number(notaCorrigida));
+}
+
 module.exports = {
     encontrarCriterioEliminatorioReprovado,
-    encontrarDesclassificacaoProposta
+    encontrarDesclassificacaoProposta,
+    podeCorrigirDesclassificacao
 };

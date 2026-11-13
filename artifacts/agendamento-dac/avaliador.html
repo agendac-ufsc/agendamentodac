@@ -600,10 +600,34 @@ function obterDesclassificacaoProposta(avaliacoes = []) {
     return null;
 }
 
-function podeContinuarAvaliacao(resultadoItem817, avaliacoes = [], scoresAtuais = {}) {
+function podeContinuarAvaliacao(
+    resultadoItem817,
+    avaliacoes = [],
+    scoresAtuais = {},
+    scoresSalvosAvaliadorAtual = {}
+) {
+    const desclassificacaoSalva = obterDesclassificacaoProposta(avaliacoes);
+    const podeCorrigirReprovacaoPropria = Boolean(
+        desclassificacaoSalva
+        && obterCriterioEliminatorioReprovado(scoresSalvosAvaliadorAtual)
+    );
     return resultadoItem817?.status === 'aprovado'
-        && !obterDesclassificacaoProposta(avaliacoes)
-        && !obterCriterioEliminatorioReprovado(scoresAtuais);
+        && (!desclassificacaoSalva || podeCorrigirReprovacaoPropria)
+        && (!obterCriterioEliminatorioReprovado(scoresAtuais) || podeCorrigirReprovacaoPropria);
+}
+
+function estaCorrigindoDesclassificacao() {
+    if (currentAvaliacaoIndex === null || !viewerEmail) return false;
+    const item = allUnificados[currentAvaliacaoIndex];
+    const id = obterIdInscricaoAvaliador(item);
+    const avaliacoes = Array.isArray(scoresCache[id]) ? scoresCache[id] : [];
+    const avaliacaoPropria = avaliacoes.find(
+        avaliacao => String(avaliacao?.evaluatorEmail || '').trim().toLowerCase() === viewerEmail.toLowerCase()
+    );
+    return Boolean(
+        obterDesclassificacaoProposta(avaliacoes)
+        && obterCriterioEliminatorioReprovado(avaliacaoPropria?.scoresJson)
+    );
 }
 
 function obterIdInscricaoAvaliador(item) {
@@ -785,8 +809,11 @@ function renderAvaliacaoList() {
             : (myAvFinalizada
                 ? `<span class="av-status done"><i class="fas fa-check"></i> Avaliado por mim</span>`
                 : `<span class="av-status">${myAvProntaParaFinalizar ? 'Pronta para confirmar' : (myAv ? 'Em andamento' : 'Pendente')}</span>`);
+        const podeCorrigirReprovacao = Boolean(
+            desclassificacao && obterCriterioEliminatorioReprovado(myAv?.scoresJson)
+        );
         const botaoAvaliacao = desclassificacao
-            ? { classe: 'btn-reprovada', icone: 'fa-ban', rotulo: 'Ver reprovação', aria: `Ver reprovação automática pelo item ${desclassificacao.item}` }
+            ? { classe: 'btn-reprovada', icone: 'fa-ban', rotulo: podeCorrigirReprovacao ? 'Corrigir reprovação' : 'Ver reprovação', aria: podeCorrigirReprovacao ? 'Corrigir item eliminatório que reprovei' : `Ver reprovação automática pelo item ${desclassificacao.item}` }
             : (myAvFinalizada
                 ? { classe: 'btn-avaliado', icone: 'fa-check-circle', rotulo: 'Avaliado', aria: 'Editar avaliação' }
                 : { classe: 'btn-refresh', icone: 'fa-star', rotulo: 'Avaliar', aria: 'Avaliar inscrição' });
@@ -860,8 +887,12 @@ function avaliacaoCompleta(scores = {}) {
     return chaves.length > 0 && contarCriteriosAvaliados(scores) === chaves.length;
 }
 
-function criterioBloqueado(criterionKey, scoresSalvos = {}) {
+function criterioBloqueado(criterionKey, scoresSalvos = {}, correcaoReprovacao = false) {
     if (!ehRubricaDeNiveis()) return false;
+    if (correcaoReprovacao) {
+        const eliminatorios = [RUBRICA_NIVEL_ID, RUBRICA_NIVEL_ID_812];
+        return !eliminatorios.includes(criterionKey) || Number(scoresSalvos[criterionKey]) !== 0;
+    }
     const indice = CHAVES_RUBRICA_NIVEIS.indexOf(criterionKey);
     if (indice <= 0 || criterionKey === RUBRICA_NIVEL_ID_812) return false;
     return CHAVES_RUBRICA_NIVEIS
@@ -874,8 +905,8 @@ function obterPrimeiroCriterioPendente(scoresSalvos = {}) {
     return CHAVES_RUBRICA_NIVEIS.find(chave => !criterioTemNotaValida(scoresSalvos, chave)) || null;
 }
 
-function renderEtapaAvaliacao(existingScores, criterionKey, content) {
-    const bloqueado = criterioBloqueado(criterionKey, existingScores);
+function renderEtapaAvaliacao(existingScores, criterionKey, content, correcaoReprovacao = false) {
+    const bloqueado = criterioBloqueado(criterionKey, existingScores, correcaoReprovacao);
     const sufixo = obterSufixoRubrica(criterionKey);
     return `<div class="drawer-criterion-step${bloqueado ? ' is-locked' : ''}" id="criterion-step-${sufixo}" data-criterion-step="${sufixo}" aria-disabled="${bloqueado ? 'true' : 'false'}"${bloqueado ? ' inert' : ''}>
         ${bloqueado ? '<div class="drawer-criterion-step-lock-note"><i class="fas fa-lock"></i> Salve os critérios anteriores para liberar este item.</div>' : ''}
@@ -892,7 +923,11 @@ function centralizarEtapaAvaliacao(criterionKey) {
     const sufixo = obterSufixoRubrica(criterionKey);
     requestAnimationFrame(() => {
         const etapa = document.getElementById(`criterion-step-${sufixo}`);
-        if (!etapa || criterioBloqueado(criterionKey, obterScoresSalvosAvaliadorAtual())) return;
+        if (!etapa || criterioBloqueado(
+            criterionKey,
+            obterScoresSalvosAvaliadorAtual(),
+            estaCorrigindoDesclassificacao()
+        )) return;
         etapa.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
     });
 }
@@ -1608,6 +1643,13 @@ function renderDrawerContent(item, existingScores = {}) {
     const desclassificacaoSalva = obterDesclassificacaoProposta(avaliacoesInscricao);
     const desclassificacaoAtual = obterCriterioEliminatorioReprovado(scoresEmEdicao);
     const desclassificacao = desclassificacaoSalva || desclassificacaoAtual;
+    const itensCorrigiveisReprovacao = desclassificacaoSalva
+        ? [
+            [RUBRICA_NIVEL_ID, '8.1.1'],
+            [RUBRICA_NIVEL_ID_812, '8.1.2']
+        ].filter(([chave]) => Number(existingScores[chave]) === 0).map(([, item]) => item)
+        : [];
+    const correcaoReprovacao = itensCorrigiveisReprovacao.length > 0;
     const desclassificacaoLocalPendente = Boolean(desclassificacaoAtual && !desclassificacaoSalva);
     const chaveDesclassificacao = desclassificacaoAtual
         ? `${id}:${desclassificacaoAtual.scoreKey}`
@@ -1617,7 +1659,8 @@ function renderDrawerContent(item, existingScores = {}) {
     const mostrarRubricas = podeContinuarAvaliacao(
         resultadoItem817,
         avaliacoesInscricao,
-        scoresEmEdicao
+        scoresEmEdicao,
+        existingScores
     );
     const itensAvaliados = contarCriteriosAvaliados(scoresEmEdicao);
     const totalItens = obterChavesAvaliacao().length;
@@ -1684,6 +1727,7 @@ function renderDrawerContent(item, existingScores = {}) {
         <div class="drawer-schedule-eligibility" role="status" aria-live="polite" data-eliminatory-item="${escapeAttr(desclassificacao.item)}" style="margin-top:12px;padding:11px 13px;border:1px solid #fecaca;border-radius:8px;background:#fef2f2;color:#991b1b">
             <strong>Item ${escapeHtml(desclassificacao.item)} — Reprovada</strong>
             <span>A inscrição foi desclassificada. Os demais critérios não serão avaliados.</span>
+            ${correcaoReprovacao ? `<span>Você pode revisar o(s) item(ns) ${itensCorrigiveisReprovacao.join(' e ')} que marcou como não atendido. Salve a correção para recalcular a situação da inscrição.</span>` : ''}
             ${desclassificacaoLocalPendente ? (salvandoDesclassificacao
                 ? '<span aria-live="polite">Salvando a reprovação...</span>'
                 : `<button type="button" class="btn-rubric-save" onclick="tentarSalvarDesclassificacao('${escapeAttr(desclassificacaoAtual.scoreKey)}')">Tentar salvar reprovação</button>`) : ''}
@@ -1699,7 +1743,7 @@ function renderDrawerContent(item, existingScores = {}) {
                 </div>
             </div>
             ${renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID)}
-        `)}
+        `, correcaoReprovacao)}
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID_812, `
             <div class="drawer-criterion">
                 <div class="drawer-criterion-title">8.1.2 Viabilidade técnica e adequação da proposta ao espaço público requerido.</div>
@@ -1710,14 +1754,14 @@ function renderDrawerContent(item, existingScores = {}) {
                 </div>
             </div>
             ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_812) : ''}
-        `)}
+        `, correcaoReprovacao)}
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID_813, `
             <div class="drawer-criterion">
                 <div class="drawer-criterion-title">8.1.3. Experiência do proponente no desenvolvimento de ações relacionadas ao projeto inscrito.</div>
             </div>
             ${documentosItem813 ? `<div class="drawer-section">${documentosItem813}</div>` : ''}
             ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_813) : ''}
-        `)}
+        `, correcaoReprovacao)}
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID_814, `
             <div class="drawer-criterion">
                 <div class="drawer-criterion-title">8.1.4. Relevância cultural e impacto social.</div>
@@ -1728,7 +1772,7 @@ function renderDrawerContent(item, existingScores = {}) {
                 </div>
             </div>
             ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_814) : ''}
-        `)}
+        `, correcaoReprovacao)}
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID_815, `
             <div class="drawer-criterion">
                 <div class="drawer-criterion-title">8.1.5. Gratuidade.</div>
@@ -1739,7 +1783,7 @@ function renderDrawerContent(item, existingScores = {}) {
                 </div>
             </div>
             ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_815) : ''}
-        `)}
+        `, correcaoReprovacao)}
         ${renderEtapaAvaliacao(existingScores, RUBRICA_NIVEL_ID_818, `
             <div class="drawer-criterion">
                 <div class="drawer-criterion-title">8.1.8. Utilização, por parte do (a) proponente, de recursos de acessibilidade comunicacional que possam contribuir com a ampliação do acesso e da inclusão.</div>
@@ -1750,17 +1794,19 @@ function renderDrawerContent(item, existingScores = {}) {
                 </div>
             </div>
             ${ehRubricaDeNiveis() ? renderEvaluationBlock(existingScores, RUBRICA_NIVEL_ID_818) : ''}
-        `)}
+        `, correcaoReprovacao)}
         <div class="drawer-total-score">
             <span><i class="fas fa-trophy"></i> Pontuação obtida</span>
             <strong>${escapeHtml(formatarPontuacao(pontuacaoObtida))} / ${escapeHtml(formatarPontuacaoMaxima())} pontos</strong>
         </div>
-        <div class="drawer-save drawer-save-complete">
+        ${correcaoReprovacao
+            ? '<div class="drawer-save-progress" role="status">Edite e salve somente os itens eliminatórios que você marcou como não atendidos. Os demais itens serão liberados se a reprovação deixar de existir.</div>'
+            : `<div class="drawer-save drawer-save-complete">
             <span class="drawer-save-progress">${escapeHtml(progressoSalvamento)}</span>
             <button type="button" class="btn-save-modal" onclick="salvarAvaliacao()" ${todosItensSalvos ? '' : 'disabled'}>
                 <i class="fas fa-save"></i> Salvar avaliação
             </button>
-        </div>
+        </div>`}
         ` : ''}
         </div>`;
     return html;
@@ -1875,7 +1921,11 @@ function handleRubricaTrigger(criterionKey = RUBRICA_NIVEL_ID) {
     const sufixo = obterSufixoRubrica(criterionKey);
     const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
     const estado = obterEstadoRubrica(criterionKey);
-    if (!trigger || criterioBloqueado(criterionKey, obterScoresSalvosAvaliadorAtual())) return;
+    if (!trigger || criterioBloqueado(
+        criterionKey,
+        obterScoresSalvosAvaliadorAtual(),
+        estaCorrigindoDesclassificacao()
+    )) return;
     if (trigger.dataset.saved === 'true' && !estado.editando) {
         iniciarEdicaoRubrica(criterionKey);
         return;
@@ -1887,7 +1937,11 @@ function toggleRubricaOpcoes(criterionKey = RUBRICA_NIVEL_ID) {
     const sufixo = obterSufixoRubrica(criterionKey);
     const trigger = document.getElementById(`rubricTrigger-${sufixo}`);
     const estado = obterEstadoRubrica(criterionKey);
-    if (criterioBloqueado(criterionKey, obterScoresSalvosAvaliadorAtual())) return;
+    if (criterioBloqueado(
+        criterionKey,
+        obterScoresSalvosAvaliadorAtual(),
+        estaCorrigindoDesclassificacao()
+    )) return;
     const abrindo = !estado.opcoesAbertas;
     if (!abrindo && trigger?.dataset.savedValue !== '') {
         const valorAtual = Number(currentAvaliacaoScores?.[criterionKey]);
@@ -1900,7 +1954,11 @@ function toggleRubricaOpcoes(criterionKey = RUBRICA_NIVEL_ID) {
 }
 
 function iniciarEdicaoRubrica(criterionKey = RUBRICA_NIVEL_ID) {
-    if (criterioBloqueado(criterionKey, obterScoresSalvosAvaliadorAtual())) return;
+    if (criterioBloqueado(
+        criterionKey,
+        obterScoresSalvosAvaliadorAtual(),
+        estaCorrigindoDesclassificacao()
+    )) return;
     const estado = obterEstadoRubrica(criterionKey);
     estado.editando = true;
     estado.opcoesAbertas = true;
@@ -1909,7 +1967,11 @@ function iniciarEdicaoRubrica(criterionKey = RUBRICA_NIVEL_ID) {
 }
 
 function setRubricaNivel(criterionKey, criterioId, valor, nome) {
-    if (criterioBloqueado(criterionKey, obterScoresSalvosAvaliadorAtual())) return;
+    if (criterioBloqueado(
+        criterionKey,
+        obterScoresSalvosAvaliadorAtual(),
+        estaCorrigindoDesclassificacao()
+    )) return;
     currentAvaliacaoScores[criterionKey] = Number(valor);
     currentAvaliacaoScores[`${criterionKey}_label`] = nome;
     const sufixo = obterSufixoRubrica(criterionKey);
@@ -1928,7 +1990,9 @@ function setRubricaNivel(criterionKey, criterioId, valor, nome) {
         desclassificacaoAutomaticaEmAndamento = `${id}:${desclassificacao.scoreKey}`;
     }
     renderAvaliacaoList();
-    if (desclassificacao) void salvarAvaliacao(criterionKey);
+    if (desclassificacao && Number(valor) === 0 && !estaCorrigindoDesclassificacao()) {
+        void salvarAvaliacao(criterionKey);
+    }
 }
 
 function tentarSalvarDesclassificacao(criterionKey) {
@@ -2022,7 +2086,11 @@ async function salvarAvaliacao(criterionKey = null) {
             });
             return;
         }
-        if (criterioBloqueado(criterionKey, obterScoresSalvosAvaliadorAtual())) {
+        if (criterioBloqueado(
+            criterionKey,
+            obterScoresSalvosAvaliadorAtual(),
+            estaCorrigindoDesclassificacao()
+        )) {
             await showAvaliadorDialog('Salve o critério anterior antes de continuar para este item.', {
                 title: 'Critério bloqueado',
                 confirmLabel: 'OK',
@@ -2081,17 +2149,28 @@ async function salvarAvaliacao(criterionKey = null) {
                 avaliacao => (avaliacao.evaluatorEmail || '').toLowerCase() === viewerEmail.toLowerCase()
             );
             const avaliacaoAnterior = indiceMinhaAvaliacao >= 0 ? avaliacoesAtuais[indiceMinhaAvaliacao] : {};
+            const scoresAvaliacaoSalva = { ...(avaliacaoAnterior.scoresJson || {}), ...scoresParaSalvar };
+            const corrigiuReprovacaoPropria = Boolean(
+                obterCriterioEliminatorioReprovado(avaliacaoAnterior.scoresJson)
+                && !obterCriterioEliminatorioReprovado(scoresAvaliacaoSalva)
+            );
             const avaliacaoSalva = {
                 ...avaliacaoAnterior,
                 inscriptionId: id,
                 evaluatorEmail: viewerEmail,
-                scoresJson: { ...(avaliacaoAnterior.scoresJson || {}), ...scoresParaSalvar },
+                scoresJson: scoresAvaliacaoSalva,
                 finalized: d.finalized === true,
                 finalizedAt: d.finalizedAt || null,
                 updatedAt: new Date().toISOString(),
                 ...(desclassificacaoSalva ? { classification: 'Reprovada' } : {})
             };
-            const proximoCriterioPendente = salvarCriterio && !desclassificacaoSalva
+            if (corrigiuReprovacaoPropria
+                && !desclassificacaoSalva
+                && avaliacaoSalva.classification === 'Reprovada') {
+                delete avaliacaoSalva.classification;
+            }
+            const desclassificacaoDaProposta = d.proposalDisqualification ?? desclassificacaoSalva;
+            const proximoCriterioPendente = salvarCriterio && !desclassificacaoDaProposta
                 ? obterPrimeiroCriterioPendente(avaliacaoSalva.scoresJson)
                 : null;
             if (indiceMinhaAvaliacao >= 0) {
@@ -2120,8 +2199,7 @@ async function salvarAvaliacao(criterionKey = null) {
             );
             if (indicePersistida >= 0) myAssessmentsCache[indicePersistida] = avaliacaoPersistida;
             else myAssessmentsCache.push(avaliacaoPersistida);
-            if (chaveTentativaDesclassificacao
-                && desclassificacaoAutomaticaEmAndamento === chaveTentativaDesclassificacao) {
+            if (String(desclassificacaoAutomaticaEmAndamento || '').startsWith(`${id}:`)) {
                 desclassificacaoAutomaticaEmAndamento = null;
             }
             const avaliacaoConcluidaAgora = !salvarCriterio
@@ -2145,16 +2223,22 @@ async function salvarAvaliacao(criterionKey = null) {
             }
             renderAvaliacaoList();
             if (proximoCriterioPendente) centralizarEtapaAvaliacao(proximoCriterioPendente);
-            const mensagemSucesso = desclassificacaoSalva
-                ? `Proposta reprovada automaticamente pelo item ${desclassificacaoSalva.item}. Os demais critérios não serão avaliados.`
-                : (avaliacaoConcluidaAgora
-                    ? 'Avaliação concluída e salva com sucesso!'
-                    : (salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!'));
-            const tituloSucesso = desclassificacaoSalva
-                ? 'Proposta reprovada'
-                : (avaliacaoConcluidaAgora
-                    ? 'Avaliação concluída'
-                    : (salvarCriterio ? 'Critério salvo' : 'Avaliação salva'));
+            const mensagemSucesso = desclassificacaoDaProposta
+                ? (corrigiuReprovacaoPropria && !desclassificacaoSalva
+                    ? `Critério corrigido, mas a inscrição permanece reprovada pelo item ${desclassificacaoDaProposta.item}.`
+                    : `Proposta reprovada automaticamente pelo item ${desclassificacaoDaProposta.item}. Os demais critérios não serão avaliados.`)
+                : (corrigiuReprovacaoPropria
+                    ? 'Critério corrigido. A reprovação foi removida e os demais itens estão liberados para avaliação.'
+                    : (avaliacaoConcluidaAgora
+                        ? 'Avaliação concluída e salva com sucesso!'
+                        : (salvarCriterio ? 'Critério salvo com sucesso!' : 'Avaliação salva com sucesso!')));
+            const tituloSucesso = desclassificacaoDaProposta
+                ? (corrigiuReprovacaoPropria && !desclassificacaoSalva ? 'Correção salva' : 'Proposta reprovada')
+                : (corrigiuReprovacaoPropria
+                    ? 'Reprovação removida'
+                    : (avaliacaoConcluidaAgora
+                        ? 'Avaliação concluída'
+                        : (salvarCriterio ? 'Critério salvo' : 'Avaliação salva')));
             await showAvaliadorDialog(mensagemSucesso, {
                 title: tituloSucesso,
                 confirmLabel: 'OK',

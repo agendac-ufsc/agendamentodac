@@ -24,7 +24,8 @@ const { Readable } = require('stream');
 const { createAssessmentStore } = require('./assessment-store');
 const {
     encontrarCriterioEliminatorioReprovado,
-    encontrarDesclassificacaoProposta
+    encontrarDesclassificacaoProposta,
+    podeCorrigirDesclassificacao
 } = require('./evaluation-disqualification');
 const {
     EVALUATOR_SESSION_TTL_SECONDS,
@@ -5825,17 +5826,38 @@ app.post('/api/save-assessment', async (req, res) => {
     try {
         const avaliacoes = await assessmentStore.getByInscription(inscriptionId);
         const desclassificacaoExistente = encontrarDesclassificacaoProposta(avaliacoes);
-        if (desclassificacaoExistente) {
-            return res.status(409).json({
-                error: `Inscrição reprovada automaticamente pelo item ${desclassificacaoExistente.item}. As demais avaliações foram encerradas.`,
-                disqualification: desclassificacaoExistente
-            });
-        }
         const emailNormalizado = String(evaluatorEmail).trim().toLowerCase();
         const idx = avaliacoes.findIndex(a => String(a.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado);
         const scoresAnteriores = idx >= 0 && avaliacoes[idx].scoresJson && typeof avaliacoes[idx].scoresJson === 'object'
             ? avaliacoes[idx].scoresJson
             : {};
+        const podeCorrigirReprovacao = podeCorrigirDesclassificacao(
+            avaliacoes,
+            emailNormalizado,
+            scoresJson,
+            finalize
+        );
+        if (desclassificacaoExistente && podeCorrigirReprovacao) {
+            if (!isSameOriginRequest(req)) {
+                return res.status(403).json({ error: 'Origem da solicitação não autorizada.' });
+            }
+            const session = await findEvaluatorSession(req);
+            if (session.status === 'unavailable') {
+                return res.status(503).json({ error: 'Armazenamento de sessões indisponível.' });
+            }
+            if (session.status !== 'authenticated') {
+                return res.status(401).json({ error: 'Sessão de avaliador inválida. Entre novamente.' });
+            }
+            if (String(session.evaluator?.email || '').trim().toLowerCase() !== emailNormalizado) {
+                return res.status(403).json({ error: 'Somente o avaliador responsável pode corrigir a reprovação.' });
+            }
+        }
+        if (desclassificacaoExistente && !podeCorrigirReprovacao) {
+            return res.status(409).json({
+                error: `Inscrição reprovada automaticamente pelo item ${desclassificacaoExistente.item}. As demais avaliações foram encerradas.`,
+                disqualification: desclassificacaoExistente
+            });
+        }
         const scoresAtualizados = { ...scoresAnteriores, ...scoresJson };
         const criteriosRaw = await redis.get('criterios');
         const criteriosAtivos = parseRedisValue(criteriosRaw) || CRITERIOS_DEFAULT;
@@ -5862,6 +5884,10 @@ app.post('/api/save-assessment', async (req, res) => {
             }
         }
         const updatedAt = new Date().toISOString();
+        const corrigiuReprovacaoPropria = Boolean(
+            encontrarCriterioEliminatorioReprovado(scoresAnteriores)
+            && !encontrarCriterioEliminatorioReprovado(scoresAtualizados)
+        );
         // Salvar um critério mantém a avaliação em andamento; só o salvamento
         // geral explícito pode concluí-la, mesmo quando ela já foi finalizada.
         const finalized = finalize === true || Boolean(desclassificacao);
@@ -5877,11 +5903,15 @@ app.post('/api/save-assessment', async (req, res) => {
                 || (idx >= 0 ? avaliacoes[idx].inscriptionSnapshot : null),
             ...(desclassificacao ? { classification: 'Reprovada' } : {})
         };
+        if (corrigiuReprovacaoPropria && entry.classification === 'Reprovada') {
+            delete entry.classification;
+        }
         await assessmentStore.save(entry);
         const savedAssessments = await assessmentStore.getByInscription(inscriptionId);
         const savedEntry = savedAssessments.find(
             av => String(av.evaluatorEmail || '').trim().toLowerCase() === emailNormalizado
         );
+        const desclassificacaoDaProposta = encontrarDesclassificacaoProposta(savedAssessments);
         const scoresConfirmed = savedEntry && Object.entries(scoresAtualizados).every(
             ([criterion, score]) => savedEntry.scoresJson?.[criterion] === score
         );
@@ -5892,7 +5922,8 @@ app.post('/api/save-assessment', async (req, res) => {
             success: true,
             finalized: savedEntry.finalized,
             finalizedAt: savedEntry.finalizedAt || null,
-            disqualification: desclassificacao
+            disqualification: desclassificacao,
+            proposalDisqualification: desclassificacaoDaProposta
         });
     } catch (e) {
         res.status(500).json({ error: 'Erro ao salvar avaliação.' });
