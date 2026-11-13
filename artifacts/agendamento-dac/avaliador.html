@@ -330,7 +330,7 @@
                     <p><span id="classificacaoTotal">0</span> proposta(s) com pelo menos uma avaliação finalizada. A pontuação mostra a média das avaliações finalizadas e fica parcial até atingir o número necessário. Edite sua classificação e pressione Enter para salvar.</p>
                 </div>
                 <button type="button" class="btn-top btn-refresh ranking-pdf-button" id="btnGerarPdfHomologadas" onclick="gerarPdfInscricoesHomologadas()" hidden>
-                    <i class="far fa-file-pdf" aria-hidden="true"></i> Gerar PDF de homologadas
+                    <i class="far fa-file-pdf" aria-hidden="true"></i> Gerar PDF de resultados
                 </button>
             </div>
             <div class="ranking-table-wrap">
@@ -600,11 +600,24 @@ function obterCriterioEliminatorioReprovado(scores = {}) {
 
 function obterDesclassificacaoProposta(avaliacoes = []) {
     if (!Array.isArray(avaliacoes)) return null;
+    const criteriosPorChave = new Map();
+    const criteriosPossiveis = [
+        { scoreKey: RUBRICA_NIVEL_ID, item: '8.1.1' },
+        { scoreKey: RUBRICA_NIVEL_ID_812, item: '8.1.2' }
+    ];
+
     for (const avaliacao of avaliacoes) {
-        const criterio = obterCriterioEliminatorioReprovado(avaliacao?.scoresJson);
-        if (criterio) return criterio;
+        const scores = avaliacao?.scoresJson;
+        if (!scores || typeof scores !== 'object' || Array.isArray(scores)) continue;
+        for (const criterio of criteriosPossiveis) {
+            const valor = scores[criterio.scoreKey];
+            if (valor === undefined || valor === null || String(valor).trim() === '') continue;
+            if (Number(valor) === 0) criteriosPorChave.set(criterio.scoreKey, criterio);
+        }
     }
-    return null;
+
+    const criterios = Array.from(criteriosPorChave.values());
+    return criterios.length ? { ...criterios[0], itens: criterios.map(criterio => criterio.item) } : null;
 }
 
 function podeContinuarAvaliacao(
@@ -1156,83 +1169,67 @@ async function gerarPdfInscricoesHomologadas() {
                 if (pontuacaoValidaA && pontuacaoA !== pontuacaoB) return pontuacaoB - pontuacaoA;
                 return String(a.p?.evento || '').localeCompare(String(b.p?.evento || ''), 'pt-BR');
             });
-        const reprovadas = inscricoes.filter(item => Boolean(item.desclassificacao));
+        const desclassificadas = inscricoes.filter(item => Boolean(item.desclassificacao));
+        const linhas = aprovadas.map(item => [
+            item.p?.evento || item.p?.nome || 'Proposta sem título',
+            'Homologada',
+            ''
+        ]).concat(desclassificadas.map(item => {
+            const itens = Array.isArray(item.desclassificacao?.itens)
+                ? item.desclassificacao.itens
+                : [item.desclassificacao?.item].filter(Boolean);
+            const itensUnicos = [...new Set(itens.map(valor => String(valor || '').trim()).filter(Boolean))];
+            const justificativa = itensUnicos.length
+                ? 'Item ' + itensUnicos.join(' e ')
+                : 'Critério eliminatório';
+            return [item.p?.evento || item.p?.nome || 'Proposta sem título', 'Desclassificada', justificativa];
+        }));
+
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const margem = 16;
         const larguraPagina = doc.internal.pageSize.getWidth();
         const alturaPagina = doc.internal.pageSize.getHeight();
         const dataGeracao = new Date().toLocaleString('pt-BR');
-        doc.setProperties({ title: 'Inscrições homologadas — DAC/UFSC' });
+        doc.setProperties({ title: 'Resultado das propostas — DAC/UFSC' });
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(21);
-        doc.text('Inscrições homologadas', margem, 22);
+        doc.text('Resultado das propostas', margem, 22);
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(12);
         doc.text('DAC/UFSC · Gerado em ' + dataGeracao, margem, 32);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(13);
-        doc.text(
-            `Aprovadas: ${aprovadas.length} · Reprovadas: ${reprovadas.length}`,
-            margem,
-            41
-        );
+        doc.text('Homologadas: ' + aprovadas.length + ' · Desclassificadas: ' + desclassificadas.length, margem, 41);
 
-        let cursorY = 55;
-        const adicionarSecao = (titulo, registros, tituloResultado, obterResultado) => {
-            if (cursorY > alturaPagina - 48) {
-                doc.addPage();
-                cursorY = 22;
-            }
-            doc.setFont('helvetica', 'bold');
-            doc.setFontSize(16);
-            doc.text(`${titulo} (${registros.length})`, margem, cursorY);
-            cursorY += 6;
-            if (registros.length === 0) {
-                doc.setFont('helvetica', 'normal');
-                doc.setFontSize(12);
-                doc.text('Nenhuma inscrição nesta categoria.', margem, cursorY + 5);
-                cursorY += 17;
-                return;
-            }
-
-            doc.autoTable({
-                startY: cursorY,
-                margin: { left: margem, right: margem },
-                head: [['Proposta', tituloResultado]],
-                body: registros.map(item => [
-                    item.p?.evento || 'Proposta sem título',
-                    obterResultado(item)
-                ]),
-                styles: { font: 'helvetica', fontSize: 12, cellPadding: 4.5, overflow: 'linebreak' },
-                headStyles: { fillColor: [30, 58, 138], textColor: 255, fontStyle: 'bold', fontSize: 12 },
-                alternateRowStyles: { fillColor: [248, 251, 255] },
-                columnStyles: { 0: { cellWidth: 112 }, 1: { cellWidth: 66 } },
-                didDrawPage: () => {
-                    doc.setFont('helvetica', 'normal');
-                    doc.setFontSize(9);
-                    doc.setTextColor(100);
-                    doc.text(
-                        'DAC/UFSC · Inscrições homologadas',
-                        margem,
-                        alturaPagina - 10
-                    );
+        doc.autoTable({
+            startY: 55,
+            margin: { left: margem, right: margem },
+            head: [['Nome da Proposta', 'Status', 'Justificativa']],
+            body: linhas,
+            theme: 'grid',
+            styles: {
+                font: 'helvetica', fontSize: 11, cellPadding: 4.5, overflow: 'linebreak', valign: 'middle',
+                textColor: [20, 20, 20], lineColor: [0, 0, 0], lineWidth: 0.25
+            },
+            headStyles: {
+                fillColor: [255, 255, 255], textColor: [0, 0, 0], fontStyle: 'bold', fontSize: 11,
+                halign: 'center', lineColor: [0, 0, 0], lineWidth: 0.25
+            },
+            alternateRowStyles: { fillColor: [255, 255, 255] },
+            columnStyles: { 0: { cellWidth: 59 }, 1: { cellWidth: 59, halign: 'center' }, 2: { cellWidth: 60 } },
+            didParseCell: data => {
+                if (data.section === 'body' && data.column.index === 1) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.halign = 'center';
                 }
-            });
-            cursorY = doc.lastAutoTable.finalY + 16;
-        };
-
-        adicionarSecao(
-            'Aprovadas',
-            aprovadas,
-            'Pontuação média',
-            item => `${formatarPontuacao(item.pontuacao)} pts`
-        );
-        adicionarSecao(
-            'Reprovadas',
-            reprovadas,
-            'Motivo da reprovação',
-            item => `Critério eliminatório ${item.desclassificacao.item}`
-        );
+            },
+            didDrawPage: () => {
+                doc.setFont('helvetica', 'normal');
+                doc.setFontSize(9);
+                doc.setTextColor(100);
+                doc.text('DAC/UFSC · Resultado das propostas', margem, alturaPagina - 10);
+            }
+        });
 
         const totalPaginas = doc.getNumberOfPages();
         for (let pagina = 1; pagina <= totalPaginas; pagina += 1) {
@@ -1240,7 +1237,7 @@ async function gerarPdfInscricoesHomologadas() {
             doc.setFont('helvetica', 'normal');
             doc.setFontSize(9);
             doc.setTextColor(100);
-            doc.text(`Página ${pagina} de ${totalPaginas}`, larguraPagina - margem, alturaPagina - 10, { align: 'right' });
+            doc.text('Página ' + pagina + ' de ' + totalPaginas, larguraPagina - margem, alturaPagina - 10, { align: 'right' });
         }
 
         const pdfUrl = URL.createObjectURL(doc.output('blob'));
@@ -1249,10 +1246,7 @@ async function gerarPdfInscricoesHomologadas() {
     } catch (error) {
         previewWindow.close();
         await showAvaliadorDialog(error.message || 'Não foi possível gerar o PDF.', {
-            title: 'Erro ao gerar PDF',
-            danger: true,
-            hideCancel: true,
-            confirmLabel: 'OK'
+            title: 'Erro ao gerar PDF', danger: true, hideCancel: true, confirmLabel: 'OK'
         });
     }
 }

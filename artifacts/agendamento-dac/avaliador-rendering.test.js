@@ -288,7 +288,7 @@ test('não abre a pré-visualização do PDF sem permissão para excluir inscri�
     assert.equal(abasAbertas, 0);
 });
 
-test('abre o PDF como pré-visualização em uma nova aba sem iniciar download', async () => {
+test('gera PDF em tabela única e mantém desclassificadas ao final', async () => {
     let openedUrl = '';
     let outputType = '';
     let saveCalled = false;
@@ -322,29 +322,26 @@ test('abre o PDF como pré-visualização em uma nova aba sem iniciar download',
         }
         save() { saveCalled = true; }
     }
-    const gerarPdf = vm.runInNewContext(
-        `${extractFunction('gerarPdfInscricoesHomologadas').replace(/^function /, 'async function ')}\ngerarPdfInscricoesHomologadas`,
-        {
-            viewerCanDeleteInscricoes: true,
-            window: {
-                open: (url, target) => {
-                    assert.equal(url, 'about:blank');
-                    assert.equal(target, '_blank');
-                    return previewWindow;
-                },
-                jspdf: { jsPDF: MockJsPDF }
+    const source = extractFunction('gerarPdfInscricoesHomologadas').replace(/^function /, 'async function ');
+    const gerarPdf = vm.runInNewContext(source + '\n' + 'gerarPdfInscricoesHomologadas', {
+        viewerCanDeleteInscricoes: true,
+        window: {
+            open: (url, target) => {
+                assert.equal(url, 'about:blank');
+                assert.equal(target, '_blank');
+                return previewWindow;
             },
-            URL: { createObjectURL: blob => { assert.equal(blob.type, 'blob'); return 'blob:preview'; } },
-            obterInscricoesHomologadas: () => [
-                { id: 'approved-low', p: { evento: 'Projeto Alfa' }, quantidadeAvaliacoes: 3, pontuacao: 70, desclassificacao: null },
-                { id: 'rejected', p: { evento: 'Projeto Reprovado' }, quantidadeAvaliacoes: 1, pontuacao: 0, desclassificacao: { item: '8.1.2' } },
-                { id: 'approved-high', p: { evento: 'Projeto Zulu' }, quantidadeAvaliacoes: 3, pontuacao: 90, desclassificacao: null },
-                { id: 'approved-middle', p: { evento: 'Projeto Meio' }, quantidadeAvaliacoes: 3, pontuacao: 80, desclassificacao: null }
-            ],
-            formatarPontuacao: String,
-            showAvaliadorDialog: async () => {}
-        }
-    );
+            jspdf: { jsPDF: MockJsPDF }
+        },
+        URL: { createObjectURL: blob => { assert.equal(blob.type, 'blob'); return 'blob:preview'; } },
+        obterInscricoesHomologadas: () => [
+            { id: 'approved-low', p: { evento: 'Projeto Alfa' }, quantidadeAvaliacoes: 3, pontuacao: 70, desclassificacao: null },
+            { id: 'rejected', p: { evento: 'Projeto Reprovado' }, quantidadeAvaliacoes: 1, pontuacao: 0, desclassificacao: { item: '8.1.1', itens: ['8.1.1', '8.1.2'] } },
+            { id: 'approved-high', p: { evento: 'Projeto Zulu' }, quantidadeAvaliacoes: 3, pontuacao: 90, desclassificacao: null },
+            { id: 'approved-middle', p: { evento: 'Projeto Meio' }, quantidadeAvaliacoes: 3, pontuacao: 80, desclassificacao: null }
+        ],
+        showAvaliadorDialog: async () => {}
+    });
 
     await gerarPdf();
     assert.equal(openedUrl, 'blob:preview');
@@ -352,23 +349,35 @@ test('abre o PDF como pré-visualização em uma nova aba sem iniciar download',
     assert.equal(saveCalled, false);
     assert.equal(previewWindow.opener, null);
     assert.equal(optionsPdf.orientation, 'portrait');
-    assert.equal(tabelas.length, 2);
-    assert.deepEqual(Array.from(tabelas[0].head[0]), ['Proposta', 'Pontuação média']);
+    assert.equal(tabelas.length, 1);
+    assert.deepEqual(Array.from(tabelas[0].head[0]), ['Nome da Proposta', 'Status', 'Justificativa']);
     assert.deepEqual(
         Array.from(tabelas[0].body, row => Array.from(row)),
         [
-            ['Projeto Zulu', '90 pts'],
-            ['Projeto Meio', '80 pts'],
-            ['Projeto Alfa', '70 pts']
+            ['Projeto Zulu', 'Homologada', ''],
+            ['Projeto Meio', 'Homologada', ''],
+            ['Projeto Alfa', 'Homologada', ''],
+            ['Projeto Reprovado', 'Desclassificada', 'Item 8.1.1 e 8.1.2']
         ]
     );
-    assert.deepEqual(Array.from(tabelas[1].head[0]), ['Proposta', 'Motivo da reprovação']);
-    assert.deepEqual(
-        Array.from(tabelas[1].body, row => Array.from(row)),
-        [['Projeto Reprovado', 'Critério eliminatório 8.1.2']]
-    );
-    assert.equal(tabelas[0].styles.fontSize, 12);
-    assert.equal(tabelas[0].headStyles.fontSize, 12);
+    assert.equal(tabelas[0].theme, 'grid');
+    assert.deepEqual(Array.from(tabelas[0].headStyles.fillColor), [255, 255, 255]);
+    assert.equal(tabelas[0].columnStyles[1].halign, 'center');
+    assert.equal(tabelas[0].styles.fontSize, 11);
+    assert.equal(tabelas[0].headStyles.fontSize, 11);
+});
+test('justificativa reúne todos os itens eliminatórios', () => {
+    const source = extractFunction('obterDesclassificacaoProposta');
+    const resultado = vm.runInNewContext(source + '\n' + 'obterDesclassificacaoProposta(avaliacoes)', {
+        RUBRICA_NIVEL_ID: '__nivel_avaliacao',
+        RUBRICA_NIVEL_ID_812: '__nivel_avaliacao_812',
+        avaliacoes: [
+            { scoresJson: { __nivel_avaliacao: 0, __nivel_avaliacao_812: 0 } },
+            { scoresJson: { __nivel_avaliacao_812: 0 } }
+        ]
+    });
+    assert.equal(resultado.item, '8.1.1');
+    assert.deepEqual(Array.from(resultado.itens), ['8.1.1', '8.1.2']);
 });
 
 test('libera 8.1.1 e 8.1.2 juntos e mantém os critérios seguintes em sequência', () => {
