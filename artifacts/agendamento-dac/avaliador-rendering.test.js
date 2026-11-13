@@ -292,13 +292,16 @@ test('abre o PDF como pré-visualização em uma nova aba sem iniciar download',
     let openedUrl = '';
     let outputType = '';
     let saveCalled = false;
+    let optionsPdf = null;
+    const tabelas = [];
     const previewWindow = {
         location: { replace: url => { openedUrl = url; } },
         close: () => {}
     };
     class MockJsPDF {
-        constructor() {
-            this.internal = { pageSize: { getWidth: () => 297, getHeight: () => 210 } };
+        constructor(options) {
+            optionsPdf = options;
+            this.internal = { pageSize: { getWidth: () => 210, getHeight: () => 297 } };
         }
         setProperties() {}
         setFont() {}
@@ -308,6 +311,11 @@ test('abre o PDF como pré-visualização em uma nova aba sem iniciar download',
         addPage() {}
         setPage() {}
         getNumberOfPages() { return 1; }
+        autoTable(options) {
+            tabelas.push(options);
+            this.lastAutoTable = { finalY: options.startY + 20 };
+            options.didDrawPage?.();
+        }
         output(type) {
             outputType = type;
             return { type };
@@ -327,7 +335,12 @@ test('abre o PDF como pré-visualização em uma nova aba sem iniciar download',
                 jspdf: { jsPDF: MockJsPDF }
             },
             URL: { createObjectURL: blob => { assert.equal(blob.type, 'blob'); return 'blob:preview'; } },
-            obterInscricoesHomologadas: () => [],
+            obterInscricoesHomologadas: () => [
+                { id: 'approved-low', p: { evento: 'Projeto Alfa' }, quantidadeAvaliacoes: 3, pontuacao: 70, desclassificacao: null },
+                { id: 'rejected', p: { evento: 'Projeto Reprovado' }, quantidadeAvaliacoes: 1, pontuacao: 0, desclassificacao: { item: '8.1.2' } },
+                { id: 'approved-high', p: { evento: 'Projeto Zulu' }, quantidadeAvaliacoes: 3, pontuacao: 90, desclassificacao: null },
+                { id: 'approved-middle', p: { evento: 'Projeto Meio' }, quantidadeAvaliacoes: 3, pontuacao: 80, desclassificacao: null }
+            ],
             formatarPontuacao: String,
             showAvaliadorDialog: async () => {}
         }
@@ -338,6 +351,24 @@ test('abre o PDF como pré-visualização em uma nova aba sem iniciar download',
     assert.equal(outputType, 'blob');
     assert.equal(saveCalled, false);
     assert.equal(previewWindow.opener, null);
+    assert.equal(optionsPdf.orientation, 'portrait');
+    assert.equal(tabelas.length, 2);
+    assert.deepEqual(Array.from(tabelas[0].head[0]), ['Proposta', 'Pontuação média']);
+    assert.deepEqual(
+        Array.from(tabelas[0].body, row => Array.from(row)),
+        [
+            ['Projeto Zulu', '90 pts'],
+            ['Projeto Meio', '80 pts'],
+            ['Projeto Alfa', '70 pts']
+        ]
+    );
+    assert.deepEqual(Array.from(tabelas[1].head[0]), ['Proposta', 'Motivo da reprovação']);
+    assert.deepEqual(
+        Array.from(tabelas[1].body, row => Array.from(row)),
+        [['Projeto Reprovado', 'Critério eliminatório 8.1.2']]
+    );
+    assert.equal(tabelas[0].styles.fontSize, 12);
+    assert.equal(tabelas[0].headStyles.fontSize, 12);
 });
 
 test('libera 8.1.1 e 8.1.2 juntos e mantém os critérios seguintes em sequência', () => {
