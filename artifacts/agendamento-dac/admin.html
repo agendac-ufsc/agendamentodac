@@ -2703,6 +2703,16 @@ async function enviarDivulgacaoManual() {
         });
         const data = await r.json();
         if (!r.ok || !data.success) throw new Error(data.error || 'Falha no envio.');
+        const registroEnviado = allUnificados.find(registro =>
+            String(registro?.primeiraEtapa?.id || '') === String(_divulgacaoData.id)
+        );
+        if (registroEnviado) {
+            registroEnviado.primeiraEtapa.divulgacaoInstitucional = {
+                ...registroEnviado.primeiraEtapa.divulgacaoInstitucional,
+                enviado: true
+            };
+            renderTabela();
+        }
         status.textContent = '✅ E-mail enviado com sucesso para o proponente.';
         status.style.color = '#16a34a';
         btn.innerHTML = '<i class="fas fa-check"></i> Enviado';
