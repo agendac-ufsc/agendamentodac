@@ -1,4 +1,1071 @@
-apas' && String(modoInscricaoEmergencia || '').trim() !== MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
+require('dotenv').config();
+
+// Captura qualquer crash antes de chegar nos handlers — crítico para serverless
+process.on('uncaughtException', (err) => {
+    console.error('❌ [process] uncaughtException:', err.message, err.stack);
+});
+process.on('unhandledRejection', (reason) => {
+    console.error('❌ [process] unhandledRejection:', reason);
+});
+
+const express = require('express');
+const cors = require('cors');
+const path = require('path');
+const fs = require('fs');
+const axios = require('axios');
+const { google } = require('googleapis');
+const { Redis } = require('@upstash/redis');
+const multer = require('multer');
+const AdmZip = require('adm-zip');
+const { put: putBlob, get: getBlob, head: headBlob, del: deleteBlob } = require('@vercel/blob');
+const { handleUpload } = require('@vercel/blob/client');
+const { createHmac, randomUUID, randomInt, timingSafeEqual } = require('crypto');
+const { Readable } = require('stream');
+const { createAssessmentStore } = require('./assessment-store');
+const {
+    encontrarCriterioEliminatorioReprovado,
+    encontrarDesclassificacaoProposta,
+    podeCorrigirDesclassificacao
+} = require('./evaluation-disqualification');
+const {
+    EVALUATOR_SESSION_TTL_SECONDS,
+    authenticateEvaluatorSession,
+    canDeleteInscricoes,
+    createEvaluatorSession,
+    normalizeEvaluatorEmail,
+    revokeEvaluatorSession
+} = require('./evaluator-auth');
+const { ADMIN_SESSION_TTL_SECONDS, createAdminSessionToken, verifyAdminSessionToken } = require('./admin-session');
+const {
+    normalizarTextoCalendario: normalizarTituloArquivo,
+    extrairNomeEventoCalendario,
+    isTrustedLegacyCalendarEvent,
+    avaliarElegibilidadeArquivo,
+    etapasEsperadasArquivo,
+    chaveEtapaEsperada,
+    chaveEventoCalendario,
+    criarRegistroArquivado,
+    criarResumoBloqueioArquivo,
+    filtrarRegistrosArquivadosExcluidos,
+    obterBlobUrlUploadInscricao,
+    filtrarUploadsBlobExcluidos,
+    correspondeEventoEtapa
+} = require('./registration-archive');
+const { parseRedisValue } = require('./redis-value');
+const {
+    normalizeEvaluationMode,
+    normalizeManualEvaluationCount,
+    resolveRequiredEvaluationCount
+} = require('./evaluation-threshold');
+const {
+    MINIMUM_REST_INTERVAL_MINUTES,
+    schedulesConflict,
+    scheduleConflictsWithCalendarEvents,
+    shouldBlockScheduleConflict,
+    usesMinimumRestInterval,
+    classifyCalendarEventSource,
+    createOfficializedCalendarBlocks
+} = require('./schedule-time-conflicts');
+
+const app = express();
+app.use(cors());
+// O termo assinado é enviado como PDF em base64; manter margem suficiente para o anexo.
+app.use(express.json({ limit: '10mb' }));
+app.use('/api', (_req, res, next) => { res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate'); next(); });
+app.use(express.static(path.join(__dirname, 'dist/public'), { index: false }));
+app.use(express.static(path.join(__dirname), { index: false }));
+
+// O token precisa ser o Read-Write Token criado na loja do Vercel Blob.
+// Remover aspas externas evita que um valor copiado como "token" seja recusado.
+const blobReadWriteToken = String(process.env.BLOB_READ_WRITE_TOKEN || '')
+    .trim()
+    .replace(/^(['"])(.*)\1$/s, '$2')
+    .trim();
+const blobStorageReady = Boolean(blobReadWriteToken);
+if (!blobStorageReady) {
+    console.warn('⚠️ [Vercel Blob] BLOB_READ_WRITE_TOKEN não configurado; uploads ficarão indisponíveis.');
+} else {
+    console.log('✅ [Vercel Blob] Read-Write Token detectado.');
+    if (!blobReadWriteToken.startsWith('vercel_blob_rw_')) {
+        console.warn('⚠️ [Vercel Blob] O valor não começa com vercel_blob_rw_; confirme que é o Read-Write Token da loja, não um token de cliente ou uma URL.');
+    }
+}
+const blobOptions = options => ({ ...options, token: blobReadWriteToken });
+// Os documentos da inscrição podem estar em qualquer formato; estes limites
+// controlam somente a quantidade e o tamanho dos arquivos por campo.
+const regrasDocumentosTeste = {
+    testeCurriculoPessoaFisica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeDocumentoPessoaFisica: { max: 5, bytes: 50 * 1024 * 1024 },
+    testePortfolioPessoaJuridica: { max: 1, bytes: 100 * 1024 * 1024 },
+    testeContratoPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeDocumentoRepresentantePessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeDocumentoCnpjPessoaJuridica: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeComprovanteVinculoUfsc: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeFichaTecnicaProposta: { max: 1, bytes: 50 * 1024 * 1024 },
+    testeLinksVideoProposta: { max: 5, bytes: 50 * 1024 * 1024 },
+    testeOutrosLinksProposta: { max: 1, bytes: 50 * 1024 * 1024 }
+};
+const nomeArquivoSeguro = value => String(value || 'arquivo')
+    .replace(/[^a-zA-Z0-9._-]+/g, '_')
+    .slice(-150) || 'arquivo';
+function criarComprovanteUploadInscricao(id) {
+    if (!blobStorageReady || !id) return '';
+    return createHmac('sha256', blobReadWriteToken)
+        .update(`dac-inscricao-document-upload:${String(id)}`)
+        .digest('hex');
+}
+function validarComprovanteUploadInscricao(id, comprovante) {
+    if (!blobStorageReady || !id || !/^[a-f0-9]{64}$/i.test(String(comprovante || ''))) return false;
+    const esperado = Buffer.from(criarComprovanteUploadInscricao(id), 'hex');
+    const recebido = Buffer.from(String(comprovante), 'hex');
+    return esperado.length === recebido.length && timingSafeEqual(esperado, recebido);
+}
+function pathnameDocumentoDaInscricaoValido(pathname, id) {
+    const partes = String(pathname || '').split('/');
+    return partes.length === 3
+        && partes[0] === 'inscricoes'
+        && partes[1] === String(id)
+        && Boolean(partes[2])
+        && partes[2] !== '.'
+        && partes[2] !== '..';
+}
+const uploadDocumentosTeste = multer({
+    storage: multer.memoryStorage(),
+    limits: { files: 30, fileSize: 100 * 1024 * 1024 }
+});
+const uploadRegistrosAtividades = multer({
+    storage: multer.memoryStorage(),
+    limits: { files: 5, fileSize: 20 * 1024 * 1024 }
+});
+
+// Configurar Google Calendar — locais disponíveis
+const CALENDAR_IDS = {
+    teatro: 'oto.bezerra@ufsc.br',
+    igrejinha: process.env.IGREJINHA_CALENDAR_ID || 'c_e19d30c40d4de176bc7d4e11ada96bfaffd130b3ed499d9807c88785e2c71c05@group.calendar.google.com'
+};
+const CALENDAR_ID = CALENDAR_IDS.teatro; // retrocompatibilidade
+let googleAuthClient;
+let SERVICE_ACCOUNT_EMAIL = '';
+
+// Funções para persistência com Upstash Redis (REST)
+const AGENDAMENTOS_KEY = 'agendamentos_v1';
+
+let redis;
+try {
+    let url = (process.env.UPSTASH_REDIS_REST_URL || '').replace(/^["']|["']$/g, '');
+    let token = (process.env.UPSTASH_REDIS_REST_TOKEN || '').replace(/^["']|["']$/g, '');
+
+    // Fallback: aceitar REDIS_URL em vários formatos
+    // - https://default:TOKEN@HOST.upstash.io  (REST)
+    // - rediss://default:TOKEN@HOST.upstash.io:PORT  (Redis TLS — formato padrão do Vercel/Upstash integration)
+    // - redis://default:TOKEN@HOST:PORT
+    if ((!url || !token) && process.env.REDIS_URL) {
+        const raw = process.env.REDIS_URL.replace(/^["']|["']$/g, '');
+        console.log(`[Redis] Tentando REDIS_URL — protocolo detectado: ${raw.split(':')[0]}`);
+        try {
+            const parsed = new URL(raw);
+            if (parsed.protocol === 'https:') {
+                url = `${parsed.protocol}//${parsed.hostname}`;
+                token = parsed.password || parsed.username;
+            } else if (parsed.protocol === 'rediss:' || parsed.protocol === 'redis:') {
+                // Upstash via integração Vercel: rediss://default:TOKEN@host.upstash.io:PORT
+                // Converter para REST: https://host.upstash.io + token = password
+                url = `https://${parsed.hostname}`;
+                token = parsed.password || parsed.username;
+                console.log(`[Redis] REDIS_URL rediss:// convertido para REST — host: ${parsed.hostname}`);
+            }
+        } catch (parseErr) {
+            console.error('[Redis] Erro ao parsear REDIS_URL:', parseErr.message);
+        }
+    }
+
+    // Corrige caso as credenciais tenham sido salvas invertidas
+    if (url && token && !url.startsWith('https://') && token.startsWith('https://')) {
+        [url, token] = [token, url];
+    }
+    if (url && token) {
+        redis = new Redis({ url, token });
+        console.log('✅ [Redis] Cliente Upstash REST inicializado com sucesso.');
+    } else {
+        console.warn('⚠️ [Redis] Credenciais Upstash não encontradas no ambiente.');
+    }
+} catch (e) {
+    console.error('❌ [Redis] Erro ao inicializar cliente:', e.message);
+}
+
+const assessmentStore = redis ? createAssessmentStore(redis) : null;
+const EVALUATOR_SESSION_COOKIE = 'dac_evaluator_session';
+const ADMIN_SESSION_COOKIE = 'dac_admin_session';
+const INSCRICOES_ARQUIVADAS_KEY = 'inscricoes_arquivadas_v1';
+const EVALUATOR_CANCELLED_INSCRIPTIONS_KEY = 'avaliador_inscricoes_canceladas_v1';
+const ARQUIVAMENTO_LOCK_KEY = 'inscricoes_arquivamento_lock';
+
+function obterSenhaAdminConfigurada() {
+    return String(process.env.ADMIN_PASSWORD || '')
+        .replace(/^["']|["']$/g, '')
+        .trim();
+}
+
+function getEvaluatorCookieOptions(req) {
+    const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
+        .split(',')[0]
+        .trim()
+        .toLowerCase();
+    return {
+        httpOnly: true,
+        secure: req.secure || forwardedProto === 'https',
+        sameSite: 'strict',
+        path: '/api'
+    };
+}
+
+function getEvaluatorSessionCookie(req) {
+    const cookies = String(req.headers.cookie || '').split(';');
+    for (const cookie of cookies) {
+        const separator = cookie.indexOf('=');
+        if (separator < 0 || cookie.slice(0, separator).trim() !== EVALUATOR_SESSION_COOKIE) continue;
+        try {
+            return decodeURIComponent(cookie.slice(separator + 1).trim());
+        } catch {
+            return '';
+        }
+    }
+    return '';
+}
+
+function getAdminSessionCookie(req) {
+    const cookies = String(req.headers.cookie || '').split(';');
+    for (const cookie of cookies) {
+        const separator = cookie.indexOf('=');
+        if (separator < 0 || cookie.slice(0, separator).trim() !== ADMIN_SESSION_COOKIE) continue;
+        try {
+            return decodeURIComponent(cookie.slice(separator + 1).trim());
+        } catch {
+            return '';
+        }
+    }
+    return '';
+}
+
+function isSameOriginRequest(req) {
+    const origin = String(req.headers.origin || '').trim();
+    if (!origin) return true;
+    try {
+        const originHost = new URL(origin).host.toLowerCase();
+        const requestHost = String(req.headers['x-forwarded-host'] || req.headers.host || '')
+            .split(',')[0]
+            .trim()
+            .toLowerCase();
+        return Boolean(requestHost) && originHost === requestHost;
+    } catch {
+        return false;
+    }
+}
+
+function requireAdminSession(req, res, next) {
+    const password = obterSenhaAdminConfigurada();
+    if (!password) {
+        return res.status(503).json({ error: 'A senha administrativa não está configurada no ambiente de produção.' });
+    }
+    if (!isSameOriginRequest(req)) {
+        return res.status(403).json({ error: 'Origem da solicitação não autorizada.' });
+    }
+    if (!verifyAdminSessionToken(password, getAdminSessionCookie(req))) {
+        return res.status(401).json({ error: 'Sessão administrativa inválida ou expirada. Entre novamente.' });
+    }
+    next();
+}
+
+async function findEvaluatorSession(req) {
+    if (!redis) return { status: 'unavailable', evaluator: null };
+    const token = getEvaluatorSessionCookie(req);
+    if (!token) return { status: 'unauthenticated', evaluator: null };
+
+    const evaluators = parseRedisValue(await redis.get('avaliadores')) || [];
+    const session = await authenticateEvaluatorSession(redis, token, evaluators);
+    return session.authenticated
+        ? { status: 'authenticated', evaluator: session.evaluator, token }
+        : { status: 'unauthenticated', evaluator: null };
+}
+
+const getAgendamentos = async () => {
+    try {
+        if (redis) {
+            const data = await redis.get(AGENDAMENTOS_KEY);
+            const parsed = parseRedisValue(data);
+            return Array.isArray(parsed) ? parsed : [];
+        }
+    } catch (error) {
+        console.error('❌ [Redis] Erro ao buscar agendamentos:', error.message);
+    }
+    return [];
+};
+
+const saveAgendamento = async (novoAgendamento) => {
+    try {
+        if (redis) {
+            const agendamentos = await getAgendamentos();
+            if (!novoAgendamento.id) {
+                novoAgendamento.id = `site_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            }
+            agendamentos.push(novoAgendamento);
+            // Upstash REST serializa automaticamente — não usar JSON.stringify extra
+            await redis.set(AGENDAMENTOS_KEY, agendamentos);
+            console.log("✅ [Redis] Agendamento salvo com sucesso. Dados:", JSON.stringify(novoAgendamento));
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ [Redis] Erro ao salvar agendamento:', error.message);
+    }
+    return false;
+};
+
+const updateAgendamento = async (id, campos) => {
+    try {
+        if (redis) {
+            const agendamentos = await getAgendamentos();
+            const idNormalizado = String(id);
+            const idx = agendamentos.findIndex(a => String(a.id) === idNormalizado);
+            if (idx === -1) return false;
+            agendamentos[idx] = { ...agendamentos[idx], ...campos };
+            await redis.set(AGENDAMENTOS_KEY, agendamentos);
+            return true;
+        }
+    } catch (error) {
+        console.error('❌ [Redis] Erro ao atualizar agendamento:', error.message);
+    }
+    return false;
+};
+
+const verificarEventosNoCalendario = async (agendamento) => {
+    if (!googleAuthClient) await initGoogleAuth();
+    try {
+        const allEvents = await calendar.events.list({
+            auth: googleAuthClient,
+            calendarId: CALENDAR_ID,
+            maxResults: 2500,
+            singleEvents: true
+        });
+
+        const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const eventosEsperados = [];
+
+        // Listar todos os eventos esperados para este agendamento
+        for (const key in agendamento.etapas) {
+            const itens = Array.isArray(agendamento.etapas[key]) ? agendamento.etapas[key] : [agendamento.etapas[key]];
+            itens.forEach((item, i) => {
+                const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                const eventSummary = `${label}: ${agendamento.evento}`;
+                eventosEsperados.push(eventSummary);
+            });
+        }
+
+        // Verificar se os eventos ainda existem no calendário
+        // Usamos uma lógica mais flexível: se encontrarmos QUALQUER evento que mencione o e-mail do proponente
+        // e tenha o nome do evento no título, consideramos que o agendamento ainda é válido.
+        const eventosEncontrados = allEvents.data.items.filter(e => {
+            const summaryMatch = e.summary && e.summary.toLowerCase().includes(agendamento.evento.toLowerCase());
+            const descriptionMatch = e.description && e.description.toLowerCase().includes(agendamento.email.toLowerCase());
+            return summaryMatch && descriptionMatch;
+        });
+
+        // Se nenhum evento foi encontrado, significa que foram apagados
+        // Para agendamentos muito recentes (menos de 5 minutos), assumimos que existem (evita delay de propagação do Google)
+        const isRecent = agendamento.id && (Date.now() - parseInt(agendamento.id)) < 300000;
+        return eventosEncontrados.length > 0 || isRecent;
+    } catch (error) {
+        console.error('⚠️ [Google Calendar] Erro ao verificar eventos:', error.message);
+        return true; // Assume que existem para não quebrar o fluxo
+    }
+};
+
+const deleteAgendamentoById = async (id) => {
+    try {
+        if (!redis) return false;
+        const agendamentos = await getAgendamentos();
+        const agendamentoAExcluir = agendamentos.find(a => String(a.id) === String(id));
+        if (!agendamentoAExcluir) return false;
+
+        let eventosFalhos = 0;
+        if (agendamentoAExcluir.etapas) {
+            if (!googleAuthClient) await initGoogleAuth();
+        }
+        if (agendamentoAExcluir.etapas && googleAuthClient) {
+            const calendarId = agendamentoAExcluir.calendarId
+                || CALENDAR_IDS[(agendamentoAExcluir.local || 'teatro').toLowerCase()]
+                || CALENDAR_IDS.teatro;
+            const resposta = await calendar.events.list({
+                auth: googleAuthClient,
+                calendarId,
+                maxResults: 2500,
+                singleEvents: true
+            });
+            const eventos = resposta.data.items || [];
+            const nomesEtapas = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+            const horaDoEvento = event => {
+                const inicio = event.start?.dateTime || '';
+                return {
+                    data: inicio.slice(0, 10),
+                    hora: inicio.includes('T') ? inicio.split('T')[1].slice(0, 5) : ''
+                };
+            };
+
+            for (const [key, valores] of Object.entries(agendamentoAExcluir.etapas)) {
+                const itens = Array.isArray(valores) ? valores : [valores];
+                for (let i = 0; i < itens.length; i++) {
+                    const item = itens[i];
+                    if (!item?.data || !item?.horario) continue;
+                    const label = itens.length > 1 ? `${nomesEtapas[key]} ${i + 1}` : nomesEtapas[key];
+                    const [horaInicio] = String(item.horario).split(' às ');
+                    const sameSlot = event => {
+                        const inicio = horaDoEvento(event);
+                         const resumoEsperado = `${label}: ${agendamentoAExcluir.evento}`;
+                         const resumoAtual = String(event.summary || '').replace(/^\[Em análise\]\s*/i, '').trim();
+                         return resumoAtual === resumoEsperado
+                            && inicio.data === item.data
+                            && inicio.hora === horaInicio;
+                    };
+                    const matchesWithId = eventos.filter(event => {
+                        if (!sameSlot(event)) return false;
+                        const privateProps = event.extendedProperties?.private || {};
+                        return String(privateProps.dac_inscricao_id || '') === String(agendamentoAExcluir.id);
+                    });
+                    const legacyMatches = eventos.filter(event => {
+                        if (!sameSlot(event)) return false;
+                        const privateProps = event.extendedProperties?.private || {};
+                        if (privateProps.dac_inscricao_id) return false;
+                        const descricao = String(event.description || '');
+                        const emailMatch = Boolean(agendamentoAExcluir.email)
+                            && descricao.toLowerCase().includes(String(agendamentoAExcluir.email).toLowerCase());
+                        // Eventos criados antes de dac_inscricao_id podem ter
+                        // qualquer um dos dois formatos oficiais de descrição.
+                        // Não usamos apenas o e-mail porque registros antigos
+                        // do fluxo oficial nem sempre o tinham na descrição.
+                        const descricaoSistema = privateProps.dac_source === 'sistema'
+                            || descricao.startsWith('Em análise\nLocal:')
+                            || (descricao.includes('Proponente:') && descricao.includes('Local:'));
+                        return emailMatch || descricaoSistema;
+                    });
+                    // Eventos novos são identificados pelo ID. Para eventos
+                    // antigos, só usamos o fallback quando há uma única
+                    // correspondência, evitando apagar o horário de outra
+                    // inscrição com o mesmo nome e horário.
+                    const matches = matchesWithId.length > 0
+                        ? matchesWithId
+                        : legacyMatches.length === 1 ? legacyMatches : [];
+                    console.log(
+                        `[Calendar] Exclusão ID ${agendamentoAExcluir.id}: ` +
+                        `${eventos.length} eventos no calendário, ` +
+                        `${matchesWithId.length} por ID, ${legacyMatches.length} legados ` +
+                        `para "${label}: ${agendamentoAExcluir.evento}" ` +
+                        `(${item.data} ${horaInicio})` +
+                        (legacyMatches.length > 1 ? ' — ambíguo, preservado' : '')
+                    );
+                    for (const event of matches) {
+                        try {
+                            await calendar.events.delete({ auth: googleAuthClient, calendarId, eventId: event.id });
+                            console.log(`✅ [Calendar] Evento deletado: ${event.summary} (${item.data} ${horaInicio})`);
+                        } catch (err) {
+                            eventosFalhos++;
+                            console.error(`⚠️ [Calendar] Erro ao deletar evento ${event.id}:`, err.message);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Só remove o registro que corresponde ao ID selecionado no painel.
+        const filtrados = agendamentos.filter(a => String(a.id) !== String(id));
+        await redis.set(AGENDAMENTOS_KEY, filtrados);
+        console.log(`✅ [Redis] Agendamento ${id} removido.`);
+
+        const nomeEvento = (agendamentoAExcluir.evento || '').trim().toLowerCase().replace(/\s+/g, '_');
+        const emailNorm = (agendamentoAExcluir.email || '').trim().toLowerCase();
+        const formsId = `forms_${emailNorm || 'noemail'}_${nomeEvento}`;
+        await addToBlacklist(formsId).catch(() => {});
+        await addToBlacklist(agendamentoAExcluir.id).catch(() => {});
+        let avaliacoesRemovidas = 0;
+        let falhaAoRemoverAvaliacoes = false;
+        if (assessmentStore) {
+            try {
+                avaliacoesRemovidas = await assessmentStore.deleteByInscription(id);
+            } catch (error) {
+                falhaAoRemoverAvaliacoes = true;
+                console.error(`⚠️ [Avaliações] Não foi possível limpar a inscrição ${id}:`, error.message);
+            }
+        }
+        return { success: true, eventosFalhos, avaliacoesRemovidas, falhaAoRemoverAvaliacoes };
+    } catch (error) {
+        console.error('❌ [Redis] Erro ao deletar agendamento:', error.message);
+    }
+    return false;
+};
+
+const deleteLegacyCalendarEvents = async (inscricao) => {
+    if (!googleAuthClient || !Array.isArray(inscricao?.calendarDates)) return 0;
+    const nomesCalendarios = {
+        'teatro carmen fossari': CALENDAR_IDS.teatro,
+        'igre jinha da ufsc': CALENDAR_IDS.igrejinha,
+        'igrejinha da ufsc': CALENDAR_IDS.igrejinha
+    };
+    let removidos = 0;
+    const consultas = new Map();
+    for (const item of inscricao.calendarDates) {
+        if (!item?.data || !item?.horario || !item?.resumo) continue;
+        const calendarId = nomesCalendarios[String(item.local || '').toLowerCase()]
+            || CALENDAR_IDS.teatro;
+        if (!consultas.has(calendarId)) consultas.set(calendarId, []);
+        consultas.get(calendarId).push(item);
+    }
+
+    for (const [calendarId, itens] of consultas) {
+        const resposta = await calendar.events.list({
+            auth: googleAuthClient, calendarId, maxResults: 2500, singleEvents: true
+        });
+        const eventos = resposta.data.items || [];
+        for (const item of itens) {
+            const [horaInicio] = String(item.horario).split(' às ');
+            const matches = eventos.filter(event => {
+                const inicio = event.start?.dateTime || '';
+                return event.summary === item.resumo
+                    && inicio.slice(0, 10) === item.data
+                    && inicio.includes('T')
+                    && inicio.split('T')[1].slice(0, 5) === horaInicio;
+            });
+            for (const event of matches) {
+                try {
+                    await calendar.events.delete({ auth: googleAuthClient, calendarId, eventId: event.id });
+                    removidos++;
+                    console.log(`✅ [Calendar] Evento legado deletado: ${event.summary} (${item.data} ${horaInicio})`);
+                } catch (error) {
+                    console.error(`⚠️ [Calendar] Erro ao deletar evento legado ${event.id}:`, error.message);
+                }
+            }
+        }
+    }
+    return removidos;
+};
+
+// Compatibilidade: nunca apagar vários registros só porque compartilham o e-mail.
+const deleteAgendamentoByEmail = async (email) => {
+    const agendamentos = await getAgendamentos();
+    const encontrados = agendamentos.filter(a => (a.email || '').trim().toLowerCase() === String(email || '').trim().toLowerCase());
+    if (encontrados.length !== 1) {
+        console.warn(`⚠️ [Exclusão] E-mail corresponde a ${encontrados.length} registros; exclusão bloqueada sem ID.`);
+        return false;
+    }
+    return deleteAgendamentoById(encontrados[0].id);
+};
+
+const initGoogleAuth = async () => {
+    try {
+        const serviceAccountKey = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+        if (serviceAccountKey) {
+            const credentials = JSON.parse(serviceAccountKey);
+            SERVICE_ACCOUNT_EMAIL = credentials.client_email || '';
+            const auth = new google.auth.GoogleAuth({
+                credentials: {
+                    client_email: credentials.client_email,
+                    private_key: credentials.private_key,
+                },
+                scopes: [
+                    'https://www.googleapis.com/auth/calendar',
+                    'https://www.googleapis.com/auth/spreadsheets.readonly',
+                    'https://www.googleapis.com/auth/drive.readonly'
+                ],
+            });
+            googleAuthClient = await auth.getClient();
+            console.log('✅ [Google] Autenticação configurada com sucesso.');
+        }
+    } catch (error) {
+        console.error('❌ [Google] Erro ao configurar autenticação:', error.message);
+    }
+};
+
+initGoogleAuth().catch(err => console.error('❌ [initGoogleAuth] Falha na inicialização:', err.message));
+
+const calendar = google.calendar({ version: 'v3' });
+const sheets = google.sheets({ version: 'v4' });
+const drive = google.drive({ version: 'v3' });
+let SPREADSHEET_ID = '1FFjm8WMtLGbWqFDsSwtkFfuuCaN9zNzi7RB7Z68CZAo';
+let FORMS_LINK = 'https://docs.google.com/forms/d/e/1FAIpQLSemUx54pVFiR-lyYql3Imyp82SzPaecsVIMCfFDP5-VPJ97mw/viewform?usp=dialog';
+let PERMITIR_DISPUTA = true; // Padrão é permitir disputa conforme comportamento atual
+let UNIFICAR_ESPACOS = true; // Preserva a regra atual entre Teatro e Igrejinha
+let HORARIOS_LIMITES = {
+    ensaio: { inicio: '08:00', fim: '21:00' },
+    montagem: { inicio: '08:00', fim: '21:00' },
+    desmontagem: { inicio: '08:00', fim: '21:00' }
+};
+let DATAS_BLOQUEADAS = [];
+let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
+let AVALIACOES_NECESSARIAS = 3;
+let AVALIACOES_NECESSARIAS_MODO = 'automatico';
+// O modo unificado é o padrão permanente. O modo de 2 etapas só pode ser
+// ativado com a chave explícita de emergência abaixo.
+const MODO_2_ETAPAS_CHAVE_EMERGENCIA = 'DAC-EMERGENCIA-MODO-2-ETAPAS';
+let MODO_INSCRICAO = 'unificado';
+const RESPONSAVEL_TERMO_NOME_PADRAO = 'Andréa Búrigo Ventura';
+let RESPONSAVEL_TERMO_NOME = RESPONSAVEL_TERMO_NOME_PADRAO;
+let BOTOES_HOME = {
+    interno: { ativo: false, texto: 'Edital Interno' },
+    externo: { ativo: true,  texto: 'Edital de Ocupação dos Espaços do DAC 2026' },
+    ensaio:  { ativo: false, texto: 'Agendar Apenas Ensaio' }
+};
+let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.';
+let MOSTRAR_BOTOES_DESATIVADOS = true;
+const MENSAGEM_DIVULGACAO_PADRAO = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento contendo as informações essenciais (o quê, onde, quando e quanto custa) para os seguintes e-mails: divulgadac@contato.ufsc.br e  ivo.caoe@ufsc.br\n\nRessaltamos que esse envio deve ocorrer com, no mínimo, 7 (sete) dias de antecedência em relação à data de realização do evento, a fim de viabilizar sua inclusão em nossas mídias.\nEm caso de dúvidas sobre o processo de divulgação, solicitamos que o contato seja feito diretamente com os e-mails informados acima.";
+let MENSAGEM_DIVULGACAO = MENSAGEM_DIVULGACAO_PADRAO;
+let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
+
+const CONFIG_KEY = 'agendamentos_config';
+async function obterNumeroAvaliadoresCadastrados() {
+    if (!redis) return null;
+    try {
+        const avaliadores = parseRedisValue(await redis.get('avaliadores'));
+        return Array.isArray(avaliadores) ? avaliadores.length : 0;
+    } catch (error) {
+        console.warn('[Avaliações] Não foi possível contar os avaliadores cadastrados:', error.message);
+        return null;
+    }
+}
+
+async function obterAvaliacoesNecessariasEfetivas(configs = {}) {
+    const numeroAvaliadores = await obterNumeroAvaliadoresCadastrados();
+    return resolveRequiredEvaluationCount({
+        mode: configs.avaliacoesNecessariasModo ?? AVALIACOES_NECESSARIAS_MODO,
+        manualCount: configs.avaliacoesNecessarias ?? AVALIACOES_NECESSARIAS,
+        evaluatorCount: numeroAvaliadores
+    });
+}
+
+const normalizarModoInscricao = (modo, chaveEmergencia = '') => {
+    if (modo === 'unificado') return 'unificado';
+    if (modo === 'duas-etapas' && String(chaveEmergencia).trim() === MODO_2_ETAPAS_CHAVE_EMERGENCIA) return 'duas-etapas';
+    return 'unificado';
+};
+const normalizarBooleano = (valor, padrao) => {
+    if (typeof valor === 'boolean') return valor;
+    if (typeof valor === 'string') {
+        const texto = valor.trim().toLowerCase();
+        if (['false', '0', 'nao', 'não', 'off'].includes(texto)) return false;
+        if (['true', '1', 'sim', 'on'].includes(texto)) return true;
+    }
+    return valor === undefined || valor === null ? padrao : Boolean(valor);
+};
+
+const escaparTextoHtml = valor => String(valor ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+// A página ainda sincroniza as configurações pelo JavaScript, mas os valores
+// principais também são aplicados no HTML inicial para evitar o flash dos
+// padrões enquanto a primeira chamada à API não termina.
+const prepararPaginaInicial = (html, configs) => {
+    const padroes = {
+        interno: { ativo: false, texto: 'Edital Interno', id: 'btnHomeInterno' },
+        externo: { ativo: true, texto: 'Edital de Ocupação dos Espaços do DAC 2026', id: 'btnHomeExterno' },
+        ensaio: { ativo: false, texto: 'Agendar Apenas Ensaio', id: 'btnHomeEnsaio' }
+    };
+    const botoes = configs.botoesHome || {};
+    const mostrarDesativados = configs.mostrarBotoesDesativados !== false;
+    let pagina = html;
+
+    Object.values(padroes).forEach(padrao => {
+        const botao = { ...padrao, ...(botoes[padrao.id.replace('btnHome', '').toLowerCase()] || {}) };
+        const seletor = new RegExp(`(<button\\b[^>]*\\bid="${padrao.id}"[^>]*>)[\\s\\S]*?(</button>)`, 'i');
+        pagina = pagina.replace(seletor, (_match, abertura, fechamento) => (
+            `${abertura}${escaparTextoHtml(botao.texto || padrao.texto)}${fechamento}`
+        ));
+    });
+
+    if (!mostrarDesativados) {
+        const idsOcultos = Object.values(padroes)
+            .filter(padrao => !(botoes[padrao.id.replace('btnHome', '').toLowerCase()] || {}).ativo)
+            .map(padrao => `#${padrao.id}`)
+            .join(',');
+        if (idsOcultos) {
+            pagina = pagina.replace('</head>', `<style id="server-home-config">${idsOcultos}{display:none !important}</style></head>`);
+        }
+    }
+    return pagina;
+};
+
+const getConfigs = async (caller = 'unknown') => {
+    console.log(`[getConfigs] chamado por: ${caller} | redis disponível: ${!!redis}`);
+    try {
+        if (redis) {
+            const data = await redis.get(CONFIG_KEY);
+            console.log(`[getConfigs] raw Redis value type: ${typeof data} | null? ${data === null}`);
+            if (data) {
+                const configs = parseRedisValue(data);
+                const prevSheet = SPREADSHEET_ID;
+                const prevForms = FORMS_LINK;
+                SPREADSHEET_ID = extractSpreadsheetId(configs.spreadsheetId) || SPREADSHEET_ID;
+                FORMS_LINK = configs.formsLink || FORMS_LINK;
+                PERMITIR_DISPUTA = normalizarBooleano(configs.permitirDisputa, true);
+                UNIFICAR_ESPACOS = normalizarBooleano(configs.unificarEspacos, true);
+                SOMENTE_FINSEMANA = normalizarBooleano(configs.somenteFinaisDeSemana, false);
+                HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
+                DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
+                TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
+                MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
+                if (configs.avaliacoesNecessarias !== undefined) {
+                    AVALIACOES_NECESSARIAS = normalizeManualEvaluationCount(configs.avaliacoesNecessarias);
+                }
+                AVALIACOES_NECESSARIAS_MODO = normalizeEvaluationMode(configs.avaliacoesNecessariasModo);
+                if (typeof configs.responsavelTermoNome === 'string' && configs.responsavelTermoNome.trim()) {
+                    RESPONSAVEL_TERMO_NOME = configs.responsavelTermoNome.trim();
+                }
+                if (configs.botoesHome && typeof configs.botoesHome === 'object') {
+                    BOTOES_HOME = {
+                        interno: { ...BOTOES_HOME.interno, ...(configs.botoesHome.interno || {}) },
+                        externo: { ...BOTOES_HOME.externo, ...(configs.botoesHome.externo || {}) },
+                        ensaio:  { ...BOTOES_HOME.ensaio,  ...(configs.botoesHome.ensaio  || {}) }
+                    };
+                }
+                if (configs.mensagemBotoesDesativados !== undefined) {
+                    MENSAGEM_BOTOES_DESATIVADOS = configs.mensagemBotoesDesativados || MENSAGEM_BOTOES_DESATIVADOS;
+                }
+                if (configs.mostrarBotoesDesativados !== undefined) {
+                    MOSTRAR_BOTOES_DESATIVADOS = normalizarBooleano(configs.mostrarBotoesDesativados, true);
+                }
+                if (prevSheet !== SPREADSHEET_ID || prevForms !== FORMS_LINK) {
+                    console.log(`[getConfigs] ✅ Config carregada do Redis — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
+                } else {
+                    console.log(`[getConfigs] ✅ Config do Redis sem mudança — sheet: ${SPREADSHEET_ID}`);
+                }
+                return {
+                    spreadsheetId: SPREADSHEET_ID,
+                    formsLink: FORMS_LINK,
+                    permitirDisputa: PERMITIR_DISPUTA,
+                    unificarEspacos: UNIFICAR_ESPACOS,
+                    somenteFinaisDeSemana: SOMENTE_FINSEMANA,
+                    horariosLimites: HORARIOS_LIMITES,
+                    datasBloqueadas: DATAS_BLOQUEADAS,
+                    tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                    modoInscricao: MODO_INSCRICAO,
+                    avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+                    avaliacoesNecessariasModo: AVALIACOES_NECESSARIAS_MODO,
+                    responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
+                    botoesHome: BOTOES_HOME,
+                    mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
+                    mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS,
+                    mensagemDivulgacao: MENSAGEM_DIVULGACAO
+                };
+            } else {
+                console.warn(`[getConfigs] ⚠️ Nenhum valor encontrado no Redis para chave "${CONFIG_KEY}" — usando padrões em memória`);
+            }
+        } else {
+            console.warn('[getConfigs] ⚠️ Redis indisponível — retornando valores em memória');
+        }
+    } catch (error) {
+        console.error('[getConfigs] ❌ Erro ao buscar configurações:', error.message, error.stack);
+    }
+    console.log(`[getConfigs] fallback — sheet: ${SPREADSHEET_ID} | forms: ${FORMS_LINK?.slice(0,60)}`);
+    return {
+        spreadsheetId: SPREADSHEET_ID,
+        formsLink: FORMS_LINK,
+        permitirDisputa: PERMITIR_DISPUTA,
+        unificarEspacos: UNIFICAR_ESPACOS,
+        somenteFinaisDeSemana: SOMENTE_FINSEMANA,
+        horariosLimites: HORARIOS_LIMITES,
+        datasBloqueadas: DATAS_BLOQUEADAS,
+        tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+        modoInscricao: MODO_INSCRICAO,
+        avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+        avaliacoesNecessariasModo: AVALIACOES_NECESSARIAS_MODO,
+        responsavelTermoNome: RESPONSAVEL_TERMO_NOME || RESPONSAVEL_TERMO_NOME_PADRAO,
+        botoesHome: BOTOES_HOME,
+        mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
+        mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS,
+        mensagemDivulgacao: MENSAGEM_DIVULGACAO
+    };
+};
+
+const extractSpreadsheetId = (input) => {
+    if (!input) return null;
+    let id = input.trim();
+
+    // Se for uma URL completa do Google Sheets
+    if (id.includes('/d/')) {
+        const match = id.match(/\/d\/([a-zA-Z0-9-_]+)/);
+        if (match) return match[1];
+    }
+
+    // Se for um link que começa direto pelo ID (ex: 1cQ0w.../edit)
+    if (id.includes('/')) {
+        return id.split('/')[0];
+    }
+
+    return id;
+};
+
+const saveConfigs = async (configs) => {
+    console.log(`[saveConfigs] iniciando — redis: ${!!redis} | sheet recebido: ${configs.spreadsheetId} | forms recebido: ${(configs.formsLink||'').slice(0,60)}`);
+    try {
+        // Extrair o ID caso tenham colado a URL completa
+        const cleanSpreadsheetId = extractSpreadsheetId(configs.spreadsheetId);
+
+        // Atualiza em memória primeiro
+        SPREADSHEET_ID = cleanSpreadsheetId || SPREADSHEET_ID;
+        FORMS_LINK = configs.formsLink || FORMS_LINK;
+        if (configs.permitirDisputa !== undefined) {
+            PERMITIR_DISPUTA = configs.permitirDisputa;
+        }
+        if (configs.unificarEspacos !== undefined) {
+            UNIFICAR_ESPACOS = normalizarBooleano(configs.unificarEspacos, true);
+        }
+        if (configs.somenteFinaisDeSemana !== undefined) {
+            SOMENTE_FINSEMANA = configs.somenteFinaisDeSemana;
+        }
+        if (configs.horariosLimites) {
+            HORARIOS_LIMITES = configs.horariosLimites;
+        }
+        if (configs.datasBloqueadas) {
+            DATAS_BLOQUEADAS = configs.datasBloqueadas;
+        }
+        if (configs.tituloPaginaAgendamento !== undefined) {
+            TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
+        }
+        if (configs.modoInscricao !== undefined) {
+            MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
+        }
+        if (configs.avaliacoesNecessarias !== undefined) {
+            AVALIACOES_NECESSARIAS = normalizeManualEvaluationCount(configs.avaliacoesNecessarias);
+        }
+        if (configs.avaliacoesNecessariasModo !== undefined) {
+            AVALIACOES_NECESSARIAS_MODO = normalizeEvaluationMode(configs.avaliacoesNecessariasModo);
+        }
+        if (configs.responsavelTermoNome !== undefined) {
+            const nome = String(configs.responsavelTermoNome || '').trim();
+            if (nome) RESPONSAVEL_TERMO_NOME = nome;
+        }
+        if (configs.botoesHome && typeof configs.botoesHome === 'object') {
+            const norm = (b, padraoTexto) => ({
+                ativo: !!(b && b.ativo),
+                texto: ((b && typeof b.texto === 'string' ? b.texto : '') || '').trim() || padraoTexto,
+                dataInicio: (b && typeof b.dataInicio === 'string' && b.dataInicio) ? b.dataInicio : null
+            });
+            BOTOES_HOME = {
+                interno: norm(configs.botoesHome.interno, 'Edital Interno'),
+                externo: norm(configs.botoesHome.externo, 'Edital de Ocupação dos Espaços do DAC 2026'),
+                ensaio:  norm(configs.botoesHome.ensaio,  'Agendar Apenas Ensaio')
+            };
+        }
+        if (configs.mensagemBotoesDesativados !== undefined) {
+            MENSAGEM_BOTOES_DESATIVADOS = (configs.mensagemBotoesDesativados || '').trim() || MENSAGEM_BOTOES_DESATIVADOS;
+        }
+        if (configs.mostrarBotoesDesativados !== undefined) {
+            MOSTRAR_BOTOES_DESATIVADOS = normalizarBooleano(configs.mostrarBotoesDesativados, true);
+        }
+        if (configs.mensagemDivulgacao !== undefined) {
+            MENSAGEM_DIVULGACAO = String(configs.mensagemDivulgacao || '').trim() || MENSAGEM_DIVULGACAO_PADRAO;
+        }
+
+        if (redis) {
+            const configToSave = {
+                spreadsheetId: cleanSpreadsheetId,
+                formsLink: FORMS_LINK,
+                permitirDisputa: PERMITIR_DISPUTA,
+                unificarEspacos: UNIFICAR_ESPACOS,
+                somenteFinaisDeSemana: SOMENTE_FINSEMANA,
+                horariosLimites: HORARIOS_LIMITES,
+                datasBloqueadas: DATAS_BLOQUEADAS,
+                tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
+                modoInscricao: MODO_INSCRICAO,
+                ...(MODO_INSCRICAO === 'duas-etapas' ? { modoInscricaoEmergencia: MODO_2_ETAPAS_CHAVE_EMERGENCIA } : {}),
+                avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
+                avaliacoesNecessariasModo: AVALIACOES_NECESSARIAS_MODO,
+                responsavelTermoNome: RESPONSAVEL_TERMO_NOME,
+                botoesHome: BOTOES_HOME,
+                mensagemBotoesDesativados: MENSAGEM_BOTOES_DESATIVADOS,
+                mostrarBotoesDesativados: MOSTRAR_BOTOES_DESATIVADOS,
+                mensagemDivulgacao: MENSAGEM_DIVULGACAO
+            };
+            console.log(`[saveConfigs] gravando no Redis — sheet: ${cleanSpreadsheetId} | forms: ${FORMS_LINK?.slice(0,60)}`);
+            const setResult = await redis.set(CONFIG_KEY, configToSave);
+            console.log(`[saveConfigs] ✅ redis.set resultado: ${JSON.stringify(setResult)}`);
+            // Verificação imediata: re-lê do Redis para confirmar persistência
+            const verify = await redis.get(CONFIG_KEY);
+            const vParsed = parseRedisValue(verify);
+            console.log(`[saveConfigs] verificação pós-set — sheet lido: ${vParsed?.spreadsheetId} | forms lido: ${(vParsed?.formsLink||'').slice(0,60)}`);
+        } else {
+            console.warn('[saveConfigs] ⚠️ Redis indisponível — salvo apenas em memória. Não persistirá entre reinicializações!');
+        }
+        return true;
+    } catch (error) {
+        console.error('[saveConfigs] ❌ Erro:', error.message, error.stack);
+    }
+    return false;
+};
+
+// Carregar configurações iniciais
+getConfigs('startup').catch(err => console.error('❌ [startup] Erro ao carregar configs:', err.message));
+
+const createCalendarEvent = async (summary, description, date, timeRange, calendarId = CALENDAR_IDS.teatro, inscriptionId = null) => {
+    if (!googleAuthClient) await initGoogleAuth();
+    try {
+        const [startTime, endTime] = timeRange.split(' às ');
+        const startDateTimeStr = `${date}T${startTime}:00-03:00`;
+        const endDateTimeStr = `${date}T${endTime}:00-03:00`;
+        const event = {
+            summary: summary,
+            description: description,
+            start: { dateTime: startDateTimeStr, timeZone: 'America/Sao_Paulo' },
+            end: { dateTime: endDateTimeStr, timeZone: 'America/Sao_Paulo' },
+            extendedProperties: {
+                private: {
+                    dac_source: 'sistema',
+                    ...(inscriptionId ? { dac_inscricao_id: String(inscriptionId) } : {})
+                }
+            }
+        };
+        const response = await calendar.events.insert({
+            auth: googleAuthClient,
+            calendarId: calendarId,
+            resource: event,
+        });
+        return response.data;
+    } catch (error) {
+        console.error(`❌ [Google] Erro ao criar evento:`, error.message);
+        return null;
+    }
+};
+
+const atualizarDescricaoEventosInscricao = async (agendamento, descricao) => {
+    const id = String(agendamento?.id || '').trim();
+    const calendarId = agendamento?.calendarId
+        || CALENDAR_IDS[(agendamento?.local || 'teatro').toLowerCase()]
+        || CALENDAR_IDS.teatro;
+    if (!id || !String(descricao || '').trim()) return { updated: 0, total: 0 };
+
+    let events = [];
+    let updated = 0;
+    let total = 0;
+    try {
+        if (!googleAuthClient) await initGoogleAuth();
+        if (!googleAuthClient) throw new Error('Autenticação do Google Calendar indisponível.');
+
+        let pageToken;
+        do {
+            const response = await calendar.events.list({
+                auth: googleAuthClient,
+                calendarId,
+                maxResults: 2500,
+                privateExtendedProperty: [
+                    'dac_source=sistema',
+                    `dac_inscricao_id=${id}`
+                ],
+                ...(pageToken ? { pageToken } : {})
+            });
+            events.push(...(response.data.items || []));
+            pageToken = response.data.nextPageToken;
+        } while (pageToken);
+
+        const eventosUnicos = [...new Map(events.filter(event => event.id).map(event => [event.id, event])).values()];
+        total = eventosUnicos.length;
+        for (const event of eventosUnicos) {
+            await calendar.events.patch({
+                auth: googleAuthClient,
+                calendarId,
+                eventId: event.id,
+                resource: { description: descricao }
+            });
+            updated++;
+        }
+
+        if (updated === 0) {
+            console.warn(`⚠️ [Calendar] Nenhum evento encontrado para atualizar a sinopse da inscrição ${id}.`);
+        } else {
+            console.log(`✅ [Calendar] Sinopse atualizada em ${updated} evento(s) da inscrição ${id}.`);
+        }
+        return { updated, total };
+    } catch (error) {
+        console.error(`⚠️ [Calendar] Não foi possível atualizar a sinopse da inscrição ${id}:`, error.message);
+        return { updated, total, error: error.message };
+    }
+};
+
+const atualizarCalendarioComSinopseInscricao = async (agendamento) => {
+    if (agendamento?.inscricaoTeste !== true) return null;
+
+    const sinopse = String(agendamento.segundaEtapaTeste?.sinopse || '').trim();
+    if (!sinopse) {
+        console.warn(`⚠️ [Calendar] Inscrição unificada ${agendamento.id} sem sinopse salva; descrição não alterada.`);
+        return false;
+    }
+
+    const resultado = await atualizarDescricaoEventosInscricao(
+        agendamento,
+        `Sinopse/descrição da proposta:\n${sinopse}`
+    );
+    return resultado.total > 0 && resultado.updated === resultado.total;
+};
+
+// Endpoint de diagnóstico — mostra estado do Redis e configuração em memória
+app.get('/api/debug', async (req, res) => {
+    const env = {
+        UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL ? `${process.env.UPSTASH_REDIS_REST_URL.slice(0, 30)}...` : '❌ NÃO DEFINIDO',
+        UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN ? '✅ definido' : '❌ NÃO DEFINIDO',
+        GOOGLE_SERVICE_ACCOUNT_KEY: process.env.GOOGLE_SERVICE_ACCOUNT_KEY ? '✅ definido' : '❌ NÃO DEFINIDO',
+        BREVO_API_KEY: process.env.BREVO_API_KEY ? '✅ definido' : '❌ NÃO DEFINIDO',
+        SENDER_EMAIL: process.env.SENDER_EMAIL || '❌ NÃO DEFINIDO',
+        ADMIN_EMAIL: process.env.ADMIN_EMAIL || '❌ NÃO DEFINIDO',
+        NODE_ENV: process.env.NODE_ENV || 'não definido',
+    };
+    let redisRaw = null;
+    let redisParsed = null;
+    let redisError = null;
+    try {
+        if (redis) {
+            redisRaw = await redis.get(CONFIG_KEY);
+            redisParsed = parseRedisValue(redisRaw);
+        }
+    } catch(e) {
+        redisError = e.message;
+    }
+    const inMemory = {
+        SPREADSHEET_ID,
+        FORMS_LINK: FORMS_LINK?.slice(0, 80),
+        PERMITIR_DISPUTA,
+        TITULO_PAGINA_AGENDAMENTO,
+        AVALIACOES_NECESSARIAS,
+    };
+    const redisStored = redisParsed ? {
+        spreadsheetId: redisParsed.spreadsheetId,
+        formsLink: (redisParsed.formsLink || '').slice(0, 80),
+        permitirDisputa: redisParsed.permitirDisputa,
+    } : null;
+    console.log('[/api/debug] estado atual:', JSON.stringify({ env, inMemory, redisStored, redisError }));
+    res.json({
+        ts: new Date().toISOString(),
+        redis_disponivel: !!redis,
+        redis_error: redisError,
+        env_vars: env,
+        in_memory: inMemory,
+        redis_stored: redisStored,
+        match: redisStored ? (redisStored.spreadsheetId === inMemory.SPREADSHEET_ID && redisStored.formsLink === inMemory.FORMS_LINK?.slice(0,80)) : null,
+    });
+});
+
+// Rota para obter configurações (pública para o site poder pegar o link do forms)
+app.get('/api/config', async (req, res) => {
+    const configs = await getConfigs('GET /api/config');
+    const avaliacoesNecessariasEfetivas = await obterAvaliacoesNecessariasEfetivas(configs);
+    res.json({ ...configs, avaliacoesNecessariasEfetivas });
+});
+
+// Rota para salvar configurações (administrativa)
+app.post('/api/admin/config', async (req, res) => {
+    const { spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome } = req.body;
+    // PermitirDisputa pode ser booleano, então verificamos se é undefined
+    if (!spreadsheetId || !formsLink) {
+        return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
+    }
+    if (modoInscricao === 'duas-etapas' && String(modoInscricaoEmergencia || '').trim() !== MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
         return res.status(403).json({ success: false, error: 'O modo de 2 etapas está bloqueado. Informe a chave de emergência autorizada.' });
     }
     const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome });
