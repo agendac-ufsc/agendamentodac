@@ -1528,10 +1528,22 @@ function renderArchiveTable() {
             statusClass = 'st-cancelado';
             statusText = 'Cancelado';
         }
+        const archiveIds = [item?.id, item?.legacyId]
+            .filter(value => value !== undefined && value !== null && String(value).trim())
+            .map(String);
+        const sourceRecordIndex = item.visualOnly === true && userRole === 'admin'
+            ? allUnificados.findIndex(row => [
+                row?.id, row?.legacyId, row?.primeiraEtapa?.id, row?.primeiraEtapa?.legacyId
+            ].some(value => value !== undefined && value !== null && archiveIds.includes(String(value))))
+            : -1;
+        const editableStage = sourceRecordIndex >= 0 ? allUnificados[sourceRecordIndex]?.primeiraEtapa : null;
+        const editButton = editableStage?.id && editableStage.etapas
+            ? '<button class="btn-action" title="Editar datas e horários" aria-label="Editar datas e horários" onclick="openEditarEtapas(' + sourceRecordIndex + ')" style="color:#764ba2"><i class="fas fa-pencil-alt"></i></button>'
+            : '';
         const contactButton = sourceRecord
             ? `<button class="btn-action" title="Ver contato do proponente" aria-label="Ver contato do proponente" onclick="showArchiveContact(${archiveIndex})" style="color:#6b7280"><i class="fas fa-address-card"></i></button>`
             : '';
-        const infoButtons = `${contactButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
+        const infoButtons = `${editButton}${contactButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
 
         return `<tr>
             <td class="check-col"><input type="checkbox" class="insc-checkbox archive-check" data-index="${archiveIndex}" aria-label="Selecionar inscrição arquivada" title="${selectionDisabled ? 'Dados completos indisponíveis para excluir com segurança' : 'Selecionar para exclusão'}" ${archiveSelectedIds.has(selectionKey) ? 'checked' : ''} ${selectionDisabled ? 'disabled' : ''} onchange="updateArchiveSelection()"></td>
@@ -2622,6 +2634,7 @@ async function salvarEtapas() {
             btn.innerHTML = '<i class="fas fa-check"></i> Salvo';
             allUnificados[_editarEtapasData.idx].primeiraEtapa.etapas = etapasAtualizadas;
             renderTabela();
+            renderArchiveTable();
             setTimeout(() => closeModal('modalEditarEtapas'), 1800);
         } else {
             throw new Error(data.error || 'Falha ao salvar.');
