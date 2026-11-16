@@ -209,6 +209,24 @@
         .btn-details{padding:8px 14px;background:#fff;color:#2563eb;border:1.5px solid #2563eb;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;display:inline-flex;align-items:center;gap:6px;transition:.2s}
         .btn-details:hover{background:#eff6ff}
         .modal-box.wide{max-width:780px}
+
+        .ranking-pdf-modal-box{width:96vw!important;max-width:1100px!important;padding:20px}
+        .ranking-pdf-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 14px}
+        .ranking-pdf-field{display:grid;gap:6px;color:#374151;font-size:12px;font-weight:700}
+        .ranking-pdf-field input{width:100%;min-width:0;border:1px solid #cbd5e1;border-radius:6px;padding:9px 10px;font:inherit;font-weight:400;font-size:13px}
+        .ranking-pdf-preview{max-height:55vh;overflow:auto;background:#e5e7eb;padding:16px;border-radius:8px}
+        .ranking-pdf-page{max-width:800px;min-height:420px;margin:0 auto;padding:30px 32px;background:#fff;color:#111;box-shadow:0 1px 8px rgba(0,0,0,.12)}
+        .ranking-pdf-page-header{text-align:center;font-weight:700;line-height:1.4;margin-bottom:18px}
+        .ranking-pdf-page-header p{margin:0 0 4px}
+        .ranking-pdf-page-header .ranking-pdf-editable-heading{font-size:14px}
+        .ranking-pdf-page-meta{text-align:center;margin:0 0 8px;font-size:11px;color:#333}
+        .ranking-pdf-page-summary{text-align:center;margin:0 0 16px;font-size:13px;font-weight:700}
+        .ranking-pdf-table{width:100%;border-collapse:collapse;font-size:12px}
+        .ranking-pdf-table th,.ranking-pdf-table td{border:1px solid #111;padding:7px;vertical-align:middle}
+        .ranking-pdf-table th{text-align:center;font-weight:700}
+        .ranking-pdf-table td:nth-child(2){text-align:center;font-weight:700}
+        .ranking-pdf-table textarea{width:100%;min-height:48px;resize:vertical;border:1px solid #cbd5e1;border-radius:4px;padding:6px;font:inherit;font-size:12px;box-sizing:border-box}
+        @media(max-width:640px){.ranking-pdf-modal-box{padding:14px!important}.ranking-pdf-fields{grid-template-columns:1fr}.ranking-pdf-preview{padding:8px}.ranking-pdf-page{padding:18px 12px}.ranking-pdf-table{min-width:560px}}
         .det-section{margin-bottom:22px}
         .det-section h4{font-size:14px;font-weight:700;color:#1d4ed8;border-bottom:2px solid #dbeafe;padding-bottom:6px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
         .det-grid{display:grid;grid-template-columns:160px 1fr;gap:8px 14px;font-size:13px}
@@ -329,8 +347,8 @@
                     <h2>Avaliações concluídas</h2>
                     <p><span id="classificacaoTotal">0</span> proposta(s) com pelo menos uma avaliação finalizada. A pontuação mostra a média das avaliações finalizadas e fica parcial até atingir o número necessário. Edite sua classificação e pressione Enter para salvar.</p>
                 </div>
-                <button type="button" class="btn-top btn-refresh ranking-pdf-button" id="btnGerarPdfHomologadas" onclick="gerarPdfInscricoesHomologadas()" hidden>
-                    <i class="far fa-file-pdf" aria-hidden="true"></i> Gerar PDF de resultados
+                <button type="button" class="btn-top btn-refresh ranking-pdf-button" id="btnGerarPdfHomologadas" onclick="abrirModalPdfResultados()" hidden>
+                    <i class="far fa-file-pdf" aria-hidden="true"></i> Pré-visualizar e gerar PDF
                 </button>
             </div>
             <div class="ranking-table-wrap">
@@ -364,6 +382,41 @@
         <div class="modal-footer" id="modalAvaliadorFooter">
             <button class="btn-close-modal" id="btnCancelarDialogAvaliador" type="button" onclick="cancelarDialogAvaliador()">Cancelar</button>
             <button class="btn-save-modal" id="btnConfirmarDialogAvaliador" type="button" onclick="confirmarDialogAvaliador()">Confirmar</button>
+        </div>
+    </div>
+</div>
+
+<div class="modal" id="modalResultadoPdf" onclick="fecharModalPdfResultados()">
+    <div class="modal-box wide ranking-pdf-modal-box" role="dialog" aria-modal="true" aria-labelledby="modalResultadoPdfTitulo" onclick="event.stopPropagation()">
+        <h3 id="modalResultadoPdfTitulo">Revisar resultado antes de gerar o PDF</h3>
+        <p style="font-size:13px;color:#6b7280;margin:-6px 0 14px">Ajuste o cabeçalho e as justificativas. As alterações serão aplicadas somente ao PDF gerado.</p>
+        <div class="ranking-pdf-fields">
+            <label class="ranking-pdf-field" for="pdfResultadoTitulo">Resultado e fase
+                <input id="pdfResultadoTitulo" type="text" maxlength="180" oninput="atualizarCabecalhoPreviaPdfResultados()">
+            </label>
+            <label class="ranking-pdf-field" for="pdfResultadoEdital">Edital
+                <input id="pdfResultadoEdital" type="text" maxlength="180" oninput="atualizarCabecalhoPreviaPdfResultados()">
+            </label>
+        </div>
+        <div class="ranking-pdf-preview" aria-label="Prévia editável do resultado">
+            <div class="ranking-pdf-page">
+                <div class="ranking-pdf-page-header">
+                    <p>UNIVERSIDADE FEDERAL DE SANTA CATARINA</p>
+                    <p>SECRETARIA DE CULTURA, ARTE E ESPORTE — DEPARTAMENTO ARTÍSTICO CULTURAL</p>
+                    <p class="ranking-pdf-editable-heading" id="pdfResultadoTituloPreview"></p>
+                    <p class="ranking-pdf-editable-heading" id="pdfResultadoEditalPreview"></p>
+                </div>
+                <p class="ranking-pdf-page-meta" id="pdfResultadoDataPreview"></p>
+                <p class="ranking-pdf-page-summary" id="pdfResultadoResumoPreview"></p>
+                <table class="ranking-pdf-table">
+                    <thead><tr><th>Nome da Proposta</th><th>Status</th><th>Justificativa</th></tr></thead>
+                    <tbody id="pdfResultadosLinhasPreview"></tbody>
+                </table>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-close-modal" type="button" onclick="fecharModalPdfResultados()">Cancelar</button>
+            <button class="btn-save-modal" type="button" onclick="gerarPdfInscricoesHomologadas()"><i class="far fa-file-pdf" aria-hidden="true"></i> Salvar alterações e gerar PDF</button>
         </div>
     </div>
 </div>
@@ -1142,67 +1195,163 @@ function renderClassificacaoList() {
     });
 }
 
-async function gerarPdfInscricoesHomologadas() {
+const cabecalhoPadraoResultadoPdf = Object.freeze({
+    titulo: 'Resultado Preliminar da 2ª Fase — Propostas Externas do',
+    edital: 'Edital Nº 002/2026/DAC/SeCArtE/UFSC'
+});
+let rascunhoResultadoPdf = null;
+
+function prepararLinhasResultadoPdf() {
+    const inscricoes = obterInscricoesHomologadas();
+    const aprovadas = inscricoes
+        .filter(item => !item.desclassificacao)
+        .sort((a, b) => {
+            const pontuacaoA = Number(a.pontuacao);
+            const pontuacaoB = Number(b.pontuacao);
+            const pontuacaoValidaA = Number.isFinite(pontuacaoA);
+            const pontuacaoValidaB = Number.isFinite(pontuacaoB);
+            if (pontuacaoValidaA !== pontuacaoValidaB) return pontuacaoValidaA ? -1 : 1;
+            if (pontuacaoValidaA && pontuacaoA !== pontuacaoB) return pontuacaoB - pontuacaoA;
+            return String(a.p?.evento || '').localeCompare(String(b.p?.evento || ''), 'pt-BR');
+        });
+    const desclassificadas = inscricoes.filter(item => Boolean(item.desclassificacao));
+    const linhas = aprovadas.map(item => ({
+        proposta: String(item.p?.evento || item.p?.nome || 'Proposta sem título'),
+        status: 'Homologada',
+        justificativa: ''
+    })).concat(desclassificadas.map(item => {
+        const itens = Array.isArray(item.desclassificacao?.itens)
+            ? item.desclassificacao.itens
+            : [item.desclassificacao?.item].filter(Boolean);
+        const itensUnicos = [...new Set(itens.map(valor => String(valor || '').trim()).filter(Boolean))];
+        const justificativa = itensUnicos.length
+            ? 'Item ' + itensUnicos.join(' e ')
+            : 'Critério eliminatório';
+        return {
+            proposta: String(item.p?.evento || item.p?.nome || 'Proposta sem título'),
+            status: 'Desclassificada',
+            justificativa
+        };
+    }));
+    return { aprovadas, desclassificadas, linhas };
+}
+
+function atualizarCabecalhoPreviaPdfResultados() {
+    const titulo = document.getElementById('pdfResultadoTitulo').value.trim() || cabecalhoPadraoResultadoPdf.titulo;
+    const edital = document.getElementById('pdfResultadoEdital').value.trim() || cabecalhoPadraoResultadoPdf.edital;
+    document.getElementById('pdfResultadoTituloPreview').textContent = titulo;
+    document.getElementById('pdfResultadoEditalPreview').textContent = edital;
+}
+
+function abrirModalPdfResultados() {
     if (!viewerCanDeleteInscricoes) return;
-    const previewWindow = window.open('about:blank', '_blank');
-    if (!previewWindow) {
-        await showAvaliadorDialog('Permita a abertura de novas abas para visualizar o PDF.', {
-            title: 'Pré-visualização bloqueada',
-            hideCancel: true,
-            confirmLabel: 'OK'
+    const dados = prepararLinhasResultadoPdf();
+    if (!dados.linhas.length) {
+        showAvaliadorDialog('Não há propostas disponíveis para gerar o resultado.', {
+            title: 'Sem resultados', hideCancel: true, confirmLabel: 'OK'
         });
         return;
+    }
+
+    rascunhoResultadoPdf = dados;
+    const tituloInput = document.getElementById('pdfResultadoTitulo');
+    const editalInput = document.getElementById('pdfResultadoEdital');
+    tituloInput.value = cabecalhoPadraoResultadoPdf.titulo;
+    editalInput.value = cabecalhoPadraoResultadoPdf.edital;
+    atualizarCabecalhoPreviaPdfResultados();
+    document.getElementById('pdfResultadoDataPreview').textContent = 'DAC/UFSC · Gerado em ' + new Date().toLocaleString('pt-BR');
+    document.getElementById('pdfResultadoResumoPreview').textContent =
+        'Homologadas: ' + dados.aprovadas.length + ' · Desclassificadas: ' + dados.desclassificadas.length;
+
+    const tbody = document.getElementById('pdfResultadosLinhasPreview');
+    tbody.innerHTML = '';
+    dados.linhas.forEach((linha, index) => {
+        const tr = document.createElement('tr');
+        const propostaCell = document.createElement('td');
+        propostaCell.textContent = linha.proposta;
+        const statusCell = document.createElement('td');
+        statusCell.textContent = linha.status;
+        const justificativaCell = document.createElement('td');
+        const justificativaInput = document.createElement('textarea');
+        justificativaInput.value = linha.justificativa;
+        justificativaInput.setAttribute('aria-label', 'Justificativa para ' + linha.proposta);
+        justificativaInput.dataset.pdfJustificativa = String(index);
+        justificativaCell.appendChild(justificativaInput);
+        tr.append(propostaCell, statusCell, justificativaCell);
+        tbody.appendChild(tr);
+    });
+
+    openModal('modalResultadoPdf');
+    tituloInput.focus();
+}
+
+function fecharModalPdfResultados() {
+    closeModal('modalResultadoPdf');
+    rascunhoResultadoPdf = null;
+}
+
+document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && document.getElementById('modalResultadoPdf')?.classList.contains('open')) {
+        fecharModalPdfResultados();
+    }
+});
+
+async function gerarPdfInscricoesHomologadas() {
+    if (!viewerCanDeleteInscricoes || !rascunhoResultadoPdf) return;
+    const pdfWindow = window.open('about:blank', '_blank');
+    if (!pdfWindow) {
+        await showAvaliadorDialog('O navegador bloqueou a nova aba. Depois de confirmar, o PDF será baixado diretamente.', {
+            title: 'Abertura de aba bloqueada', hideCancel: true, confirmLabel: 'OK'
+        });
     }
 
     try {
         const { jsPDF } = window.jspdf || {};
         if (!jsPDF) throw new Error('A biblioteca de PDF não foi carregada. Atualize a página e tente novamente.');
-        const inscricoes = obterInscricoesHomologadas();
-        const aprovadas = inscricoes
-            .filter(item => !item.desclassificacao)
-            .sort((a, b) => {
-                const pontuacaoA = Number(a.pontuacao);
-                const pontuacaoB = Number(b.pontuacao);
-                const pontuacaoValidaA = Number.isFinite(pontuacaoA);
-                const pontuacaoValidaB = Number.isFinite(pontuacaoB);
-                if (pontuacaoValidaA !== pontuacaoValidaB) return pontuacaoValidaA ? -1 : 1;
-                if (pontuacaoValidaA && pontuacaoA !== pontuacaoB) return pontuacaoB - pontuacaoA;
-                return String(a.p?.evento || '').localeCompare(String(b.p?.evento || ''), 'pt-BR');
-            });
-        const desclassificadas = inscricoes.filter(item => Boolean(item.desclassificacao));
-        const linhas = aprovadas.map(item => [
-            item.p?.evento || item.p?.nome || 'Proposta sem título',
-            'Homologada',
-            ''
-        ]).concat(desclassificadas.map(item => {
-            const itens = Array.isArray(item.desclassificacao?.itens)
-                ? item.desclassificacao.itens
-                : [item.desclassificacao?.item].filter(Boolean);
-            const itensUnicos = [...new Set(itens.map(valor => String(valor || '').trim()).filter(Boolean))];
-            const justificativa = itensUnicos.length
-                ? 'Item ' + itensUnicos.join(' e ')
-                : 'Critério eliminatório';
-            return [item.p?.evento || item.p?.nome || 'Proposta sem título', 'Desclassificada', justificativa];
-        }));
-
+        const titulo = document.getElementById('pdfResultadoTitulo').value.trim() || cabecalhoPadraoResultadoPdf.titulo;
+        const edital = document.getElementById('pdfResultadoEdital').value.trim() || cabecalhoPadraoResultadoPdf.edital;
+        const justificativas = Array.from(document.querySelectorAll('#pdfResultadosLinhasPreview textarea[data-pdf-justificativa]'));
+        const linhas = rascunhoResultadoPdf.linhas.map((linha, index) => [
+            linha.proposta,
+            linha.status,
+            justificativas[index]?.value || ''
+        ]);
         const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
         const margem = 16;
         const larguraPagina = doc.internal.pageSize.getWidth();
         const alturaPagina = doc.internal.pageSize.getHeight();
         const dataGeracao = new Date().toLocaleString('pt-BR');
-        doc.setProperties({ title: 'Resultado das propostas — DAC/UFSC' });
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(21);
-        doc.text('Resultado das propostas', margem, 22);
+        doc.setProperties({ title: titulo + ' — ' + edital });
+
+        const cabecalho = [
+            'UNIVERSIDADE FEDERAL DE SANTA CATARINA',
+            'SECRETARIA DE CULTURA, ARTE E ESPORTE — DEPARTAMENTO ARTÍSTICO CULTURAL',
+            titulo,
+            edital
+        ];
+        let inicioTabela = 18;
+        cabecalho.forEach((texto, index) => {
+            doc.setFont('helvetica', 'bold');
+            doc.setFontSize(index === 0 ? 12 : 10.5);
+            const linhasCabecalho = doc.splitTextToSize(texto, larguraPagina - margem * 2);
+            doc.text(linhasCabecalho, larguraPagina / 2, inicioTabela, { align: 'center' });
+            inicioTabela += linhasCabecalho.length * 5 + 1.5;
+        });
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(12);
-        doc.text('DAC/UFSC · Gerado em ' + dataGeracao, margem, 32);
+        doc.setFontSize(9);
+        doc.text('DAC/UFSC · Gerado em ' + dataGeracao, larguraPagina / 2, inicioTabela + 1, { align: 'center' });
+        inicioTabela += 8;
         doc.setFont('helvetica', 'bold');
-        doc.setFontSize(13);
-        doc.text('Homologadas: ' + aprovadas.length + ' · Desclassificadas: ' + desclassificadas.length, margem, 41);
+        doc.setFontSize(12);
+        doc.text(
+            'Homologadas: ' + rascunhoResultadoPdf.aprovadas.length + ' · Desclassificadas: ' + rascunhoResultadoPdf.desclassificadas.length,
+            larguraPagina / 2,
+            inicioTabela,
+            { align: 'center' }
+        );
 
         doc.autoTable({
-            startY: 55,
+            startY: inicioTabela + 7,
             margin: { left: margem, right: margem },
             head: [['Nome da Proposta', 'Status', 'Justificativa']],
             body: linhas,
@@ -1240,11 +1389,17 @@ async function gerarPdfInscricoesHomologadas() {
             doc.text('Página ' + pagina + ' de ' + totalPaginas, larguraPagina - margem, alturaPagina - 10, { align: 'right' });
         }
 
-        const pdfUrl = URL.createObjectURL(doc.output('blob'));
-        previewWindow.opener = null;
-        previewWindow.location.replace(pdfUrl);
+        closeModal('modalResultadoPdf');
+        rascunhoResultadoPdf = null;
+        if (pdfWindow) {
+            const pdfUrl = URL.createObjectURL(doc.output('blob'));
+            pdfWindow.opener = null;
+            pdfWindow.location.replace(pdfUrl);
+        } else {
+            doc.save('resultado_propostas_dac.pdf');
+        }
     } catch (error) {
-        previewWindow.close();
+        if (pdfWindow && !pdfWindow.closed) pdfWindow.close();
         await showAvaliadorDialog(error.message || 'Não foi possível gerar o PDF.', {
             title: 'Erro ao gerar PDF', danger: true, hideCancel: true, confirmLabel: 'OK'
         });
