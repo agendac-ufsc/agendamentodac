@@ -219,7 +219,6 @@
         .ranking-pdf-page-header{text-align:center;font-weight:700;line-height:1.4;margin-bottom:18px}
         .ranking-pdf-page-header p{margin:0 0 4px}
         .ranking-pdf-page-header .ranking-pdf-editable-heading{font-size:14px}
-        .ranking-pdf-page-summary{text-align:center;margin:0 0 16px;font-size:13px;font-weight:700}
         .ranking-pdf-table{width:100%;border-collapse:collapse;font-size:12px}
         .ranking-pdf-table th,.ranking-pdf-table td{border:1px solid #111;padding:7px;vertical-align:middle}
         .ranking-pdf-table th{text-align:center;font-weight:700}
@@ -405,7 +404,6 @@
                     <p class="ranking-pdf-editable-heading" id="pdfResultadoTituloPreview"></p>
                     <p class="ranking-pdf-editable-heading" id="pdfResultadoEditalPreview"></p>
                 </div>
-                <p class="ranking-pdf-page-summary" id="pdfResultadoResumoPreview"></p>
                 <table class="ranking-pdf-table">
                     <thead><tr><th>Nome da Proposta</th><th>Status</th><th>Justificativa</th></tr></thead>
                     <tbody id="pdfResultadosLinhasPreview"></tbody>
@@ -1257,8 +1255,6 @@ function abrirModalPdfResultados() {
     tituloInput.value = cabecalhoPadraoResultadoPdf.titulo;
     editalInput.value = cabecalhoPadraoResultadoPdf.edital;
     atualizarCabecalhoPreviaPdfResultados();
-    document.getElementById('pdfResultadoResumoPreview').textContent =
-        'Homologadas: ' + dados.aprovadas.length + ' · Desclassificadas: ' + dados.desclassificadas.length;
 
     const tbody = document.getElementById('pdfResultadosLinhasPreview');
     tbody.innerHTML = '';
@@ -1336,15 +1332,8 @@ async function gerarPdfInscricoesHomologadas() {
         inicioTabela += 2;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
-        doc.text(
-            'Homologadas: ' + rascunhoResultadoPdf.aprovadas.length + ' · Desclassificadas: ' + rascunhoResultadoPdf.desclassificadas.length,
-            larguraPagina / 2,
-            inicioTabela,
-            { align: 'center' }
-        );
-
         doc.autoTable({
-            startY: inicioTabela + 7,
+            startY: inicioTabela + 9,
             margin: { left: margem, right: margem },
             head: [['Nome da Proposta', 'Status', 'Justificativa']],
             body: linhas,
