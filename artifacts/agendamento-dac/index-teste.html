@@ -1601,6 +1601,7 @@
     <script src="/upload-client.js"></script>
     <script>
         const stepNames = { ensaio: 'Ensaio', montagem: 'Montagem', evento: 'Evento', desmontagem: 'Desmontagem' };
+        const MAX_ENSAIOS_POR_PROPOSTA = 2;
         const steps = ['evento', 'ensaio', 'montagem', 'desmontagem'];
         const selections = {};
         const confirmedSteps = { ensaio: [], montagem: [], evento: [], desmontagem: [] };
@@ -1766,8 +1767,21 @@
             });
         }
 
+        function mostrarLimiteEnsaios() {
+            currentStepContext = 'ensaio';
+            document.getElementById('modalAddTitle').textContent = 'Limite de ensaios atingido';
+            document.getElementById('modalAddText').textContent = 'Cada proposta pode incluir no máximo 2 ensaios.';
+            document.getElementById('btnAddYes').style.display = 'none';
+            document.getElementById('btnAddNo').textContent = 'Continuar';
+            document.getElementById('modalAddAnother').style.display = 'flex';
+        }
+
         function toggleStep(step) {
             if (step !== 'evento' && confirmedSteps.evento.length === 0) return;
+            if (step === 'ensaio' && confirmedSteps.ensaio.length >= MAX_ENSAIOS_POR_PROPOSTA) {
+                mostrarLimiteEnsaios();
+                return;
+            }
 
             steps.forEach(s => {
                 const content = document.getElementById(`content-${s}`);
@@ -1932,18 +1946,14 @@
                 // somenteFinaisDeSemana NÃO se aplica ao Ensaio (ele tem regra própria de dias)
                 const diaPermitido = step === 'ensaio' || !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
 
-                // Ensaio em fim de semana: mostrar o dia (para que ocupações do Google Calendar apareçam),
-                // mas bloquear clique se não houver evento confirmado neste mesmo dia
-                let ensaioFimDeSemanasBloqueado = false;
-                if (step === 'ensaio') {
-                    const isWeekend = diasSemana === 0 || diasSemana === 6;
-                    if (isWeekend) {
-                        const dateStrEns = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
-                        const temEventoNoDia = confirmedSteps.evento.some(conf =>
-                            conf.date.toISOString().split('T')[0] === dateStrEns
-                        );
-                        if (!temEventoNoDia) ensaioFimDeSemanasBloqueado = true;
-                    }
+                // Ensaios: segunda a sexta; sábado somente na data de um Evento confirmado.
+                let ensaioDiaBloqueado = false;
+                if (step === 'ensaio' && (diasSemana === 0 || diasSemana === 6)) {
+                    const dateStrEns = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                    const temEventoNoDia = confirmedSteps.evento.some(conf =>
+                        conf.date.toISOString().split('T')[0] === dateStrEns
+                    );
+                    if (diasSemana === 0 || !temEventoNoDia) ensaioDiaBloqueado = true;
                 }
 
                 if (!diaPermitido) {
@@ -2002,9 +2012,11 @@
                             if (dayBlocked) d.style.cursor = 'not-allowed';
                         }
 
-                        if (ensaioFimDeSemanasBloqueado) {
+                        if (ensaioDiaBloqueado) {
                             d.style.cursor = 'not-allowed';
-                            d.title = 'Ensaio em fim de semana só é permitido no mesmo dia de um Evento confirmado';
+                            d.title = diasSemana === 0
+                                ? 'Ensaios não podem ser marcados aos domingos'
+                                : 'Ensaio no sábado só é permitido no mesmo dia de um Evento confirmado';
                             d.onclick = null;
                         } else if (!dayBlocked) {
                             d.onclick = (e) => { e.stopPropagation(); selectDate(step, date); };
@@ -2022,6 +2034,10 @@
         }
 
         function selectDate(step, date) {
+            if (step === 'ensaio' && confirmedSteps.ensaio.length >= MAX_ENSAIOS_POR_PROPOSTA) {
+                mostrarLimiteEnsaios();
+                return;
+            }
             selections[step].date = date;
             selections[step].start = null;
             selections[step].end = null;
@@ -2244,6 +2260,10 @@
         }
 
         function confirmStep(step) {
+            if (step === 'ensaio' && confirmedSteps.ensaio.length >= MAX_ENSAIOS_POR_PROPOSTA) {
+                mostrarLimiteEnsaios();
+                return;
+            }
             const sel = selections[step];
             const data = {
                 date: new Date(sel.date),
@@ -2254,7 +2274,14 @@
             confirmedSteps[step].push(data);
             currentStepContext = step;
 
+            if (step === 'ensaio' && confirmedSteps.ensaio.length >= MAX_ENSAIOS_POR_PROPOSTA) {
+                mostrarLimiteEnsaios();
+                return;
+            }
+
             if (step === 'ensaio' || step === 'evento') {
+                document.getElementById('btnAddYes').style.display = '';
+                document.getElementById('btnAddNo').textContent = 'Não';
                 document.getElementById('modalAddTitle').textContent = `${stepNames[step]} adicionado!`;
                 document.getElementById('modalAddText').textContent = `Deseja adicionar outro ${stepNames[step]}?`;
                 document.getElementById('modalAddAnother').style.display = 'flex';
@@ -2341,6 +2368,8 @@
         document.getElementById('btnAddYes').onclick = () => {
             const step = currentStepContext;
             document.getElementById('modalAddAnother').style.display = 'none';
+            document.getElementById('btnAddYes').style.display = '';
+            document.getElementById('btnAddNo').textContent = 'Não';
             selections[step].date = null;
             selections[step].start = null;
             selections[step].end = null;
@@ -2359,6 +2388,8 @@
 
         document.getElementById('btnAddNo').onclick = () => {
             document.getElementById('modalAddAnother').style.display = 'none';
+            document.getElementById('btnAddYes').style.display = '';
+            document.getElementById('btnAddNo').textContent = 'Não';
             finishStepSelection(currentStepContext);
         };
 

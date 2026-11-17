@@ -67,6 +67,7 @@ const {
     classifyCalendarEventSource,
     createOfficializedCalendarBlocks
 } = require('./schedule-time-conflicts');
+const { validateScheduleRules } = require('./schedule-rules');
 
 const app = express();
 app.use(cors());
@@ -2896,21 +2897,8 @@ app.post('/api/agendar', async (req, res) => {
         }
         const localKey = (local || 'teatro').toLowerCase();
 
-        // Validar dias da semana se SOMENTE_FINSEMANA estiver ativo (qui=4, sex=5, sáb=6, dom=0)
-        if (SOMENTE_FINSEMANA) {
-            const diasPermitidos = new Set([0, 4, 5, 6]);
-            for (const tipo of Object.keys(etapas)) {
-                const itens = Array.isArray(etapas[tipo]) ? etapas[tipo] : [etapas[tipo]];
-                for (const item of itens) {
-                    if (!item || !item.data) continue;
-                    const [y, m, d] = item.data.split('-').map(Number);
-                    const diaSemana = new Date(y, m - 1, d).getDay();
-                    if (!diasPermitidos.has(diaSemana)) {
-                        return res.status(400).json({ error: 'Inscrições só são aceitas para datas de quinta-feira a domingo.' });
-                    }
-                }
-            }
-        }
+        const erroRegraCronograma = validateScheduleRules(etapas, SOMENTE_FINSEMANA);
+        if (erroRegraCronograma) return res.status(400).json({ error: erroRegraCronograma });
 
         // Horários oficializados nunca voltam a disputar, mesmo com a disputa
         // geral ativada. Quando a disputa está desativada, todos os registros
@@ -3062,6 +3050,10 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
         const agendamento = agendamentos.find(item => String(item.id) === id);
         if (!agendamento) return res.status(404).json({ error: 'Inscrição inicial não encontrada.' });
 
+        const etapasParaFinalizar = dados.etapas || agendamento.etapas;
+        const erroRegraCronograma = validateScheduleRules(etapasParaFinalizar, SOMENTE_FINSEMANA);
+        if (erroRegraCronograma) return res.status(400).json({ error: erroRegraCronograma });
+
         const segundaEtapaTeste = {
             ...dados,
             email,
@@ -3072,7 +3064,6 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
         // Só rascunhos criados com a nova regra são revalidados aqui. Isso
         // preserva inscrições que já estavam em andamento antes da publicação.
         if (!jaConcluida && usesMinimumRestInterval(agendamento)) {
-            const etapasParaFinalizar = dados.etapas || agendamento.etapas;
             const conflitoEmInscricoes = agendamentos.some(ex => {
                 if (String(ex.id) === id || ehRascunhoUnificado(ex) || !shouldBlockScheduleConflict(ex, PERMITIR_DISPUTA)) {
                     return false;
@@ -6535,6 +6526,10 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
     const ag = agendamentos.find(a => a.id === id);
     const isLegada = String(id).startsWith('forms_');
     if (!ag && !isLegada) return res.status(404).json({ error: 'Agendamento não encontrado.' });
+    if (campos.etapas !== undefined) {
+        const erroRegraCronograma = validateScheduleRules(campos.etapas);
+        if (erroRegraCronograma) return res.status(400).json({ error: erroRegraCronograma });
+    }
 
     // Inscrições legadas (Forms-only) têm IDs "forms_..." e as etapas ficam
     // numa chave separada, mas agora também passam pela sincronização segura

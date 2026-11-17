@@ -14,6 +14,40 @@ const {
     classifyCalendarEventSource,
     createOfficializedCalendarBlocks
 } = require('./schedule-time-conflicts');
+const { validateScheduleRules } = require('./schedule-rules');
+
+test('cada proposta aceita no máximo dois ensaios', () => {
+    const etapas = { evento: { data: '2026-11-19', horario: '14:00 às 16:00' }, ensaio: [
+        { data: '2026-11-16', horario: '09:00 às 10:00' },
+        { data: '2026-11-17', horario: '09:00 às 10:00' }
+    ] };
+    assert.equal(validateScheduleRules(etapas, true), null);
+    assert.equal(validateScheduleRules({ ...etapas, ensaio: [...etapas.ensaio, { data: '2026-11-18', horario: '09:00 às 10:00' }] }, true), 'Cada proposta pode incluir no máximo 2 ensaios.');
+});
+
+test('ensaios de segunda a sexta independem da restrição de eventos a partir de quinta', () => {
+    const etapas = { evento: { data: '2026-11-19', horario: '14:00 às 16:00' }, ensaio: [
+        { data: '2026-11-16', horario: '09:00 às 10:00' },
+        { data: '2026-11-18', horario: '09:00 às 10:00' }
+    ] };
+    assert.equal(validateScheduleRules(etapas, true), null);
+});
+
+test('sábado só é liberado pelo Evento da própria proposta; evento de outro proponente não conta', () => {
+    const eventoNoSabadoDaProposta = { evento: { data: '2026-11-21' }, ensaio: { data: '2026-11-21', horario: '09:00 às 10:00' } };
+    // A validação recebe apenas as etapas da proposta atual.
+    const propostaSemEventoNoSabado = { evento: { data: '2026-11-19' }, ensaio: { data: '2026-11-21', horario: '09:00 às 10:00' } };
+    const domingoMesmoEvento = { evento: { data: '2026-11-22' }, ensaio: { data: '2026-11-22', horario: '09:00 às 10:00' } };
+    assert.equal(validateScheduleRules(eventoNoSabadoDaProposta, true), null);
+    assert.match(validateScheduleRules(propostaSemEventoNoSabado, true), /sábado/);
+    assert.match(validateScheduleRules(domingoMesmoEvento, true), /segunda a sexta/);
+});
+
+test('a restrição quinta a domingo continua valendo para eventos', () => {
+    const etapas = { evento: { data: '2026-11-18', horario: '14:00 às 16:00' }, ensaio: { data: '2026-11-16', horario: '09:00 às 10:00' } };
+    assert.equal(validateScheduleRules(etapas, true), 'Inscrições só são aceitas para datas de quinta-feira a domingo.');
+    assert.equal(validateScheduleRules(etapas, false), null);
+});
 
 test('parseTimeRange aceita os formatos atuais e legado', () => {
     assert.deepEqual(parseTimeRange('18:00 às 19:30'), { start: 1080, end: 1170 });
