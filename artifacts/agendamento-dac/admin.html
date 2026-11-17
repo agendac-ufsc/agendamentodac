@@ -1543,7 +1543,23 @@ function renderArchiveTable() {
         const contactButton = sourceRecord
             ? `<button class="btn-action" title="Ver contato do proponente" aria-label="Ver contato do proponente" onclick="showArchiveContact(${archiveIndex})" style="color:#6b7280"><i class="fas fa-address-card"></i></button>`
             : '';
-        const infoButtons = `${editButton}${contactButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
+        const activityRecord = p.registroAtividades && typeof p.registroAtividades === 'object'
+            ? p.registroAtividades
+            : {};
+        const activityId = p.id || p.legacyId || item?.id || item?.legacyId || '';
+        const activityComplete = activityRecord.concluido === true;
+        const activitySent = Boolean(activityRecord.enviadoEm || activityRecord.enviadoPara);
+        const activityTitle = activityComplete
+            ? 'Visualizar registro de atividades preenchido'
+            : (activitySent
+                ? 'Registro de atividades enviado — aguardando preenchimento do proponente'
+                : 'Abrir registro de atividades');
+        const activityColor = activityComplete ? '#16a34a' : (activitySent ? '#764ba2' : '#a78bfa');
+        const activityIcon = activityComplete ? 'fa-clipboard-check' : 'fa-clipboard-list';
+        const activityButton = userRole === 'admin' && activityId
+            ? `<button class="btn-action" title="${activityTitle}" aria-label="${activityTitle}" onclick="abrirRegistroAtividadesArquivo(${archiveIndex})" style="color:${activityColor}"><i class="fas ${activityIcon}"></i></button>`
+            : '';
+        const infoButtons = `${editButton}${contactButton}${activityButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
 
         return `<tr>
             <td class="check-col"><input type="checkbox" class="insc-checkbox archive-check" data-index="${archiveIndex}" aria-label="Selecionar inscrição arquivada" title="${selectionDisabled ? 'Dados completos indisponíveis para excluir com segurança' : 'Selecionar para exclusão'}" ${archiveSelectedIds.has(selectionKey) ? 'checked' : ''} ${selectionDisabled ? 'disabled' : ''} onchange="updateArchiveSelection()"></td>
@@ -2025,6 +2041,23 @@ function abrirRegistroAtividades(idx) {
         return;
     }
     registroAtividadesAdminUrl = '/registro-atividades?id=' + encodeURIComponent(p.id) + '&admin=1';
+    const iframe = document.getElementById('iframeRegistroAtividadesAdmin');
+    if (!iframe) return;
+    iframe.src = registroAtividadesAdminUrl;
+    openModal('modalRegistroAtividadesAdmin');
+}
+
+function abrirRegistroAtividadesArquivo(idx) {
+    if (userRole !== 'admin') return;
+    const item = archiveDisplayRecords[idx];
+    const sourceRecord = findArchiveSourceRecord(item);
+    const p = sourceRecord?.primeiraEtapa || sourceRecord || {};
+    const id = p.id || p.legacyId || item?.id || item?.legacyId;
+    if (!id) {
+        alert('Esta inscrição não possui identificador para abrir o registro de atividades.');
+        return;
+    }
+    registroAtividadesAdminUrl = '/registro-atividades?id=' + encodeURIComponent(id) + '&admin=1';
     const iframe = document.getElementById('iframeRegistroAtividadesAdmin');
     if (!iframe) return;
     iframe.src = registroAtividadesAdminUrl;

@@ -52,6 +52,7 @@ const {
     correspondeEventoEtapa
 } = require('./registration-archive');
 const { parseRedisValue } = require('./redis-value');
+const { generateActivityReportPdf } = require('./activity-report-pdf');
 const {
     normalizeEvaluationMode,
     normalizeManualEvaluationCount,
@@ -1928,7 +1929,7 @@ function obterOrigemPublicaTermo(req, origemInformada) {
     }
 }
 
-const sendEmail = async (to, subject, htmlContent) => {
+const sendEmail = async (to, subject, htmlContent, attachments = []) => {
     const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
     if (!apiKey) return null;
     const senderEmail = obterRemetenteBrevo();
@@ -1937,7 +1938,8 @@ const sendEmail = async (to, subject, htmlContent) => {
         to: Array.isArray(to) ? to.map(email => ({ "email": email })) : [{ "email": to }],
         replyTo: { "email": BREVO_REPLY_TO, "name": BREVO_SENDER_NAME },
         subject: subject,
-        htmlContent: htmlContent
+        htmlContent: htmlContent,
+        ...(Array.isArray(attachments) && attachments.length ? { attachment: attachments } : {})
     };
     try {
         const response = await axios.post('https://api.brevo.com/v3/smtp/email', data, {
@@ -4031,14 +4033,38 @@ app.post('/api/registro-atividades', uploadRegistrosAtividades.array('registros'
             enviadoEm: anterior.enviadoEm || null,
             enviadoPara: anterior.enviadoPara || inscricao.email || null
         };
-        const salvo = await salvarRegistroAtividades(id, inscricao, registro);
-        if (!salvo) throw new Error('Não foi possível salvar o registro no Redis.');
-
         const nome = inscricao.nome || inscricao.termoDados?.nomeCompleto || 'Proponente';
         const email = inscricao.email || inscricao.termoDados?.email || 'não informado';
         const evento = inscricao.evento || inscricao.termoDados?.nomeEvento || 'Evento';
         const local = inscricao.localNome
             || (inscricao.local === 'igrejinha' ? 'Igrejinha da UFSC' : 'Teatro Carmen Fossari');
+        let activityReportPdf = null;
+        try {
+            activityReportPdf = await generateActivityReportPdf({
+                nome,
+                email,
+                evento,
+                local,
+                concluidoEm: registro.concluidoEm,
+                autores,
+                observacao,
+                sugestao,
+                eventos,
+                arquivos: arquivos.map(arquivo => arquivo.nome)
+            });
+        } catch (pdfError) {
+            console.error('❌ [Atividades] Não foi possível gerar o PDF do registro:', pdfError.message);
+        }
+        const safeEventName = String(evento)
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[^a-zA-Z0-9_-]+/g, '_')
+            .replace(/^_+|_+$/g, '')
+            .slice(0, 80) || 'evento';
+        const activityReportFilename = `Registro_atividades_${safeEventName}.pdf`;
+        const salvo = await salvarRegistroAtividades(id, inscricao, registro);
+        if (!salvo) throw new Error('Não foi possível salvar o registro no Redis.');
+
         const eventosHtml = eventos.map(item => `
             <li><strong>${escapeHtml(item.label || 'Evento')}:</strong>
                 ${escapeHtml(item.data || 'Data não informada')}
@@ -4072,24 +4098,33 @@ app.post('/api/registro-atividades', uploadRegistrosAtividades.array('registros'
                 <p>${escapeHtml(sugestao || 'Não informado')}</p>
                 <h3 style="color:#5b347f;font-size:15px">Arquivos enviados</h3>
                 ${arquivosHtml}
+                ${activityReportPdf
+                    ? '<p>O relatório completo também está anexado em PDF.</p>'
+                    : '<p>O PDF não pôde ser gerado; o registro permanece disponível no painel administrativo.</p>'}
             </div>
         </div>`;
         const dacEmailResult = await sendEmail(
             ATIVIDADES_CONFIRMACAO_DAC_EMAIL,
             `Registro de atividades preenchido — ${evento} — ${nome}`,
-            htmlDac
+            htmlDac,
+            activityReportPdf ? [{
+                name: activityReportFilename,
+                content: activityReportPdf.toString('base64')
+            }] : []
         );
         const dacEmailSent = Boolean(dacEmailResult);
         if (!dacEmailSent) {
             console.error(`❌ [Atividades] Registro salvo, mas não foi possível avisar o DAC sobre ${email}.`);
         }
         registro.dacEmailSent = dacEmailSent;
+        registro.dacPdfAttached = Boolean(activityReportPdf && dacEmailSent);
         await salvarRegistroAtividades(id, inscricao, registro);
 
         console.log(`✅ [Atividades] Registro preenchido recebido para ${inscricao.email || id}; confirmação ao DAC: ${dacEmailSent ? 'enviada' : 'falhou'}.`);
         res.json({
             success: true,
             dacEmailSent,
+            pdfAttached: registro.dacPdfAttached,
             registro: { ...registro, arquivos: arquivos.map(({ blobUrl, pathname, ...arquivo }) => arquivo) }
         });
     } catch (error) {

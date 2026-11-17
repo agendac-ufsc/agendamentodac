@@ -545,11 +545,12 @@
                 const response = await fetch('/api/registro-atividades', { method: 'POST', body: form });
                 const data = await response.json().catch(() => ({}));
                 if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível enviar o registro.');
-                const statusMessage =
-                    data.dacEmailSent === false
-                        ? 'Registro salvo, mas o aviso por e-mail ao DAC não foi entregue.'
-                        : 'Registro enviado com sucesso ao DAC.';
-                const statusType = data.dacEmailSent === false ? 'error' : 'success';
+                const statusMessage = data.dacEmailSent === false
+                    ? 'Registro salvo, mas o aviso por e-mail ao DAC não foi entregue.'
+                    : (data.pdfAttached === false
+                        ? 'Registro salvo e aviso enviado, mas o PDF não foi anexado. O registro continua disponível no painel administrativo.'
+                        : 'Registro enviado com sucesso ao DAC, com o PDF anexado.');
+                const statusType = data.dacEmailSent === false || data.pdfAttached === false ? 'error' : 'success';
                 selectedFiles = [];
                 await carregar();
                 showStatus(statusMessage, statusType);
