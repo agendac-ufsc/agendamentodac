@@ -219,7 +219,6 @@
         .ranking-pdf-page-header{text-align:center;font-weight:700;line-height:1.4;margin-bottom:18px}
         .ranking-pdf-page-header p{margin:0 0 4px}
         .ranking-pdf-page-header .ranking-pdf-editable-heading{font-size:14px}
-        .ranking-pdf-page-meta{text-align:center;margin:0 0 8px;font-size:11px;color:#333}
         .ranking-pdf-page-summary{text-align:center;margin:0 0 16px;font-size:13px;font-weight:700}
         .ranking-pdf-table{width:100%;border-collapse:collapse;font-size:12px}
         .ranking-pdf-table th,.ranking-pdf-table td{border:1px solid #111;padding:7px;vertical-align:middle}
@@ -406,7 +405,6 @@
                     <p class="ranking-pdf-editable-heading" id="pdfResultadoTituloPreview"></p>
                     <p class="ranking-pdf-editable-heading" id="pdfResultadoEditalPreview"></p>
                 </div>
-                <p class="ranking-pdf-page-meta" id="pdfResultadoDataPreview"></p>
                 <p class="ranking-pdf-page-summary" id="pdfResultadoResumoPreview"></p>
                 <table class="ranking-pdf-table">
                     <thead><tr><th>Nome da Proposta</th><th>Status</th><th>Justificativa</th></tr></thead>
@@ -1259,7 +1257,6 @@ function abrirModalPdfResultados() {
     tituloInput.value = cabecalhoPadraoResultadoPdf.titulo;
     editalInput.value = cabecalhoPadraoResultadoPdf.edital;
     atualizarCabecalhoPreviaPdfResultados();
-    document.getElementById('pdfResultadoDataPreview').textContent = 'DAC/UFSC · Gerado em ' + new Date().toLocaleString('pt-BR');
     document.getElementById('pdfResultadoResumoPreview').textContent =
         'Homologadas: ' + dados.aprovadas.length + ' · Desclassificadas: ' + dados.desclassificadas.length;
 
@@ -1320,7 +1317,6 @@ async function gerarPdfInscricoesHomologadas() {
         const margem = 16;
         const larguraPagina = doc.internal.pageSize.getWidth();
         const alturaPagina = doc.internal.pageSize.getHeight();
-        const dataGeracao = new Date().toLocaleString('pt-BR');
         doc.setProperties({ title: titulo + ' — ' + edital });
 
         const cabecalho = [
@@ -1337,10 +1333,7 @@ async function gerarPdfInscricoesHomologadas() {
             doc.text(linhasCabecalho, larguraPagina / 2, inicioTabela, { align: 'center' });
             inicioTabela += linhasCabecalho.length * 5 + 1.5;
         });
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        doc.text('DAC/UFSC · Gerado em ' + dataGeracao, larguraPagina / 2, inicioTabela + 1, { align: 'center' });
-        inicioTabela += 8;
+        inicioTabela += 2;
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(12);
         doc.text(

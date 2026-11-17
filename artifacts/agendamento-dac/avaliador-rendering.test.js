@@ -583,3 +583,7 @@ test('encaminha a API de inscrições canceladas para o servidor do projeto', ()
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     assert.ok(config.routes.some(route => route.src === '^/api/evaluator/cancelled-inscriptions$' && route.dest === '/api/[...path].js'));
 });
+
+test('remove a data de geração da prévia e do PDF de resultados', () => {
+    assert.doesNotMatch(html, /pdfResultadoDataPreview|ranking-pdf-page-meta|DAC\/UFSC · Gerado em|dataGeracao/);
+});
