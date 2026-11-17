@@ -1462,6 +1462,33 @@ function toggleArchiveCheckAll() {
     updateArchiveSelection();
 }
 
+function ordenarRegistrosArquivo(registros) {
+    const obterDataMaisRecente = item => {
+        const sourceRecord = findArchiveSourceRecord(item);
+        const source = sourceRecord || item || {};
+        const datasFonte = obterDatasEventoVisual(source)?.dates || [];
+        const datasEvento = [
+            ...datasFonte,
+            ...(Array.isArray(item?.eventDates) ? item.eventDates : []),
+            ...(Array.isArray(source?.eventDates) ? source.eventDates : [])
+        ].map(normalizarDataEventoVisual).filter(Boolean);
+        if (datasEvento.length) return datasEvento.sort().at(-1);
+
+        const finaisCalendario = Array.isArray(item?.calendarEvents)
+            ? item.calendarEvents.map(evento => evento?.end?.dateTime || evento?.end?.date || evento?.end)
+            : [];
+        return [item?.lastEventEnd, ...finaisCalendario]
+            .map(normalizarDataEventoVisual)
+            .filter(Boolean)
+            .sort()
+            .at(-1) || '';
+    };
+
+    return (Array.isArray(registros) ? [...registros] : []).sort((a, b) =>
+        obterDataMaisRecente(b).localeCompare(obterDataMaisRecente(a))
+    );
+}
+
 function renderArchiveTable() {
     const persistedIds = new Set(archiveRecords
         .flatMap(item => [item?.id, item?.legacyId])
@@ -1473,7 +1500,7 @@ function renderArchiveTable() {
             .map(criarRegistroArquivoVisual)
             .filter(item => ![item.id, item.legacyId].filter(Boolean).some(id => persistedIds.has(String(id))))
         : [];
-    archiveDisplayRecords = [...archiveRecords, ...visualRecords];
+    archiveDisplayRecords = ordenarRegistrosArquivo([...archiveRecords, ...visualRecords]);
     const selectableIds = new Set(archiveDisplayRecords
         .filter(item => getArchiveDeletePayload(item))
         .map(archiveSelectionKey)

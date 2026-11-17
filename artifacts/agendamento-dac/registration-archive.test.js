@@ -1,5 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
 const {
     avaliarElegibilidadeArquivo,
     etapasEsperadasArquivo,
@@ -14,6 +17,52 @@ const {
     isTrustedLegacyCalendarEvent
 } = require('./registration-archive');
 const archiveFixtures = require('./registration-archive.fixtures');
+
+function extractFunction(source, name) {
+    const start = source.indexOf(`function ${name}(`);
+    assert.notEqual(start, -1, `função ${name} não encontrada`);
+    const openBrace = source.indexOf('{', start);
+    assert.notEqual(openBrace, -1, `corpo de ${name} não encontrado`);
+    let depth = 0;
+    for (let index = openBrace; index < source.length; index++) {
+        if (source[index] === '{') depth++;
+        if (source[index] === '}') depth--;
+        if (depth === 0) return source.slice(start, index + 1);
+    }
+    assert.fail(`corpo de ${name} não foi fechado`);
+}
+
+test('ordena o arquivo pela data do último Evento, mais recente primeiro', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+    const source = extractFunction(html, 'ordenarRegistrosArquivo');
+    const ordenar = vm.runInNewContext(`(${source})`, {
+        findArchiveSourceRecord: item => item?.sourceRecord || null,
+        obterDatasEventoVisual: item => ({ dates: item?.sourceEventDates || [] }),
+        normalizarDataEventoVisual: value => {
+            const match = String(value || '').match(/(\d{4})-(\d{2})-(\d{2})/);
+            return match ? `${match[1]}-${match[2]}-${match[3]}` : '';
+        }
+    });
+    const registros = [
+        { id: 'abril', lastEventEnd: '2026-04-15T22:00:00.000Z' },
+        { id: 'outubro-visual', visualOnly: true, eventDates: ['2026-10-19'] },
+        { id: 'novembro-visual', visualOnly: true, eventDates: ['2026-11-09'] },
+        { id: 'multiplas-datas', visualOnly: true, eventDates: ['2026-04-01', '2026-11-02'] },
+        { id: 'outubro-fonte', sourceRecord: { sourceEventDates: ['2026-10-21'] } }
+    ];
+
+    const ordenados = ordenar(registros);
+    assert.deepEqual(Array.from(ordenados, item => item.id), [
+        'novembro-visual',
+        'multiplas-datas',
+        'outubro-fonte',
+        'outubro-visual',
+        'abril'
+    ]);
+    assert.deepEqual(registros.map(item => item.id), [
+        'abril', 'outubro-visual', 'novembro-visual', 'multiplas-datas', 'outubro-fonte'
+    ]);
+});
 
 const agora = new Date('2026-10-09T12:00:00.000Z');
 const fimEvento = new Date(agora.getTime() - 1000).toISOString();
