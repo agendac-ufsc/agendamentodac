@@ -32,6 +32,26 @@ function extractFunction(source, name) {
     assert.fail(`corpo de ${name} não foi fechado`);
 }
 
+function extractStageColorFunction(source) {
+    const palette = source.match(/const CORES_ETAPAS_PROCESSO = Object\.freeze\(\{[\s\S]*?\}\);/);
+    assert.ok(palette, 'paleta de cores das etapas não encontrada');
+    const context = vm.createContext({});
+    vm.runInContext(
+        `${palette[0]}\n${extractFunction(source, 'corEtapaProcesso')}\nthis.corEtapaProcesso = corEtapaProcesso;`,
+        context
+    );
+    return context.corEtapaProcesso;
+}
+
+test('usa vermelho para não enviado, âmbar aguardando e verde concluído', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+    const corEtapaProcesso = extractStageColorFunction(html);
+
+    assert.equal(corEtapaProcesso(false, false), '#dc2626');
+    assert.equal(corEtapaProcesso(true, false), '#d97706');
+    assert.equal(corEtapaProcesso(true, true), '#16a34a');
+});
+
 test('ordena o arquivo pela data do último Evento, mais recente primeiro', () => {
     const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
     const source = extractFunction(html, 'ordenarRegistrosArquivo');
@@ -467,14 +487,21 @@ test('remove só os blobs confirmados e preserva termo assinado e links externos
 test('mantém a ação do termo disponível nas inscrições arquivadas', () => {
     const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
     const obterAcaoSource = extractFunction(html, 'obterAcaoTermoArquivo');
-    const obterAcao = vm.runInNewContext(`(${obterAcaoSource})`);
+    const corEtapaProcesso = extractStageColorFunction(html);
+    const obterAcao = vm.runInNewContext(`(${obterAcaoSource})`, { corEtapaProcesso });
 
     const incompleto = obterAcao({
         primeiraEtapa: { id: 'site_123', termoAssinado: false }
     });
     assert.equal(incompleto.enabled, true);
-    assert.equal(incompleto.color, '#f59e0b');
-    assert.match(incompleto.title, /incompleto/i);
+    assert.equal(incompleto.color, '#dc2626');
+    assert.match(incompleto.title, /não enviado|histórico/i);
+
+    const aguardando = obterAcao({
+        primeiraEtapa: { id: 'site_124', termoAssinado: false, termoLinkEnviadoEm: '2026-10-09T12:00:00.000Z' }
+    });
+    assert.equal(aguardando.color, '#d97706');
+    assert.match(aguardando.title, /aguardando/i);
 
     const completo = obterAcao({
         primeiraEtapa: { id: 'site_456', termoAssinado: 'true' }
@@ -493,6 +520,7 @@ test('mantém a ação do termo disponível nas inscrições arquivadas', () => 
 
 test('abre o editor de termo pelo registro completo do Arquivo', () => {
     const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+    const corEtapaProcesso = extractStageColorFunction(html);
     const archiveItem = { id: 'site_123', legacyId: 'forms_123' };
     const sourceRecord = {
         primeiraEtapa: { id: 'site_123', legacyId: 'forms_123', termoAssinado: false }
@@ -504,7 +532,7 @@ test('abre o editor de termo pelo registro completo do Arquivo', () => {
             userRole: 'admin',
             archiveDisplayRecords: [archiveItem],
             findArchiveSourceRecord: () => sourceRecord,
-            obterAcaoTermoArquivo: vm.runInNewContext(`(${extractFunction(html, 'obterAcaoTermoArquivo')})`),
+            obterAcaoTermoArquivo: vm.runInNewContext(`(${extractFunction(html, 'obterAcaoTermoArquivo')})`, { corEtapaProcesso }),
             allUnificados: [],
             abrirEditorTermoRegistro: (...args) => opened.push(args),
             alert: message => { throw new Error(message); }
