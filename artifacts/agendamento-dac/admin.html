@@ -1039,6 +1039,8 @@ let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
 let sortOrder = 'desc'; // 'desc' = mais recente primeiro | 'asc' = mais antigo primeiro
 let termoEditorIndex = null;
+let termoEditorRegistro = null;
+let termoEditorArquivo = false;
 let termoEditorCompleto = false;
 let termoAdminAlteracoesSalvas = false;
 let termoPendenteIndex = null;
@@ -1338,6 +1340,22 @@ function findArchiveSourceRecord(item) {
     ].some(value => value !== undefined && value !== null && ids.includes(String(value)))) || null;
 }
 
+function obterAcaoTermoArquivo(sourceRecord) {
+    const p = sourceRecord?.primeiraEtapa || sourceRecord || {};
+    const id = String(p.id || '').trim();
+    const completo = p.termoAssinado === true || p.termoAssinado === 'true';
+    return {
+        id,
+        enabled: Boolean(sourceRecord && id),
+        color: completo ? '#16a34a' : '#f59e0b',
+        title: !sourceRecord || !id
+            ? 'Dados completos da inscrição indisponíveis para abrir o termo'
+            : (completo
+                ? 'Visualizar dados do termo concluído'
+                : 'Abrir termo incompleto e enviar link ao proponente')
+    };
+}
+
 function renderArchiveStages(item, sourceRecord) {
     const source = sourceRecord || item || {};
     const p = source?.primeiraEtapa || source || {};
@@ -1567,6 +1585,13 @@ function renderArchiveTable() {
         const editButton = editableStage?.id && editableStage.etapas
             ? '<button class="btn-action" title="Editar datas e horários" aria-label="Editar datas e horários" onclick="openEditarEtapas(' + sourceRecordIndex + ')" style="color:#764ba2"><i class="fas fa-pencil-alt"></i></button>'
             : '';
+        const termAction = obterAcaoTermoArquivo(sourceRecord);
+        const termButton = userRole === 'admin'
+            ? `<button class="btn-action" title="${escapeHtml(termAction.title)}" aria-label="${escapeHtml(termAction.title)}" ${termAction.enabled ? `onclick="abrirEditorTermoArquivo(${archiveIndex})"` : 'disabled'} style="color:${termAction.color};${termAction.enabled ? '' : 'cursor:not-allowed'}"><i class="fas fa-file-signature"></i></button>`
+            : '';
+        const termPdfButton = userRole === 'admin' && item.termPdfAvailable === true && item.id
+            ? `<button class="btn-action" title="Baixar PDF do termo assinado" aria-label="Baixar PDF do termo assinado" onclick="abrirPdfTermoArquivo(${archiveIndex})" style="color:#16a34a"><i class="fas fa-file-pdf"></i></button>`
+            : '';
         const contactButton = sourceRecord
             ? `<button class="btn-action" title="Ver contato do proponente" aria-label="Ver contato do proponente" onclick="showArchiveContact(${archiveIndex})" style="color:#6b7280"><i class="fas fa-address-card"></i></button>`
             : '';
@@ -1586,7 +1611,7 @@ function renderArchiveTable() {
         const activityButton = userRole === 'admin' && activityId
             ? `<button class="btn-action" title="${activityTitle}" aria-label="${activityTitle}" onclick="abrirRegistroAtividadesArquivo(${archiveIndex})" style="color:${activityColor}"><i class="fas ${activityIcon}"></i></button>`
             : '';
-        const infoButtons = `${editButton}${contactButton}${activityButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
+        const infoButtons = `${editButton}${termButton}${termPdfButton}${contactButton}${activityButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
 
         return `<tr>
             <td class="check-col"><input type="checkbox" class="insc-checkbox archive-check" data-index="${archiveIndex}" aria-label="Selecionar inscrição arquivada" title="${selectionDisabled ? 'Dados completos indisponíveis para excluir com segurança' : 'Selecionar para exclusão'}" ${archiveSelectedIds.has(selectionKey) ? 'checked' : ''} ${selectionDisabled ? 'disabled' : ''} onchange="updateArchiveSelection()"></td>
@@ -1621,13 +1646,49 @@ function generateArchivePDF(idx) {
     generatePDF(sourceRecord);
 }
 
+function abrirEditorTermoArquivo(idx) {
+    if (userRole !== 'admin') return;
+    const item = archiveDisplayRecords[idx];
+    const sourceRecord = findArchiveSourceRecord(item);
+    const action = obterAcaoTermoArquivo(sourceRecord);
+    if (!action.enabled) {
+        alert(action.title);
+        return;
+    }
+    const ids = [action.id, item?.id, item?.legacyId].filter(Boolean).map(String);
+    const sourceIndex = allUnificados.findIndex(registro => [
+        registro?.id, registro?.legacyId,
+        registro?.primeiraEtapa?.id, registro?.primeiraEtapa?.legacyId
+    ].some(value => value !== undefined && value !== null && ids.includes(String(value))));
+    abrirEditorTermoRegistro(
+        sourceIndex >= 0 ? allUnificados[sourceIndex] : sourceRecord,
+        sourceIndex >= 0 ? sourceIndex : null,
+        true
+    );
+}
+
+function abrirPdfTermoArquivo(idx) {
+    const item = archiveDisplayRecords[idx];
+    if (userRole !== 'admin' || item?.termPdfAvailable !== true || !item?.id) return;
+    const win = window.open(`/api/admin/arquivadas/${encodeURIComponent(item.id)}/termo.pdf`, '_blank');
+    if (!win) alert('Permita pop-ups deste site para baixar o termo assinado.');
+}
+
 window.addEventListener('message', (event) => {
     if (event.origin !== window.location.origin || event.data?.type !== 'termo-assinado') return;
-    const item = allUnificados.find(row => String(row.primeiraEtapa?.id) === String(event.data.id));
-    if (item) {
-        item.primeiraEtapa.termoAssinado = true;
-        if (event.data.termoDados) item.primeiraEtapa.termoDados = event.data.termoDados;
+    const registros = new Set([...allUnificados, ...archiveSourceRecords]);
+    if (termoEditorRegistro) registros.add(termoEditorRegistro);
+    let atualizado = false;
+    for (const registro of registros) {
+        const p = registro?.primeiraEtapa || registro;
+        if (String(p?.id || registro?.id || '') !== String(event.data.id)) continue;
+        p.termoAssinado = true;
+        if (event.data.termoDados) p.termoDados = event.data.termoDados;
+        atualizado = true;
+    }
+    if (atualizado) {
         renderTabela();
+        renderArchiveTable();
     }
     // Rebusca os dados completos, inclusive quando o proponente está em
     // outro navegador e não pode enviar postMessage para esta janela.
@@ -1641,11 +1702,47 @@ function iniciarAtualizacaoAutomaticaTermos() {
     }, 10000);
 }
 
-function sincronizarTermoAdminAberto() {
+async function sincronizarTermoAdminAberto() {
     const modal = document.getElementById('modalEditarTermo');
-    if (!modal?.classList.contains('open') || termoEditorIndex === null || modal.dataset.editando === 'true') return;
+    if (!modal?.classList.contains('open') || !obterRegistroEditorTermo() || modal.dataset.editando === 'true') return;
 
-    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (!termoEditorArquivo && Number.isInteger(termoEditorIndex)) {
+        termoEditorRegistro = allUnificados[termoEditorIndex] || termoEditorRegistro;
+    }
+
+    if (termoEditorArquivo) {
+        const id = obterEtapaEditorTermo()?.id;
+        if (id) {
+            try {
+                const response = await fetch('/api/admin/dados-unificados?incluirArquivadas=true&_=' + Date.now(), {
+                    cache: 'no-store'
+                });
+                const records = await response.json().catch(() => []);
+                const registroAtualizado = response.ok && Array.isArray(records)
+                    ? records.find(registro => String(registro?.primeiraEtapa?.id || registro?.id || '') === String(id))
+                    : null;
+                if (registroAtualizado) {
+                    const corresponde = registro => String(registro?.primeiraEtapa?.id || registro?.id || '') === String(id);
+                    const activeIndex = allUnificados.findIndex(corresponde);
+                    if (activeIndex >= 0) {
+                        allUnificados[activeIndex] = registroAtualizado;
+                        termoEditorIndex = activeIndex;
+                        termoEditorRegistro = allUnificados[activeIndex];
+                    } else {
+                        termoEditorRegistro = registroAtualizado;
+                    }
+                    archiveSourceRecords = archiveSourceRecords.map(registro =>
+                        corresponde(registro) ? registroAtualizado : registro
+                    );
+                    renderArchiveTable();
+                }
+            } catch {
+                // Mantém os dados já carregados se a atualização em segundo plano falhar.
+            }
+        }
+    }
+
+    const p = obterEtapaEditorTermo();
     if (!p) return;
     const saved = p.termoDados || {};
     const assinaturaAtual = JSON.stringify(saved);
@@ -2216,12 +2313,28 @@ function obterDataHorarioTermo(p) {
         .join(' | ');
 }
 
+function obterRegistroEditorTermo() {
+    if (termoEditorRegistro) return termoEditorRegistro;
+    return Number.isInteger(termoEditorIndex) ? allUnificados[termoEditorIndex] || null : null;
+}
+
+function obterEtapaEditorTermo() {
+    const registro = obterRegistroEditorTermo();
+    return registro?.primeiraEtapa || registro || null;
+}
+
 function abrirEditorTermo(idx) {
+    abrirEditorTermoRegistro(allUnificados[idx], idx, false);
+}
+
+function abrirEditorTermoRegistro(registro, idx = null, arquivo = false) {
     if (userRole !== 'admin') return;
-    const p = allUnificados[idx]?.primeiraEtapa;
+    const p = registro?.primeiraEtapa || registro;
     if (!p || !p.id) return;
 
-    termoEditorIndex = idx;
+    termoEditorIndex = Number.isInteger(idx) ? idx : null;
+    termoEditorRegistro = registro;
+    termoEditorArquivo = arquivo === true;
     termoEditorCompleto = p.termoAssinado === true || p.termoAssinado === 'true';
     termoAdminAlteracoesSalvas = false;
     const saved = p.termoDados || {};
@@ -2337,7 +2450,7 @@ function setModoEdicaoTermoAdmin(editando) {
 }
 
 function ativarEdicaoTermoAdmin() {
-    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    if (userRole !== 'admin' || !obterRegistroEditorTermo()) return;
     setModoEdicaoTermoAdmin(true);
     const status = document.getElementById('adminTermoStatus');
     status.style.color = '#764ba2';
@@ -2366,8 +2479,8 @@ function coletarEdicaoTermoAdmin() {
 }
 
 async function salvarEdicaoTermoAdmin(marcarConcluido = termoEditorCompleto) {
-    if (userRole !== 'admin' || termoEditorIndex === null) return false;
-    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (userRole !== 'admin' || !obterRegistroEditorTermo()) return false;
+    const p = obterEtapaEditorTermo();
     if (!p?.id) return false;
     const termoDados = coletarEdicaoTermoAdmin();
     const status = document.getElementById('adminTermoStatus');
@@ -2402,6 +2515,7 @@ async function salvarEdicaoTermoAdmin(marcarConcluido = termoEditorCompleto) {
         if (pdfBtn) pdfBtn.style.display = termoEditorCompleto ? 'inline-flex' : 'none';
         atualizarBotaoAtualizarInformacoesTermo();
         renderTabela();
+        if (termoEditorArquivo) renderArchiveTable();
         setModoEdicaoTermoAdmin(false);
         return true;
     } catch (e) {
@@ -2415,7 +2529,7 @@ async function salvarEdicaoTermoAdmin(marcarConcluido = termoEditorCompleto) {
 }
 
 async function atualizarInformacoesTermoAdmin() {
-    if (userRole !== 'admin' || termoEditorIndex === null) return;
+    if (userRole !== 'admin' || !obterRegistroEditorTermo()) return;
     if (!termoAdminTemTodosDados()) {
         const status = document.getElementById('adminTermoStatus');
         status.style.color = '#b91c1c';
@@ -2429,8 +2543,8 @@ async function atualizarInformacoesTermoAdmin() {
 }
 
 function gerarPDFTermoAdmin() {
-    if (userRole !== 'admin' || termoEditorIndex === null) return;
-    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (userRole !== 'admin' || !obterRegistroEditorTermo()) return;
+    const p = obterEtapaEditorTermo();
     if (!p?.id) {
         alert('Esta inscrição não possui identificador para gerar o PDF.');
         return;
@@ -2443,8 +2557,8 @@ function gerarPDFTermoAdmin() {
 }
 
 async function reenviarTermoParaProponente() {
-    if (userRole !== 'admin' || termoEditorIndex === null) return;
-    const p = allUnificados[termoEditorIndex]?.primeiraEtapa;
+    if (userRole !== 'admin' || !obterRegistroEditorTermo()) return;
+    const p = obterEtapaEditorTermo();
     if (!p?.email) return;
     if (!(await showConfirmDialog(`Reenviar o link do termo para ${p.email}?\n\nO proponente poderá revisar os dados, reaprová-los e enviar uma nova versão.`))) return;
     const status = document.getElementById('adminTermoStatus');

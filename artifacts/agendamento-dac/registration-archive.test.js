@@ -463,3 +463,57 @@ test('remove só os blobs confirmados e preserva termo assinado e links externos
         [manter, termo, externo]
     );
 });
+
+test('mantém a ação do termo disponível nas inscrições arquivadas', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+    const obterAcaoSource = extractFunction(html, 'obterAcaoTermoArquivo');
+    const obterAcao = vm.runInNewContext(`(${obterAcaoSource})`);
+
+    const incompleto = obterAcao({
+        primeiraEtapa: { id: 'site_123', termoAssinado: false }
+    });
+    assert.equal(incompleto.enabled, true);
+    assert.equal(incompleto.color, '#f59e0b');
+    assert.match(incompleto.title, /incompleto/i);
+
+    const completo = obterAcao({
+        primeiraEtapa: { id: 'site_456', termoAssinado: 'true' }
+    });
+    assert.equal(completo.enabled, true);
+    assert.equal(completo.color, '#16a34a');
+    assert.match(completo.title, /concluído/i);
+
+    const semOrigem = obterAcao(null);
+    assert.equal(semOrigem.enabled, false);
+    assert.match(semOrigem.title, /indisponíveis/i);
+
+    assert.match(html, /abrirEditorTermoArquivo\(\$\{archiveIndex\}\)/);
+    assert.match(html, /termPdfAvailable === true/);
+});
+
+test('abre o editor de termo pelo registro completo do Arquivo', () => {
+    const html = fs.readFileSync(path.join(__dirname, 'admin.html'), 'utf8');
+    const archiveItem = { id: 'site_123', legacyId: 'forms_123' };
+    const sourceRecord = {
+        primeiraEtapa: { id: 'site_123', legacyId: 'forms_123', termoAssinado: false }
+    };
+    const opened = [];
+    const openedHandler = vm.runInNewContext(
+        `(${extractFunction(html, 'abrirEditorTermoArquivo')})`,
+        {
+            userRole: 'admin',
+            archiveDisplayRecords: [archiveItem],
+            findArchiveSourceRecord: () => sourceRecord,
+            obterAcaoTermoArquivo: vm.runInNewContext(`(${extractFunction(html, 'obterAcaoTermoArquivo')})`),
+            allUnificados: [],
+            abrirEditorTermoRegistro: (...args) => opened.push(args),
+            alert: message => { throw new Error(message); }
+        }
+    );
+
+    openedHandler(0);
+    assert.equal(opened.length, 1);
+    assert.equal(opened[0][0], sourceRecord);
+    assert.equal(opened[0][1], null);
+    assert.equal(opened[0][2], true);
+});
