@@ -1420,10 +1420,8 @@ function renderArchiveStages(item, sourceRecord) {
             const summary = String(entry?.resumo || '').trim();
             const separator = summary.match(/\s[-–—]\s/);
             const label = separator ? summary.slice(0, separator.index).trim() : summary;
-            const detail = separator ? summary.slice(separator.index + separator[0].length).trim() : '';
-            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(label || 'Evento')}:</strong> ${escapeHtml(date)}${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}${detail ? ` <span style="font-size:10px;color:#aaa">(${escapeHtml(detail)})</span>` : ''}</span>`;
+            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(label || 'Evento')}:</strong> ${escapeHtml(date)}${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}</span>`;
         }).join('');
-        if (html) html = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Calendário</span>${html}`;
     }
 
     const events = Array.isArray(item?.calendarEvents)
