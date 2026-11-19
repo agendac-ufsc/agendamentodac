@@ -24,6 +24,18 @@
       "dest": "/api/documentos-teste/upload.js"
     },
     {
+      "src": "^/api/divulgacao-materiais/inscricao$",
+      "dest": "/api/divulgacao-materiais.js"
+    },
+    {
+      "src": "^/api/divulgacao-materiais/upload-token$",
+      "dest": "/api/divulgacao-materiais.js"
+    },
+    {
+      "src": "^/api/divulgacao-materiais/registrar$",
+      "dest": "/api/divulgacao-materiais.js"
+    },
+    {
       "src": "^/api/agendamento/[^/]+$",
       "dest": "/api/[...path].js"
     },

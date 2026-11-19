@@ -68,6 +68,20 @@ const {
     createOfficializedCalendarBlocks
 } = require('./schedule-time-conflicts');
 const { validateScheduleRules } = require('./schedule-rules');
+const {
+    MAX_MATERIAL_FILES,
+    MAX_MATERIAL_FILE_BYTES,
+    MAX_MATERIAL_TOTAL_BYTES,
+    normalizarIdInscricao,
+    criarTokenMateriaisDivulgacao,
+    validarTokenMateriaisDivulgacao,
+    normalizarMimeType,
+    obterMimeTypeMaterial,
+    normalizarNomeMaterial,
+    pathnameMaterialDivulgacaoValido,
+    validarAssinaturaMaterial,
+    validarListaMateriais
+} = require('./divulgacao-materiais');
 
 const app = express();
 app.use(cors());
@@ -615,7 +629,8 @@ let BOTOES_HOME = {
 };
 let MENSAGEM_BOTOES_DESATIVADOS = 'As inscrições estão encerradas no momento.';
 let MOSTRAR_BOTOES_DESATIVADOS = true;
-const MENSAGEM_DIVULGACAO_PADRAO = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento contendo as informações essenciais (o quê, onde, quando e quanto custa) para os seguintes e-mails: divulgadac@contato.ufsc.br e  ivo.caoe@ufsc.br\n\nRessaltamos que esse envio deve ocorrer com, no mínimo, 7 (sete) dias de antecedência em relação à data de realização do evento, a fim de viabilizar sua inclusão em nossas mídias.\nEm caso de dúvidas sobre o processo de divulgação, solicitamos que o contato seja feito diretamente com os e-mails informados acima.";
+const MENSAGEM_DIVULGACAO_PADRAO_ANTIGA = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento contendo as informações essenciais (o quê, onde, quando e quanto custa) para os seguintes e-mails: divulgadac@contato.ufsc.br e  ivo.caoe@ufsc.br\n\nRessaltamos que esse envio deve ocorrer com, no mínimo, 7 (sete) dias de antecedência em relação à data de realização do evento, a fim de viabilizar sua inclusão em nossas mídias.\nEm caso de dúvidas sobre o processo de divulgação, solicitamos que o contato seja feito diretamente com os e-mails informados acima.";
+const MENSAGEM_DIVULGACAO_PADRAO = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento com as informações essenciais (o quê, onde, quando e quanto custa) pelo formulário seguro desta mensagem. Após o envio, o sistema encaminhará os materiais para divulgadac@contato.ufsc.br e ivo.caoe@ufsc.br e registrará o recebimento.\n\nEnvie os materiais, preferencialmente, com no mínimo 7 (sete) dias de antecedência em relação à data do evento, para viabilizar a inclusão nas mídias institucionais.\nEm caso de dúvidas, entre em contato com os endereços informados.";
 let MENSAGEM_DIVULGACAO = MENSAGEM_DIVULGACAO_PADRAO;
 let SOMENTE_FINSEMANA = false; // Se true, inscrições só são aceitas de qui a dom
 
@@ -864,7 +879,10 @@ const saveConfigs = async (configs) => {
             MOSTRAR_BOTOES_DESATIVADOS = normalizarBooleano(configs.mostrarBotoesDesativados, true);
         }
         if (configs.mensagemDivulgacao !== undefined) {
-            MENSAGEM_DIVULGACAO = String(configs.mensagemDivulgacao || '').trim() || MENSAGEM_DIVULGACAO_PADRAO;
+            const mensagemConfigurada = String(configs.mensagemDivulgacao || '').trim();
+            MENSAGEM_DIVULGACAO = mensagemConfigurada === MENSAGEM_DIVULGACAO_PADRAO_ANTIGA
+                ? MENSAGEM_DIVULGACAO_PADRAO
+                : (mensagemConfigurada || MENSAGEM_DIVULGACAO_PADRAO);
         }
 
         if (redis) {
@@ -1930,6 +1948,34 @@ function obterOrigemPublicaTermo(req, origemInformada) {
     }
 }
 
+function obterOrigemPublicaApp() {
+    const candidatas = [
+        process.env.PUBLIC_APP_URL,
+        process.env.VERCEL_PROJECT_PRODUCTION_URL,
+        process.env.REPLIT_APP_URL
+    ];
+    for (const candidata of candidatas) {
+        const valor = limparConfiguracaoBrevo(candidata).replace(/\/+$/, '');
+        if (!valor) continue;
+        try {
+            const url = new URL(valor.includes('://') ? valor : `https://${valor}`);
+            if (url.protocol === 'https:' && !url.username && !url.password) return url.origin;
+        } catch {
+            // Tenta a próxima origem configurada; nunca usa o Host do pedido.
+        }
+    }
+    return 'https://agendamentodac.vercel.app';
+}
+
+function criarLinkEnvioMateriaisDivulgacao(id) {
+    const idNormalizado = normalizarIdInscricao(id);
+    const token = criarTokenMateriaisDivulgacao(blobReadWriteToken, idNormalizado);
+    if (!blobStorageReady || !idNormalizado || !token) return '';
+    const url = new URL('/envio-divulgacao.html', obterOrigemPublicaApp());
+    url.hash = new URLSearchParams({ id: idNormalizado, token }).toString();
+    return url.toString();
+}
+
 const sendEmail = async (to, subject, htmlContent, attachments = []) => {
     const apiKey = limparConfiguracaoBrevo(process.env.BREVO_API_KEY);
     if (!apiKey) return null;
@@ -2623,7 +2669,10 @@ async function registrarDivulgacaoInstitucionalEnviada(agendamento, primeiroEven
 }
 
 function obterMensagemDivulgacao(configs) {
-    return String(configs?.mensagemDivulgacao || MENSAGEM_DIVULGACAO || MENSAGEM_DIVULGACAO_PADRAO).trim();
+    const mensagem = String(configs?.mensagemDivulgacao || MENSAGEM_DIVULGACAO || MENSAGEM_DIVULGACAO_PADRAO).trim();
+    return mensagem === MENSAGEM_DIVULGACAO_PADRAO_ANTIGA
+        ? MENSAGEM_DIVULGACAO_PADRAO
+        : mensagem;
 }
 
 function personalizarMensagemDivulgacao(mensagem, nome) {
@@ -2633,12 +2682,19 @@ function personalizarMensagemDivulgacao(mensagem, nome) {
     );
 }
 
-function criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }) {
+function criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento, linkMateriais }) {
     const texto = personalizarMensagemDivulgacao(mensagem, nome);
     const textoHtml = escapeHtml(texto)
         .replace(/divulgadac@contato\.ufsc\.br/gi, matched => '<a href=\"mailto:divulgadac@contato.ufsc.br\" style=\"color:#0e7490;font-weight:600;text-decoration:underline\">' + matched + '</a>')
         .replace(/ivo\.caoe@ufsc\.br/gi, matched => '<a href=\"mailto:ivo.caoe@ufsc.br\" style=\"color:#0e7490;font-weight:600;text-decoration:underline\">' + matched + '</a>')
         .replace(/\n/g, '<br>');
+    const blocoEnvioMateriais = linkMateriais
+        ? '<div style="margin:24px 0;padding:20px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:10px">'
+            + '<p style="margin:0 0 8px;font-size:15px;font-weight:700;color:#115e59">Envie seus materiais pelo formulário seguro</p>'
+            + '<p style="margin:0 0 16px;font-size:13px;color:#334155;line-height:1.6">O formulário registra o recebimento e encaminha os arquivos para divulgadac@contato.ufsc.br e ivo.caoe@ufsc.br. O envio por e-mail fora do formulário não atualiza o status no sistema.</p>'
+            + '<a href="' + escapeHtml(linkMateriais) + '" style="display:inline-block;padding:12px 18px;background:#0f766e;color:#fff;border-radius:7px;font-weight:700;text-decoration:none">Enviar fotos, release e síntese</a>'
+            + '</div>'
+        : '';
     return [
         '<div style="font-family:sans-serif;max-width:650px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">',
         '<div style="background:linear-gradient(135deg,#0f766e,#0e7490);padding:24px 28px">',
@@ -2647,6 +2703,7 @@ function criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }) {
         '</div>',
         '<div style="padding:28px">',
         '<div style="font-size:14px;color:#444;line-height:1.8">' + textoHtml + '</div>',
+        blocoEnvioMateriais,
         evento ? '<p style="font-size:12px;color:#888;margin-top:24px">Evento: ' + escapeHtml(evento) + '</p>' : '',
         '<hr style="border:0;border-top:1px solid #eee;margin:24px 0">',
         '<p style="font-size:11px;color:#aaa;margin:0">UFSC — Secretaria de Cultura, Arte e Esporte · Departamento Artístico Cultural (DAC)</p>',
@@ -2681,8 +2738,23 @@ async function enviarDivulgacaoInstitucional(agendamento, mensagem, origem) {
     const nome = agendamento?.nome || agendamento?.termoDados?.nomeCompleto || 'Proponente';
     const evento = agendamento?.evento || agendamento?.termoDados?.nomeEvento || 'seu evento';
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+    const linkMateriais = agendamento?.isLegada === true
+        ? ''
+        : criarLinkEnvioMateriaisDivulgacao(agendamento?.id);
+    if (agendamento?.isLegada !== true && !linkMateriais) {
+        console.error('❌ [Divulgação] Não foi possível gerar o link seguro para envio dos materiais.');
+        return null;
+    }
+    const mensagemEmail = agendamento?.isLegada === true
+        && String(mensagem || '').trim() === MENSAGEM_DIVULGACAO_PADRAO
+        ? MENSAGEM_DIVULGACAO_PADRAO_ANTIGA
+        : mensagem;
     const assunto = 'Divulgação institucional — ' + evento + ' — DAC/UFSC';
-    const resultado = await sendEmail(email, assunto, criarHtmlDivulgacaoInstitucional({ nome, mensagem, evento }));
+    const resultado = await sendEmail(
+        email,
+        assunto,
+        criarHtmlDivulgacaoInstitucional({ nome, mensagem: mensagemEmail, evento, linkMateriais })
+    );
     if (!resultado) return null;
     const enviadoEm = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
     const avisoAssunto = 'Aviso: divulgação institucional enviada — ' + evento + ' — DAC/UFSC';
@@ -2699,6 +2771,288 @@ async function enviarDivulgacaoInstitucional(agendamento, mensagem, origem) {
     console.log('✅ [Divulgação] E-mail ' + (origem || 'manual') + ' aceito pelo Brevo para ' + email + '.');
     return resultado;
 }
+
+const DIVULGACAO_MATERIAIS_DESTINATARIOS = [
+    'divulgadac@contato.ufsc.br',
+    'ivo.caoe@ufsc.br'
+];
+const DIVULGACAO_MATERIAIS_LOCK_PREFIX = 'divulgacao_materiais_envio_lock:';
+const DIVULGACAO_MATERIAIS_UPLOADS_PREFIX = 'divulgacao_materiais_uploads:';
+
+async function buscarInscricaoAutorizadaMateriais(id, token) {
+    const idNormalizado = normalizarIdInscricao(id);
+    if (!idNormalizado || !validarTokenMateriaisDivulgacao(blobReadWriteToken, idNormalizado, token)) {
+        return null;
+    }
+    const inscricao = (await getAgendamentos())
+        .find(item => String(item.id) === idNormalizado);
+    if (!inscricao
+        || (inscricao.inscricaoTeste === true && inscricao.inscricaoTesteConcluida !== true)
+        || inscricao.inscricaoTesteConcluida === false
+        || !termoAutorizacaoCompleto(inscricao)) {
+        return null;
+    }
+    return inscricao;
+}
+
+function criarEmailMateriaisDivulgacaoHtml({ inscricao, resumo, documentos, recebidoEm }) {
+    const evento = inscricao.evento || inscricao.termoDados?.nomeEvento || 'Evento DAC';
+    const nome = inscricao.nome || inscricao.termoDados?.nomeCompleto || 'Proponente';
+    const listaArquivos = documentos.map(documento =>
+        '<li style="margin:0 0 6px">' + escapeHtml(documento.nome) + '</li>'
+    ).join('');
+    return '<div style="font-family:sans-serif;max-width:680px;margin:auto;border:1px solid #ddd;border-radius:12px;overflow:hidden;color:#333">'
+        + '<div style="background:linear-gradient(135deg,#0f766e,#0e7490);padding:24px 28px">'
+        + '<h2 style="margin:0;color:#fff;font-size:19px">Materiais de divulgação recebidos</h2>'
+        + '<p style="margin:6px 0 0;color:rgba(255,255,255,.85);font-size:13px">DAC — Departamento Artístico Cultural da UFSC</p>'
+        + '</div>'
+        + '<div style="padding:28px;font-size:14px;color:#444;line-height:1.7">'
+        + '<p><strong>Evento:</strong> ' + escapeHtml(evento) + '<br>'
+        + '<strong>Proponente:</strong> ' + escapeHtml(nome) + '<br>'
+        + '<strong>Enviado em:</strong> ' + escapeHtml(recebidoEm) + '</p>'
+        + '<p><strong>Síntese do evento:</strong><br>' + escapeHtml(resumo).replace(/\n/g, '<br>') + '</p>'
+        + '<p><strong>Arquivos anexados:</strong></p><ul>' + listaArquivos + '</ul>'
+        + '<p style="font-size:12px;color:#64748b">Os mesmos arquivos ficam vinculados à inscrição no painel administrativo.</p>'
+        + '</div></div>';
+}
+
+async function obterInscricaoDaSolicitacaoMateriais(req) {
+    const { id, token } = req.method === 'GET' ? req.query : (req.body || {});
+    return buscarInscricaoAutorizadaMateriais(id, token);
+}
+
+async function reservarUploadMaterialDivulgacao(id, pathname, tamanho) {
+    const key = DIVULGACAO_MATERIAIS_UPLOADS_PREFIX + id;
+    const lockKey = key + ':lock';
+    const lockValue = randomUUID();
+    const lock = await redis.set(lockKey, lockValue, { nx: true, ex: 10 });
+    if (!lock) throw new Error('Outro upload está sendo autorizado. Tente novamente.');
+
+    try {
+        const reserva = `${tamanho}:${pathname}`;
+        const adicionada = await redis.sadd(key, reserva);
+        await redis.expire(key, 60 * 60);
+        const reservas = await redis.smembers(key);
+        const totalReservado = reservas.reduce((total, item) => {
+            const tamanhoReservado = Number(String(item).split(':', 1)[0]);
+            return total + (Number.isSafeInteger(tamanhoReservado) ? tamanhoReservado : 0);
+        }, 0);
+        if (reservas.length > MAX_MATERIAL_FILES * 2
+            || totalReservado > MAX_MATERIAL_TOTAL_BYTES * 2) {
+            if (adicionada) await redis.srem(key, reserva);
+            throw new Error('O limite de tentativas de upload desta inscrição foi atingido.');
+        }
+    } finally {
+        const lockAtual = await redis.get(lockKey).catch(() => null);
+        if (lockAtual === lockValue) await redis.del(lockKey).catch(() => null);
+    }
+}
+
+app.post('/api/divulgacao-materiais/inscricao', async (req, res) => {
+    if (!redis || !blobStorageReady) {
+        return res.status(503).json({ error: 'O envio de materiais está temporariamente indisponível.' });
+    }
+    try {
+        const inscricao = await obterInscricaoDaSolicitacaoMateriais(req);
+        if (!inscricao) return res.status(404).json({ error: 'Este link de envio não é válido ou não está mais disponível.' });
+        const materiais = inscricao.divulgacaoMateriais || {};
+        return res.json({
+            success: true,
+            evento: inscricao.evento || inscricao.termoDados?.nomeEvento || 'Evento DAC',
+            recebido: materiais.recebido === true,
+            recebidoEm: materiais.recebidoEm || null,
+            encaminhamento: materiais.encaminhamento?.status || null
+        });
+    } catch (error) {
+        console.error('❌ [/api/divulgacao-materiais/inscricao] erro:', error.message);
+        return res.status(500).json({ error: 'Não foi possível carregar este formulário.' });
+    }
+});
+
+app.post('/api/divulgacao-materiais/upload-token', async (req, res) => {
+    if (!redis || !blobStorageReady) {
+        return res.status(503).json({ error: 'O envio de materiais está temporariamente indisponível.' });
+    }
+    try {
+        const result = await handleUpload({
+            body: req.body,
+            request: req,
+            token: blobReadWriteToken,
+            onBeforeGenerateToken: async (pathname, clientPayload) => {
+                let dados;
+                try {
+                    dados = JSON.parse(clientPayload || '{}');
+                } catch {
+                    throw new Error('Dados do arquivo inválidos.');
+                }
+                const inscricao = await buscarInscricaoAutorizadaMateriais(dados.id, dados.token);
+                if (!inscricao) throw new Error('Este link de envio não é válido ou não está mais disponível.');
+                if (inscricao.divulgacaoMateriais?.recebido === true) {
+                    throw new Error('Os materiais desta inscrição já foram recebidos.');
+                }
+                const nome = String(dados.nome || '');
+                const mimeType = normalizarMimeType(dados.mimeType);
+                const tamanho = Number(dados.tamanho);
+                if (!pathnameMaterialDivulgacaoValido(pathname, dados.id)
+                    || !obterMimeTypeMaterial(nome)
+                    || mimeType !== obterMimeTypeMaterial(nome)) {
+                    throw new Error('Tipo ou caminho de arquivo não permitido.');
+                }
+                if (!Number.isSafeInteger(tamanho) || tamanho < 1 || tamanho > MAX_MATERIAL_FILE_BYTES) {
+                    throw new Error('Cada arquivo pode ter até 10 MB.');
+                }
+                await reservarUploadMaterialDivulgacao(dados.id, pathname, tamanho);
+                return {
+                    maximumSizeInBytes: MAX_MATERIAL_FILE_BYTES,
+                    validUntil: Date.now() + 60 * 60 * 1000,
+                    addRandomSuffix: false
+                };
+            }
+        });
+        return res.status(200).json(result);
+    } catch (error) {
+        console.error('❌ [/api/divulgacao-materiais/upload-token] erro:', error.message);
+        return res.status(400).json({ error: 'Não foi possível autorizar o envio deste arquivo.' });
+    }
+});
+
+app.post('/api/divulgacao-materiais/registrar', async (req, res) => {
+    if (!redis || !blobStorageReady) {
+        return res.status(503).json({ error: 'O envio de materiais está temporariamente indisponível.' });
+    }
+
+    const id = normalizarIdInscricao(req.body?.id);
+    const token = req.body?.token;
+    const resumo = String(req.body?.resumo || '').replace(/\r\n/g, '\n').trim();
+    const arquivos = req.body?.arquivos;
+    if (!id || !validarTokenMateriaisDivulgacao(blobReadWriteToken, id, token)) {
+        return res.status(404).json({ error: 'Este link de envio não é válido ou não está mais disponível.' });
+    }
+    if (!resumo || resumo.length > 3000) {
+        return res.status(400).json({ error: 'Preencha a síntese do evento (até 3.000 caracteres).' });
+    }
+    const validacao = validarListaMateriais(arquivos, id);
+    if (!validacao.valido) return res.status(400).json({ error: validacao.erro });
+
+    const lockKey = DIVULGACAO_MATERIAIS_LOCK_PREFIX + id;
+    const lockValue = randomUUID();
+    try {
+        const inscricaoInicial = await buscarInscricaoAutorizadaMateriais(id, token);
+        if (!inscricaoInicial) return res.status(404).json({ error: 'Este link de envio não é válido ou não está mais disponível.' });
+        if (inscricaoInicial.divulgacaoMateriais?.recebido === true) {
+            return res.status(409).json({ error: 'Os materiais desta inscrição já foram recebidos.' });
+        }
+        const lock = await redis.set(lockKey, lockValue, { nx: true, ex: 120 });
+        if (!lock) return res.status(409).json({ error: 'Este envio já está sendo processado. Aguarde um instante.' });
+
+        const inscricao = await buscarInscricaoAutorizadaMateriais(id, token);
+        if (!inscricao) return res.status(404).json({ error: 'Este link de envio não é válido ou não está mais disponível.' });
+        if (inscricao.divulgacaoMateriais?.recebido === true) {
+            return res.status(409).json({ error: 'Os materiais desta inscrição já foram recebidos.' });
+        }
+
+        const documentos = [];
+        const anexosEmail = [];
+        for (const arquivo of arquivos) {
+            const nome = String(arquivo.nome || '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 255);
+            const mimeEsperado = obterMimeTypeMaterial(nome);
+            const pathname = String(arquivo.pathname || '');
+            let metadata;
+            try {
+                metadata = await headBlob(pathname, blobOptions({ access: 'private' }));
+            } catch {
+                return res.status(400).json({ error: 'Um dos arquivos não foi encontrado no armazenamento. Tente enviá-lo novamente.' });
+            }
+            if (metadata.pathname !== pathname
+                || metadata.size !== Number(arquivo.tamanho)
+                || metadata.size > MAX_MATERIAL_FILE_BYTES
+                || normalizarMimeType(metadata.contentType) !== mimeEsperado) {
+                return res.status(400).json({ error: 'Um dos arquivos não corresponde ao tipo ou tamanho informado.' });
+            }
+            const arquivoBlob = await getBlob(metadata.url, blobOptions({ access: 'private', useCache: false }));
+            if (arquivoBlob.statusCode !== 200 || !arquivoBlob.stream) {
+                return res.status(400).json({ error: 'Não foi possível ler um dos arquivos enviados.' });
+            }
+            const conteudo = await streamParaBuffer(arquivoBlob.stream);
+            if (conteudo.length !== metadata.size || !validarAssinaturaMaterial(conteudo, mimeEsperado)) {
+                return res.status(400).json({ error: 'O conteúdo de um dos arquivos não corresponde ao formato permitido.' });
+            }
+            const documento = {
+                id: randomUUID(),
+                pathname: metadata.pathname,
+                blobUrl: metadata.url,
+                nome,
+                mimeType: mimeEsperado,
+                tamanho: metadata.size,
+                campo: 'divulgacaoMateriais',
+                categoria: 'Materiais de divulgação',
+                enviadoEm: new Date().toISOString()
+            };
+            documentos.push(documento);
+            anexosEmail.push({ name: normalizarNomeMaterial(nome), content: conteudo.toString('base64') });
+        }
+
+        const recebidoEm = new Date().toISOString();
+        const recebidoEmTexto = new Date(recebidoEm).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const documentosAtuais = Array.isArray(inscricao.documentos) ? inscricao.documentos : [];
+        const registroMateriais = {
+            recebido: true,
+            recebidoEm,
+            resumo,
+            documentoIds: documentos.map(documento => documento.id),
+            encaminhamento: { status: 'pendente' }
+        };
+        const salvos = await updateAgendamento(id, {
+            documentos: [...documentosAtuais, ...documentos],
+            divulgacaoMateriais: registroMateriais
+        });
+        if (!salvos) return res.status(500).json({ error: 'Não foi possível registrar o recebimento no sistema.' });
+        await redis.del(DIVULGACAO_MATERIAIS_UPLOADS_PREFIX + id).catch(() => null);
+
+        const evento = inscricao.evento || inscricao.termoDados?.nomeEvento || 'Evento DAC';
+        const resultadoEmail = await sendEmail(
+            DIVULGACAO_MATERIAIS_DESTINATARIOS,
+            `Materiais de divulgação recebidos — ${evento} — DAC/UFSC`,
+            criarEmailMateriaisDivulgacaoHtml({
+                inscricao,
+                resumo,
+                documentos,
+                recebidoEm: recebidoEmTexto
+            }),
+            anexosEmail
+        );
+        const encaminhamentoStatus = resultadoEmail ? 'enviado' : 'falhou';
+        const atualizado = await updateAgendamento(id, {
+            divulgacaoMateriais: {
+                ...registroMateriais,
+                encaminhamento: {
+                    status: encaminhamentoStatus,
+                    enviadoEm: resultadoEmail ? new Date().toISOString() : null,
+                    messageId: resultadoEmail?.messageId || null
+                }
+            }
+        });
+        if (!atualizado) {
+            console.error(`❌ [Divulgação] Materiais recebidos para ${id}, mas o estado do encaminhamento não pôde ser atualizado.`);
+        }
+
+        console.log(`✅ [Divulgação] Materiais registrados para ${id}; encaminhamento ${encaminhamentoStatus}.`);
+        return res.json({
+            success: true,
+            recebido: true,
+            emailEncaminhado: Boolean(resultadoEmail),
+            aviso: resultadoEmail
+                ? ''
+                : 'Os materiais foram recebidos, mas o encaminhamento automático por e-mail não foi confirmado.'
+        });
+    } catch (error) {
+        console.error('❌ [/api/divulgacao-materiais/registrar] erro:', error.message);
+        return res.status(500).json({ error: 'Não foi possível concluir o envio dos materiais.' });
+    } finally {
+        const lockAtual = await redis.get(lockKey).catch(() => null);
+        if (lockAtual === lockValue) await redis.del(lockKey).catch(() => null);
+    }
+});
 
 async function verificarEnviosAutomaticosDivulgacao() {
     if (!redis || !process.env.BREVO_API_KEY) return;
@@ -6548,7 +6902,7 @@ app.post('/api/admin/atualizar-etapas', async (req, res) => {
 });
 
 // Envio manual e registro da mensagem de divulgação institucional.
-app.post('/api/admin/enviar-divulgacao', async (req, res) => {
+app.post('/api/admin/enviar-divulgacao', requireAdminSession, async (req, res) => {
     const { id, mensagem } = req.body || {};
     if (!id) return res.status(400).json({ error: 'ID da inscrição não fornecido.' });
     try {
@@ -6564,7 +6918,10 @@ app.post('/api/admin/enviar-divulgacao', async (req, res) => {
             return res.status(400).json({ error: 'A inscrição não possui um e-mail válido para envio.' });
         }
         const configs = await getConfigs('envio manual divulgação institucional');
-        const mensagemFinal = String(mensagem || '').trim() || obterMensagemDivulgacao(configs);
+        const mensagemInformada = String(mensagem || '').trim();
+        const mensagemFinal = mensagemInformada
+            ? obterMensagemDivulgacao({ mensagemDivulgacao: mensagemInformada })
+            : obterMensagemDivulgacao(configs);
         const primeiroEvento = obterInicioDoPrimeiroEvento(agendamento);
         const resultado = await enviarDivulgacaoInstitucional(agendamento, mensagemFinal, 'manual');
         if (!resultado) return res.status(502).json({ error: 'Não foi possível enviar o e-mail de divulgação.' });

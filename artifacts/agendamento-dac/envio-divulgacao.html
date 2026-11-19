@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Envio de materiais — DAC/UFSC</title>
+  <style>
+    :root { color-scheme: light; font-family: Arial, Helvetica, sans-serif; color: #1f2937; background: #f3f7f7; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; padding: 32px 16px; }
+    main { width: min(100%, 720px); margin: 0 auto; }
+    .brand { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; color: #115e59; }
+    .brand-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: white; background: #0f766e; font-weight: 800; }
+    .brand-name { font-size: 14px; font-weight: 700; letter-spacing: .02em; }
+    .card { background: white; border: 1px solid #dbe4e4; border-radius: 16px; box-shadow: 0 12px 30px rgba(15, 75, 72, .08); overflow: hidden; }
+    .card-head { padding: 28px 30px 20px; background: linear-gradient(135deg, #0f766e, #0e7490); color: white; }
+    h1 { margin: 0 0 8px; font-size: clamp(22px, 4vw, 30px); line-height: 1.2; }
+    .card-head p { margin: 0; color: rgba(255,255,255,.9); line-height: 1.55; }
+    .content { padding: 26px 30px 30px; }
+    .event { padding: 12px 14px; margin: 0 0 22px; border-left: 4px solid #0f766e; border-radius: 5px; background: #f0fdfa; font-weight: 700; }
+    .field { margin: 0 0 20px; }
+    label { display: block; margin-bottom: 7px; color: #263b3a; font-size: 14px; font-weight: 700; }
+    .hint { margin: 6px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }
+    textarea { display: block; width: 100%; min-height: 150px; resize: vertical; padding: 12px 13px; border: 1px solid #cbd5d5; border-radius: 8px; font: inherit; line-height: 1.5; }
+    textarea:focus, input:focus { outline: 3px solid rgba(15,118,110,.16); border-color: #0f766e; }
+    .file-box { padding: 16px; border: 1px dashed #83aaa7; border-radius: 9px; background: #f8fbfb; }
+    input[type=file] { display: block; width: 100%; font: inherit; }
+    button { display: inline-flex; align-items: center; justify-content: center; min-height: 46px; padding: 11px 18px; border: 0; border-radius: 8px; background: #0f766e; color: white; font: inherit; font-weight: 700; cursor: pointer; }
+    button:hover:not(:disabled) { background: #115e59; }
+    button:disabled { cursor: wait; opacity: .65; }
+    .status { min-height: 22px; margin: 0 0 14px; font-size: 14px; line-height: 1.5; }
+    .status.error { color: #b91c1c; }
+    .status.success { color: #166534; }
+    .status.info { color: #475569; }
+    .notice { margin-top: 18px; padding: 12px 14px; border-radius: 8px; background: #f1f5f9; color: #475569; font-size: 12px; line-height: 1.6; }
+    .received { display: none; padding: 18px; border: 1px solid #bbf7d0; border-radius: 10px; background: #f0fdf4; color: #166534; line-height: 1.6; }
+    .received h2 { margin: 0 0 8px; font-size: 18px; }
+    .received p { margin: 0; }
+    footer { padding: 16px 8px 0; text-align: center; color: #64748b; font-size: 12px; }
+    @media (max-width: 560px) {
+      body { padding: 18px 10px; }
+      .card-head { padding: 22px 20px 18px; }
+      .content { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><div class="brand-mark" aria-hidden="true">DAC</div><div class="brand-name">UFSC · Departamento Artístico Cultural</div></div>
+    <section class="card">
+      <header class="card-head">
+        <h1>Envio de materiais de divulgação</h1>
+        <p>Envie fotos, release e a síntese do evento. O sistema registra o recebimento e encaminha os arquivos ao DAC.</p>
+      </header>
+      <div class="content">
+        <p id="eventName" class="event" hidden></p>
+        <p id="loading" class="status info" role="status">Verificando este link de envio…</p>
+        <div id="received" class="received" role="status" aria-live="polite">
+          <h2>Materiais recebidos</h2>
+          <p id="receivedMessage">O envio foi registrado no sistema.</p>
+        </div>
+        <form id="materialsForm" hidden>
+          <div class="field">
+            <label for="summary">Síntese do evento</label>
+            <textarea id="summary" maxlength="3000" required placeholder="Conte o que é o evento, onde e quando acontece e o valor do ingresso (se houver)."></textarea>
+            <p class="hint">Até 3.000 caracteres. A síntese será encaminhada junto com os arquivos.</p>
+          </div>
+          <div class="field">
+            <label for="files">Fotos, release ou outros materiais</label>
+            <div class="file-box">
+              <input id="files" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.pdf,.txt,image/jpeg,image/png,image/webp,application/pdf,text/plain">
+              <p class="hint">PDF, JPG, PNG, WebP ou TXT. Até 10 arquivos, 10 MB por arquivo e 15 MB no total.</p>
+            </div>
+          </div>
+          <p id="status" class="status" role="status" aria-live="polite"></p>
+          <button id="submitButton" type="submit">Enviar materiais ao DAC</button>
+        </form>
+        <div id="pageError" class="status error" role="alert" hidden></div>
+        <div class="notice">Este link é individual para a inscrição. Após o recebimento, não será possível enviar novamente pelo mesmo link. Se precisar corrigir um arquivo, entre em contato com o DAC.</div>
+      </div>
+    </section>
+    <footer>UFSC — Secretaria de Cultura, Arte e Esporte · DAC</footer>
+  </main>
+  <script src="/upload-client.js"></script>
+  <script>
+    (() => {
+      const params = new URLSearchParams(window.location.hash.slice(1) || window.location.search.slice(1));
+      const id = params.get('id') || '';
+      const token = params.get('token') || '';
+      if (window.location.hash || window.location.search) {
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+      const loading = document.getElementById('loading');
+      const form = document.getElementById('materialsForm');
+      const eventName = document.getElementById('eventName');
+      const errorBox = document.getElementById('pageError');
+      const status = document.getElementById('status');
+      const button = document.getElementById('submitButton');
+      const acceptedTypes = {
+        '.jpg': 'image/jpeg',
+        '.jpeg': 'image/jpeg',
+        '.png': 'image/png',
+        '.webp': 'image/webp',
+        '.pdf': 'application/pdf',
+        '.txt': 'text/plain'
+      };
+      const maxFileBytes = 10 * 1024 * 1024;
+      const maxTotalBytes = 15 * 1024 * 1024;
+
+      function setStatus(message, kind = '') {
+        status.textContent = message;
+        status.className = `status ${kind}`.trim();
+      }
+
+      function fileMimeType(file) {
+        const extension = String(file.name || '').toLowerCase().match(/\.[^.]+$/)?.[0] || '';
+        const expected = acceptedTypes[extension];
+        if (!expected) return '';
+        return !file.type || file.type === 'application/octet-stream' ? expected : file.type.toLowerCase();
+      }
+
+      function safeName(value) {
+        return String(value || 'material')
+          .normalize('NFKD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[\u0000-\u001f\u007f]/g, '')
+          .replace(/[\\/<>:"|?*]+/g, '_')
+          .replace(/\s+/g, '_')
+          .replace(/[^a-zA-Z0-9._-]/g, '_')
+          .replace(/^\.+/, '')
+          .slice(-150) || 'material';
+      }
+
+      function showReceived(message, event) {
+        loading.hidden = true;
+        form.hidden = true;
+        eventName.hidden = !event;
+        if (event) eventName.textContent = event;
+        document.getElementById('receivedMessage').textContent = message;
+        document.getElementById('received').style.display = 'block';
+      }
+
+      async function loadForm() {
+        if (!/^\d{1,20}$/.test(id) || !/^[a-f0-9]{64}$/i.test(token)) {
+          throw new Error('O link de envio está incompleto ou inválido.');
+        }
+        const response = await fetch('/api/divulgacao-materiais/inscricao', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, token }),
+          cache: 'no-store'
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success) throw new Error(data.error || 'Este link de envio não é válido ou não está mais disponível.');
+        if (data.recebido) {
+          const detalhe = data.encaminhamento === 'enviado'
+            ? ' O sistema também encaminhou os materiais aos endereços do DAC.'
+            : ' O recebimento foi registrado, mas o encaminhamento automático por e-mail não foi confirmado; entre em contato com o DAC.';
+          showReceived(`Este envio já foi concluído.${detalhe}`, data.evento);
+          return;
+        }
+        loading.hidden = true;
+        eventName.hidden = !data.evento;
+        if (data.evento) eventName.textContent = data.evento;
+        form.hidden = false;
+      }
+
+      form.addEventListener('submit', async event => {
+        event.preventDefault();
+        const resumo = document.getElementById('summary').value.trim();
+        const files = Array.from(document.getElementById('files').files || []);
+        if (!resumo) return setStatus('Preencha a síntese do evento.', 'error');
+        if (resumo.length > 3000) return setStatus('A síntese ultrapassa 3.000 caracteres.', 'error');
+        if (!files.length || files.length > 10) return setStatus('Selecione de 1 a 10 arquivos.', 'error');
+        if (files.some(file => !fileMimeType(file) || fileMimeType(file) !== acceptedTypes[String(file.name).toLowerCase().match(/\.[^.]+$/)?.[0] || ''])) {
+          return setStatus('Use arquivos PDF, JPG, PNG, WebP ou TXT.', 'error');
+        }
+        if (files.some(file => file.size < 1 || file.size > maxFileBytes)) {
+          return setStatus('Cada arquivo pode ter até 10 MB.', 'error');
+        }
+        if (files.reduce((total, file) => total + file.size, 0) > maxTotalBytes) {
+          return setStatus('O tamanho total dos arquivos não pode passar de 15 MB.', 'error');
+        }
+        if (!window.DacUploadClient?.upload) return setStatus('O componente de envio não carregou. Atualize a página e tente novamente.', 'error');
+
+        button.disabled = true;
+        button.textContent = 'Enviando…';
+        try {
+          const uploaded = [];
+          for (let index = 0; index < files.length; index++) {
+            const file = files[index];
+            const mimeType = fileMimeType(file);
+            const pathname = `inscricoes/${id}/${window.crypto.randomUUID()}-${safeName(file.name)}`;
+            setStatus(`Enviando arquivo ${index + 1} de ${files.length}: ${file.name}`);
+            const blob = await window.DacUploadClient.upload(pathname, file, {
+              access: 'private',
+              handleUploadUrl: '/api/divulgacao-materiais/upload-token',
+              clientPayload: JSON.stringify({ id, token, nome: file.name, mimeType, tamanho: file.size }),
+              contentType: mimeType,
+              multipart: false
+            });
+            uploaded.push({ pathname: blob.pathname, nome: file.name, mimeType, tamanho: file.size });
+          }
+          setStatus('Arquivos enviados. Registrando o recebimento e encaminhando ao DAC…');
+          const response = await fetch('/api/divulgacao-materiais/registrar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, token, resumo, arquivos: uploaded })
+          });
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok || !data.success) throw new Error(data.error || 'Não foi possível registrar o envio.');
+          const message = data.emailEncaminhado
+            ? 'O envio foi registrado e os arquivos foram encaminhados aos endereços do DAC.'
+            : 'O envio foi registrado. O encaminhamento automático por e-mail não foi confirmado; não envie novamente pelo link.';
+          showReceived(message, eventName.textContent);
+        } catch (error) {
+          setStatus(error.message || 'Ocorreu um erro no envio. Tente novamente.', 'error');
+          button.disabled = false;
+          button.textContent = 'Enviar materiais ao DAC';
+        }
+      });
+
+      loadForm().catch(error => {
+        loading.hidden = true;
+        errorBox.textContent = error.message || 'Não foi possível abrir este link.';
+        errorBox.hidden = false;
+      });
+    })();
+  </script>
+</body>
+</html>

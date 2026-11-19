@@ -2037,13 +2037,18 @@ function renderTabela() {
         const registroAtividadesEnviado = registroAtividades.enviado === true || Boolean(registroAtividades.enviadoEm);
         const divulgacaoInstitucional = p.divulgacaoInstitucional || {};
         const divulgacaoEnviada = divulgacaoInstitucional.enviado === true;
+        const divulgacaoMateriais = p.divulgacaoMateriais || {};
+        const materiaisDivulgacaoRecebidos = divulgacaoMateriais.recebido === true;
+        const encaminhamentoMateriaisConfirmado = divulgacaoMateriais.encaminhamento?.status === 'enviado';
         const divulgacaoBloqueada = !termoAssinado;
-        const divulgacaoCompleta = divulgacaoEnviada && registroAtividadesCompleto;
+        const divulgacaoCompleta = materiaisDivulgacaoRecebidos;
         const divulgacaoColor = corEtapaProcesso(divulgacaoEnviada, divulgacaoCompleta);
         const divulgacaoTitle = divulgacaoCompleta
-            ? 'Divulgação enviada e registro de atividades recebido — abrir para reenviar'
+            ? (encaminhamentoMateriaisConfirmado
+                ? 'Materiais de divulgação recebidos e encaminhados ao DAC — conferir a pasta de documentos'
+                : 'Materiais recebidos; encaminhamento por e-mail não confirmado — conferir a pasta de documentos')
             : (divulgacaoEnviada
-                ? 'Divulgação enviada — aguardando retorno do Registro de atividades; abrir para reenviar'
+                ? 'Divulgação enviada — aguardando o envio dos materiais pelo formulário; abrir para reenviar'
                 : (divulgacaoBloqueada
                     ? 'Divulgação não enviada — aguardando termo de autorização completo'
                     : 'Divulgação não enviada — enviar manualmente ou aguardar o envio automático'));
@@ -2841,7 +2846,7 @@ async function salvarEtapas() {
 }
 
 
-const MENSAGEM_DIVULGACAO_PADRAO_ADMIN = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento contendo as informações essenciais (o quê, onde, quando e quanto custa) para os seguintes e-mails: divulgadac@contato.ufsc.br e  ivo.caoe@ufsc.br\n\nRessaltamos que esse envio deve ocorrer com, no mínimo, 7 (sete) dias de antecedência em relação à data de realização do evento, a fim de viabilizar sua inclusão em nossas mídias.\nEm caso de dúvidas sobre o processo de divulgação, solicitamos que o contato seja feito diretamente com os e-mails informados acima.";
+const MENSAGEM_DIVULGACAO_PADRAO_ADMIN = "Olá, {{nome}}\nPara viabilizar a divulgação do seu evento nas mídias institucionais da UFSC, solicitamos o envio de fotos, release e uma síntese do evento com as informações essenciais (o quê, onde, quando e quanto custa) pelo formulário seguro desta mensagem. Após o envio, o sistema encaminhará os materiais para divulgadac@contato.ufsc.br e ivo.caoe@ufsc.br e registrará o recebimento.\n\nEnvie os materiais, preferencialmente, com no mínimo 7 (sete) dias de antecedência em relação à data do evento, para viabilizar a inclusão nas mídias institucionais.\nEm caso de dúvidas, entre em contato com os endereços informados.";
 let _divulgacaoData = {};
 
 function personalizarMensagemDivulgacaoAdmin(mensagem, nome) {
