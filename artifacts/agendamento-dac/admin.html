@@ -1373,6 +1373,25 @@ function obterAcaoTermoArquivo(sourceRecord) {
     };
 }
 
+function normalizeArchiveStageLabel(value) {
+    const text = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    const patterns = [
+        [/^ensaio\s*(?:e|\/|&|\+)\s*apresentacao\b/, 'Ensaio e Apresentação'],
+        [/^evento\s*(?:e|\/|&|\+)\s*desmontagem\b/, 'Evento e Desmontagem'],
+        [/^apresentacao\s*(?:e|\/|&|\+)\s*desmontagem\b/, 'Apresentação e Desmontagem'],
+        [/^montagem(?:\s+(\d+))?\b/, 'Montagem'],
+        [/^ensaio(?:\s+(\d+))?\b/, 'Ensaio'],
+        [/^desmontagem(?:\s+(\d+))?\b/, 'Desmontagem'],
+        [/^evento(?:\s+(\d+))?\b/, 'Evento'],
+        [/^apresentacao\b/, 'Apresentação']
+    ];
+    for (const [pattern, label] of patterns) {
+        const match = text.match(pattern);
+        if (match) return `${label}${match[1] ? ` ${match[1]}` : ''}`;
+    }
+    return 'Evento';
+}
+
 function renderArchiveStages(item, sourceRecord) {
     const source = sourceRecord || item || {};
     const p = source?.primeiraEtapa || source || {};
@@ -1384,7 +1403,9 @@ function renderArchiveStages(item, sourceRecord) {
             const items = Array.isArray(p.etapas[key]) ? p.etapas[key] : [p.etapas[key]];
             items.forEach((entry, index) => {
                 if (!entry?.data || !entry?.horario) return;
-                const label = items.length > 1 ? `${names[key] || key} ${index + 1}` : (names[key] || key);
+                const baseLabel = normalizeArchiveStageLabel(names[key] || key);
+                const hasOrdinal = /\s\d+$/.test(baseLabel);
+                const label = items.length > 1 && !hasOrdinal ? `${baseLabel} ${index + 1}` : baseLabel;
                 const date = String(entry.data).split('-').reverse().join('/');
                 html += `<span style="display:block;white-space:nowrap;margin-bottom:2px"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(date)}, ${escapeHtml(entry.horario)}</span>`;
             });
@@ -1405,9 +1426,7 @@ function renderArchiveStages(item, sourceRecord) {
             { keywords: ['desmontagem'], label: 'Desmontagem' }
         ];
         columns.forEach(({ keywords, label }) => {
-            const index = headers.findIndex(header =>
-                keywords.some(keyword => String(header || '').toLowerCase().includes(keyword))
-            );
+            const index = headers.findIndex(header => keywords.some(keyword => String(header || '').toLowerCase().includes(keyword)));
             if (index < 0 || !values[index] || !String(values[index]).trim()) return;
             html += `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#666"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(String(values[index]).trim())}</span>`;
         });
@@ -1417,27 +1436,19 @@ function renderArchiveStages(item, sourceRecord) {
     if (!html && Array.isArray(p.calendarDates) && p.calendarDates.length) {
         html = p.calendarDates.map(entry => {
             const date = entry?.data ? String(entry.data).split('-').reverse().join('/') : '';
-            const summary = String(entry?.resumo || '').trim();
-            const separator = summary.match(/\s[-–—]\s/);
-            const label = separator ? summary.slice(0, separator.index).trim() : summary;
-            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(label || 'Evento')}:</strong> ${escapeHtml(date)}${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}</span>`;
+            const label = normalizeArchiveStageLabel(entry?.resumo);
+            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(label)}:</strong> ${escapeHtml(date)}${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}</span>`;
         }).join('');
     }
 
-    const events = Array.isArray(item?.calendarEvents)
-        ? item.calendarEvents
-        : (Array.isArray(source?.calendarEvents) ? source.calendarEvents : []);
+    const events = Array.isArray(item?.calendarEvents) ? item.calendarEvents : (Array.isArray(source?.calendarEvents) ? source.calendarEvents : []);
     if (!html && events.length) {
         html = events.map(entry => {
-            const startValue = entry?.start && typeof entry.start === 'object'
-                ? (entry.start.dateTime || entry.start.date)
-                : entry?.start;
-            const endValue = entry?.end && typeof entry.end === 'object'
-                ? (entry.end.dateTime || entry.end.date)
-                : entry?.end;
+            const startValue = entry?.start && typeof entry.start === 'object' ? (entry.start.dateTime || entry.start.date) : entry?.start;
+            const endValue = entry?.end && typeof entry.end === 'object' ? (entry.end.dateTime || entry.end.date) : entry?.end;
             const start = formatArchiveDate(startValue);
             const end = endValue ? formatArchiveDate(endValue) : '';
-            const label = escapeHtml(entry?.stage || entry?.summary || 'Evento');
+            const label = escapeHtml(normalizeArchiveStageLabel(entry?.stage || entry?.summary));
             return `<span style="display:block;white-space:nowrap;margin-bottom:2px"><strong>${label}:</strong> ${start}${end ? ` — ${end}` : ''}</span>`;
         }).join('');
     }
@@ -1445,7 +1456,6 @@ function renderArchiveStages(item, sourceRecord) {
     if (!html && Array.isArray(item?.eventDates)) html = formatArchiveEventDates(item.eventDates);
     return html || '<span style="color:#aaa">—</span>';
 }
-
 function archiveSelectionKey(item) {
     return String(item?.id || item?.legacyId || '').trim();
 }
