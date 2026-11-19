@@ -1417,7 +1417,11 @@ function renderArchiveStages(item, sourceRecord) {
     if (!html && Array.isArray(p.calendarDates) && p.calendarDates.length) {
         html = p.calendarDates.map(entry => {
             const date = entry?.data ? String(entry.data).split('-').reverse().join('/') : '';
-            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(date)}</strong>${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}${entry?.resumo ? ` <span style="font-size:10px;color:#aaa">(${escapeHtml(entry.resumo)})</span>` : ''}</span>`;
+            const summary = String(entry?.resumo || '').trim();
+            const separator = summary.match(/\s[-–—]\s/);
+            const label = separator ? summary.slice(0, separator.index).trim() : summary;
+            const detail = separator ? summary.slice(separator.index + separator[0].length).trim() : '';
+            return `<span style="display:block;white-space:nowrap;margin-bottom:2px;color:#555"><strong>${escapeHtml(label || 'Evento')}:</strong> ${escapeHtml(date)}${entry?.horario ? `, ${escapeHtml(entry.horario)}` : ''}${detail ? ` <span style="font-size:10px;color:#aaa">(${escapeHtml(detail)})</span>` : ''}</span>`;
         }).join('');
         if (html) html = `<span style="display:block;font-size:10px;color:#aaa;margin-bottom:3px">via Calendário</span>${html}`;
     }
