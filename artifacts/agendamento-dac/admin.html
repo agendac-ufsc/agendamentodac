@@ -93,13 +93,14 @@
         #inscricoesTable .acoes-list .btn-action small{font-size:9px;margin-left:-2px}
         /* O arquivo mantém uma tabela compacta, independente da aba Inscrições. */
         #pane-arquivo .archive-table-wrap{width:fit-content;max-width:100%;margin-inline:auto}
-        #archiveTable{width:900px;min-width:760px;max-width:100%;margin-inline:auto;table-layout:fixed}
+        #archiveTable{width:1040px;min-width:840px;max-width:100%;margin-inline:auto;table-layout:fixed}
         #archiveTable th:nth-child(1),#archiveTable td:nth-child(1){width:36px;text-align:center;padding-left:4px;padding-right:4px}
-        #archiveTable th:nth-child(2),#archiveTable td:nth-child(2){width:24%}
-        #archiveTable th:nth-child(3),#archiveTable td:nth-child(3){width:15%}
-        #archiveTable th:nth-child(4),#archiveTable td:nth-child(4){width:32.1%}
-        #archiveTable th:nth-child(5),#archiveTable td:nth-child(5){width:112px}
+        #archiveTable th:nth-child(2),#archiveTable td:nth-child(2){width:22%}
+        #archiveTable th:nth-child(3),#archiveTable td:nth-child(3){width:14%}
+        #archiveTable th:nth-child(4),#archiveTable td:nth-child(4){width:28%}
+        #archiveTable th:nth-child(5),#archiveTable td:nth-child(5){width:100px}
         #archiveTable th:nth-child(6),#archiveTable td:nth-child(6){width:112px;text-align:center}
+        #archiveTable th:nth-child(7),#archiveTable td:nth-child(7){width:112px;text-align:center}
         #archiveTable .acoes-list{display:flex;align-items:center;justify-content:center;gap:2px;min-width:0}
         .col-evento{font-weight:700;color:#333}
         .local-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:700}
@@ -345,6 +346,7 @@
                             <th>Etapas</th>
                             <th>Status</th>
                             <th style="text-align:center">Informações</th>
+                            <th style="text-align:center">Etapas do processo</th>
                         </tr>
                     </thead>
                     <tbody id="archiveBody"></tbody>
@@ -1615,18 +1617,23 @@ function renderArchiveTable() {
             : {};
         const activityId = p.id || p.legacyId || item?.id || item?.legacyId || '';
         const activityComplete = activityRecord.concluido === true;
-        const activitySent = Boolean(activityRecord.enviadoEm || activityRecord.enviadoPara);
+        const activitySent = activityRecord.enviado === true
+            || Boolean(activityRecord.enviadoEm || activityRecord.enviadoPara);
+        const divulgacaoEnviada = p.divulgacaoInstitucional?.enviado === true;
         const activityTitle = activityComplete
             ? 'Visualizar registro de atividades preenchido'
             : (activitySent
                 ? 'Registro de atividades enviado — aguardando preenchimento do proponente'
-                : 'Abrir registro de atividades');
-        const activityColor = activityComplete ? '#16a34a' : (activitySent ? '#764ba2' : '#a78bfa');
+                : (divulgacaoEnviada
+                    ? 'Registro de atividades não enviado — aguardando envio automático'
+                    : 'Registro de atividades não enviado — aguardando divulgação institucional'));
+        const activityColor = corEtapaProcesso(activitySent, activityComplete);
         const activityIcon = activityComplete ? 'fa-clipboard-check' : 'fa-clipboard-list';
         const activityButton = userRole === 'admin' && activityId
             ? `<button class="btn-action" title="${activityTitle}" aria-label="${activityTitle}" onclick="abrirRegistroAtividadesArquivo(${archiveIndex})" style="color:${activityColor}"><i class="fas ${activityIcon}"></i></button>`
             : '';
-        const infoButtons = `${editButton}${termButton}${termPdfButton}${contactButton}${activityButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
+        const infoButtons = `${editButton}${contactButton}<button class="btn-action" title="Visualizar ficha PDF" aria-label="Visualizar ficha PDF" onclick="generateArchivePDF(${archiveIndex})" style="color:#d9534f"><i class="far fa-file-pdf"></i></button>`;
+        const etapasProcessoButtons = `${termButton}${termPdfButton}${activityButton}`;
 
         return `<tr>
             <td class="check-col"><input type="checkbox" class="insc-checkbox archive-check" data-index="${archiveIndex}" aria-label="Selecionar inscrição arquivada" title="${selectionDisabled ? 'Dados completos indisponíveis para excluir com segurança' : 'Selecionar para exclusão'}" ${archiveSelectedIds.has(selectionKey) ? 'checked' : ''} ${selectionDisabled ? 'disabled' : ''} onchange="updateArchiveSelection()"></td>
@@ -1635,6 +1642,7 @@ function renderArchiveTable() {
             <td style="font-size:12px;line-height:1.7">${stages}</td>
             <td><span class="status-badge ${statusClass}">${escapeHtml(statusText)}</span></td>
             <td class="acoes-cell"><div class="acoes-list">${infoButtons}</div></td>
+            <td class="acoes-cell"><div class="acoes-list">${etapasProcessoButtons}</div></td>
         </tr>`;
     }).join('');
     updateArchiveSelectionControls();
