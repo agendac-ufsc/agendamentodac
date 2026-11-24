@@ -665,16 +665,19 @@
 
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
 
-                <!-- Bloqueio de Datas (integrado) -->
-                <h4 style="font-size:15px;color:#333;margin:0 0 4px;display:flex;align-items:center;gap:8px"><i class="fas fa-ban" style="color:#e53e3e"></i> Bloqueio de Datas Específicas</h4>
-                <p style="font-size:12px;color:#666;margin:0 0 14px">Bloqueia datas pontuais para impedir novos agendamentos naquele dia.</p>
-                <div style="display:flex;gap:10px;margin-bottom:16px">
+                <!-- Bloqueio e liberação de datas -->
+                <h4 style="font-size:15px;color:#333;margin:0 0 4px;display:flex;align-items:center;gap:8px"><i class="fas fa-calendar-alt" style="color:#764ba2"></i> Bloqueio e Liberação de Datas Específicas</h4>
+                <p style="font-size:12px;color:#666;margin:0 0 14px">Libere uma data como exceção às regras de início do edital e dias permitidos. Datas ocupadas no calendário continuam sujeitas à disponibilidade de horários.</p>
+                <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
                     <input type="date" id="bloqueioData" class="form-input" style="flex:1;max-width:220px">
-                    <button class="btn-top btn-danger" onclick="toggleBloqueioData()"><i class="fas fa-ban"></i> Bloquear/Desbloquear</button>
+                    <button class="btn-top btn-danger" onclick="toggleBloqueioData()"><i class="fas fa-ban"></i> Bloquear data</button>
+                    <button class="btn-top btn-success" style="background:#16803c;border-color:#16803c" onclick="toggleLiberacaoData()"><i class="fas fa-calendar-check"></i> Liberar data</button>
                 </div>
                 <h5 style="font-size:13px;font-weight:700;margin-bottom:8px">Datas bloqueadas atualmente:</h5>
                 <div id="listaDatasBloqueadas" style="background:#fff;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data bloqueada.</div>
-                <button class="btn-top btn-purple" style="margin-top:14px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Bloqueios</button>
+                <h5 style="font-size:13px;font-weight:700;margin:14px 0 8px">Datas liberadas como exceção:</h5>
+                <div id="listaDatasLiberadas" style="background:#fff;padding:14px;border-radius:8px;border:1px solid #eee;font-size:13px;color:#666;min-height:40px">Nenhuma data liberada.</div>
+                <button class="btn-top btn-purple" style="margin-top:14px" onclick="saveConfigs()"><i class="fas fa-save"></i> Salvar Datas</button>
 
                 <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0 16px">
 
@@ -1036,6 +1039,7 @@ let avaliadores = [];
 let avaliacoesNecessariasModo = 'automatico';
 let avaliacoesNecessariasEfetivas = 1;
 let datasBloqueadas = [];
+let datasLiberadas = [];
 let adminDataRefreshTimer = null;
 let userRole = null; // 'admin' | 'viewer'
 let viewerEmail = null;
@@ -3943,8 +3947,10 @@ async function loadConfigs() {
         document.getElementById('h-ensaio-fim').value = hl.ensaio?.fim || '17:00';
         document.getElementById('h-montagem-fim').value = hl.montagem?.fim || '21:00';
         document.getElementById('h-desmontagem-fim').value = hl.desmontagem?.fim || '21:00';
-        datasBloqueadas = c.datasBloqueadas || [];
+        datasBloqueadas = Array.isArray(c.datasBloqueadas) ? c.datasBloqueadas : [];
+        datasLiberadas = Array.isArray(c.datasLiberadas) ? c.datasLiberadas : [];
         renderDatasBloqueadas();
+        renderDatasLiberadas();
     } catch(e) {}
 }
 
@@ -4077,7 +4083,8 @@ async function saveConfigs() {
             montagem:   { fim: document.getElementById('h-montagem-fim').value },
             desmontagem:{ fim: document.getElementById('h-desmontagem-fim').value }
         },
-        datasBloqueadas
+        datasBloqueadas,
+        datasLiberadas
     };
     try {
         const r = await fetch('/api/admin/config', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) });
@@ -4164,27 +4171,59 @@ function toggleBloqueioData() {
     const data = document.getElementById('bloqueioData').value;
     if (!data) { alert('Selecione uma data.'); return; }
     const idx = datasBloqueadas.indexOf(data);
-    if (idx >= 0) datasBloqueadas.splice(idx, 1); else datasBloqueadas.push(data);
+    if (idx >= 0) datasBloqueadas.splice(idx, 1);
+    else {
+        datasBloqueadas.push(data);
+        datasLiberadas = datasLiberadas.filter(d => d !== data);
+    }
     datasBloqueadas.sort();
     renderDatasBloqueadas();
+    renderDatasLiberadas();
+}
+
+function toggleLiberacaoData() {
+    const data = document.getElementById('bloqueioData').value;
+    if (!data) { alert('Selecione uma data.'); return; }
+    const idx = datasLiberadas.indexOf(data);
+    if (idx >= 0) datasLiberadas.splice(idx, 1);
+    else {
+        datasLiberadas.push(data);
+        datasBloqueadas = datasBloqueadas.filter(d => d !== data);
+    }
+    datasLiberadas.sort();
+    renderDatasBloqueadas();
+    renderDatasLiberadas();
+}
+
+function renderListaDatasRegra(datas, elementId, textoVazio, fundo, cor, acaoRemover) {
+    const el = document.getElementById(elementId);
+    if (!el) return;
+    if (!datas.length) { el.textContent = textoVazio; return; }
+    el.innerHTML = datas.map(d => {
+        const [y,m,dia] = d.split('-');
+        return `<span style="display:inline-flex;align-items:center;gap:6px;background:${fundo};color:${cor};border-radius:6px;padding:3px 10px;margin:3px;font-size:12px;font-weight:600">
+            📅 ${dia}/${m}/${y}
+            <button onclick="${acaoRemover}('${d}')" style="background:none;border:none;cursor:pointer;color:${cor};padding:0;font-size:14px;line-height:1">×</button>
+        </span>`;
+    }).join('');
 }
 
 function renderDatasBloqueadas() {
-    const el = document.getElementById('listaDatasBloqueadas');
-    if (!el) return;
-    if (!datasBloqueadas.length) { el.textContent = 'Nenhuma data bloqueada.'; return; }
-    el.innerHTML = datasBloqueadas.map(d => {
-        const [y,m,dia] = d.split('-');
-        return `<span style="display:inline-flex;align-items:center;gap:6px;background:#fee2e2;color:#991b1b;border-radius:6px;padding:3px 10px;margin:3px;font-size:12px;font-weight:600">
-            📅 ${dia}/${m}/${y}
-            <button onclick="desbloquearData('${d}')" style="background:none;border:none;cursor:pointer;color:#991b1b;padding:0;font-size:14px;line-height:1">×</button>
-        </span>`;
-    }).join('');
+    renderListaDatasRegra(datasBloqueadas, 'listaDatasBloqueadas', 'Nenhuma data bloqueada.', '#fee2e2', '#991b1b', 'desbloquearData');
+}
+
+function renderDatasLiberadas() {
+    renderListaDatasRegra(datasLiberadas, 'listaDatasLiberadas', 'Nenhuma data liberada.', '#dcfce7', '#166534', 'removerDataLiberada');
 }
 
 function desbloquearData(d) {
     datasBloqueadas = datasBloqueadas.filter(x => x !== d);
     renderDatasBloqueadas();
+}
+
+function removerDataLiberada(d) {
+    datasLiberadas = datasLiberadas.filter(x => x !== d);
+    renderDatasLiberadas();
 }
 
 // ══════════════════════════════════════════════════

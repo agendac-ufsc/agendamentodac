@@ -613,6 +613,7 @@ let HORARIOS_LIMITES = {
     desmontagem: { inicio: '08:00', fim: '21:00' }
 };
 let DATAS_BLOQUEADAS = [];
+let DATAS_LIBERADAS = [];
 let TITULO_PAGINA_AGENDAMENTO = 'Inscrição de Projeto';
 let AVALIACOES_NECESSARIAS = 3;
 let AVALIACOES_NECESSARIAS_MODO = 'automatico';
@@ -710,6 +711,10 @@ const prepararPaginaInicial = (html, configs) => {
     return pagina;
 };
 
+const normalizarDatasConfiguracao = value => Array.isArray(value)
+    ? [...new Set(value.map(data => String(data || '').trim()).filter(data => /^\d{4}-\d{2}-\d{2}$/.test(data)))].sort()
+    : [];
+
 const getConfigs = async (caller = 'unknown') => {
     console.log(`[getConfigs] chamado por: ${caller} | redis disponível: ${!!redis}`);
     try {
@@ -726,7 +731,8 @@ const getConfigs = async (caller = 'unknown') => {
                 UNIFICAR_ESPACOS = normalizarBooleano(configs.unificarEspacos, true);
                 SOMENTE_FINSEMANA = normalizarBooleano(configs.somenteFinaisDeSemana, false);
                 HORARIOS_LIMITES = configs.horariosLimites || HORARIOS_LIMITES;
-                DATAS_BLOQUEADAS = configs.datasBloqueadas || [];
+                DATAS_BLOQUEADAS = normalizarDatasConfiguracao(configs.datasBloqueadas);
+                DATAS_LIBERADAS = normalizarDatasConfiguracao(configs.datasLiberadas);
                 TITULO_PAGINA_AGENDAMENTO = configs.tituloPaginaAgendamento || TITULO_PAGINA_AGENDAMENTO;
                 MODO_INSCRICAO = normalizarModoInscricao(configs.modoInscricao, configs.modoInscricaoEmergencia);
                 if (configs.avaliacoesNecessarias !== undefined) {
@@ -762,6 +768,7 @@ const getConfigs = async (caller = 'unknown') => {
                     somenteFinaisDeSemana: SOMENTE_FINSEMANA,
                     horariosLimites: HORARIOS_LIMITES,
                     datasBloqueadas: DATAS_BLOQUEADAS,
+                    datasLiberadas: DATAS_LIBERADAS,
                     tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                     modoInscricao: MODO_INSCRICAO,
                     avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
@@ -790,6 +797,7 @@ const getConfigs = async (caller = 'unknown') => {
         somenteFinaisDeSemana: SOMENTE_FINSEMANA,
         horariosLimites: HORARIOS_LIMITES,
         datasBloqueadas: DATAS_BLOQUEADAS,
+                    datasLiberadas: DATAS_LIBERADAS,
         tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
         modoInscricao: MODO_INSCRICAO,
         avaliacoesNecessarias: AVALIACOES_NECESSARIAS,
@@ -841,8 +849,11 @@ const saveConfigs = async (configs) => {
         if (configs.horariosLimites) {
             HORARIOS_LIMITES = configs.horariosLimites;
         }
-        if (configs.datasBloqueadas) {
-            DATAS_BLOQUEADAS = configs.datasBloqueadas;
+        if (configs.datasBloqueadas !== undefined) {
+            DATAS_BLOQUEADAS = normalizarDatasConfiguracao(configs.datasBloqueadas);
+        }
+        if (configs.datasLiberadas !== undefined) {
+            DATAS_LIBERADAS = normalizarDatasConfiguracao(configs.datasLiberadas);
         }
         if (configs.tituloPaginaAgendamento !== undefined) {
             TITULO_PAGINA_AGENDAMENTO = (configs.tituloPaginaAgendamento || '').trim() || 'Inscrição de Projeto';
@@ -894,6 +905,7 @@ const saveConfigs = async (configs) => {
                 somenteFinaisDeSemana: SOMENTE_FINSEMANA,
                 horariosLimites: HORARIOS_LIMITES,
                 datasBloqueadas: DATAS_BLOQUEADAS,
+                    datasLiberadas: DATAS_LIBERADAS,
                 tituloPaginaAgendamento: TITULO_PAGINA_AGENDAMENTO,
                 modoInscricao: MODO_INSCRICAO,
                 ...(MODO_INSCRICAO === 'duas-etapas' ? { modoInscricaoEmergencia: MODO_2_ETAPAS_CHAVE_EMERGENCIA } : {}),
@@ -1080,7 +1092,7 @@ app.get('/api/config', async (req, res) => {
 
 // Rota para salvar configurações (administrativa)
 app.post('/api/admin/config', async (req, res) => {
-    const { spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome } = req.body;
+    const { spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, datasLiberadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome } = req.body;
     // PermitirDisputa pode ser booleano, então verificamos se é undefined
     if (!spreadsheetId || !formsLink) {
         return res.status(400).json({ error: 'Campos obrigatórios ausentes' });
@@ -1088,7 +1100,7 @@ app.post('/api/admin/config', async (req, res) => {
     if (modoInscricao === 'duas-etapas' && String(modoInscricaoEmergencia || '').trim() !== MODO_2_ETAPAS_CHAVE_EMERGENCIA) {
         return res.status(403).json({ success: false, error: 'O modo de 2 etapas está bloqueado. Informe a chave de emergência autorizada.' });
     }
-    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome });
+    const success = await saveConfigs({ spreadsheetId, formsLink, permitirDisputa, unificarEspacos, somenteFinaisDeSemana, horariosLimites, datasBloqueadas, datasLiberadas, tituloPaginaAgendamento, modoInscricao, modoInscricaoEmergencia, botoesHome, mensagemBotoesDesativados, mostrarBotoesDesativados, mensagemDivulgacao, avaliacoesNecessarias, avaliacoesNecessariasModo, responsavelTermoNome });
     if (!success) return res.status(500).json({ success: false, error: 'Falha ao persistir no Redis. Verifique as credenciais UPSTASH.' });
     res.json({ success });
 });
@@ -3251,7 +3263,7 @@ app.post('/api/agendar', async (req, res) => {
         }
         const localKey = (local || 'teatro').toLowerCase();
 
-        const erroRegraCronograma = validateScheduleRules(etapas, SOMENTE_FINSEMANA);
+        const erroRegraCronograma = validateScheduleRules(etapas, SOMENTE_FINSEMANA, DATAS_LIBERADAS, DATAS_BLOQUEADAS);
         if (erroRegraCronograma) return res.status(400).json({ error: erroRegraCronograma });
 
         // Horários oficializados nunca voltam a disputar, mesmo com a disputa
@@ -3405,7 +3417,7 @@ app.post('/api/finalizar-inscricao-teste', async (req, res) => {
         if (!agendamento) return res.status(404).json({ error: 'Inscrição inicial não encontrada.' });
 
         const etapasParaFinalizar = dados.etapas || agendamento.etapas;
-        const erroRegraCronograma = validateScheduleRules(etapasParaFinalizar, SOMENTE_FINSEMANA);
+        const erroRegraCronograma = validateScheduleRules(etapasParaFinalizar, SOMENTE_FINSEMANA, DATAS_LIBERADAS, DATAS_BLOQUEADAS);
         if (erroRegraCronograma) return res.status(400).json({ error: erroRegraCronograma });
 
         const segundaEtapaTeste = {

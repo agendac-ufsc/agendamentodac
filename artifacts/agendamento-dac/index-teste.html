@@ -1615,6 +1615,7 @@
             desmontagem: { fim: '21:00' }
         };
         let datasBloqueadas = [];
+        let datasLiberadas = [];
         let globalCurrentMonth = new Date(); // Mês compartilhado entre todas as etapas
         let dataInicioEdital = null; // Data mínima conforme edital selecionado (YYYY-MM-DD)
         let botoesHomeDataInicio = {}; // { interno: 'YYYY-MM-DD', externo: ..., ensaio: ... }
@@ -1641,6 +1642,7 @@
                     somenteFinaisDeSemana = !!config.somenteFinaisDeSemana;
                     if (config.horariosLimites) horariosLimites = config.horariosLimites;
                     datasBloqueadas = config.datasBloqueadas || [];
+                    datasLiberadas = Array.isArray(config.datasLiberadas) ? config.datasLiberadas : [];
                     
                     const aviso = document.querySelector('div[style*="background: #fff3cd"]');
                     if (aviso) {
@@ -1940,11 +1942,14 @@
                 const date = new Date(year, month, i);
                 const today = new Date(); today.setHours(0,0,0,0);
                 if (date.toDateString() === today.toDateString()) d.classList.add('today');
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(i).padStart(2,'0')}`;
+                const dataLiberada = datasLiberadas.includes(dateStr);
                 const minDate = dataInicioEdital ? new Date(dataInicioEdital + 'T00:00:00') : today;
-                const limiteMin = minDate > today ? minDate : today;
+                const limiteMin = dataLiberada ? today : (minDate > today ? minDate : today);
                 const diasSemana = date.getDay(); // 0=Dom,1=Seg,2=Ter,3=Qua,4=Qui,5=Sex,6=Sáb
-                // somenteFinaisDeSemana NÃO se aplica ao Ensaio (ele tem regra própria de dias)
-                const diaPermitido = step === 'ensaio' || !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
+                // A data liberada é exceção às regras de início do edital e de dias permitidos.
+                // Ensaios ainda obedecem a regra própria de dias da semana.
+                const diaPermitido = dataLiberada || step === 'ensaio' || !somenteFinaisDeSemana || [0,4,5,6].includes(diasSemana);
 
                 // Ensaios: segunda a sexta; sábado somente na data de um Evento confirmado.
                 let ensaioDiaBloqueado = false;
@@ -1964,8 +1969,7 @@
                 } else if (date < limiteMin) {
                     d.classList.add('other-month');
                 } else {
-                    const dateStr = date.toISOString().split('T')[0];
-                    const isBloqueada = datasBloqueadas.includes(dateStr);
+                    const isBloqueada = datasBloqueadas.includes(dateStr) && !dataLiberada;
                     
                     if (isBloqueada) {
                         d.classList.add('busy-full');
@@ -3173,12 +3177,18 @@
         function abrirSelecaoLocal(tipo) {
             // Aplica data de início do edital selecionado ao calendário
             dataInicioEdital = (tipo && botoesHomeDataInicio[tipo]) || null;
-            // Reposiciona o mês visível para a dataInicio se ainda não chegou
+            // Mostra primeiro a exceção liberada que antecede o início do edital, quando houver.
             if (dataInicioEdital) {
                 const minDate = new Date(dataInicioEdital + 'T00:00:00');
                 const hoje = new Date(); hoje.setHours(0,0,0,0);
                 if (minDate > hoje) {
-                    globalCurrentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
+                    const hojeIso = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-${String(hoje.getDate()).padStart(2,'0')}`;
+                    const dataLiberadaAnterior = datasLiberadas
+                        .filter(data => /^\d{4}-\d{2}-\d{2}$/.test(data) && data >= hojeIso && data < dataInicioEdital)
+                        .sort()[0];
+                    const dataInicial = dataLiberadaAnterior || dataInicioEdital;
+                    const dataInicialObj = new Date(dataInicial + 'T00:00:00');
+                    globalCurrentMonth = new Date(dataInicialObj.getFullYear(), dataInicialObj.getMonth(), 1);
                 }
             }
             mostrarTelaTeste('localSelectionContainer');

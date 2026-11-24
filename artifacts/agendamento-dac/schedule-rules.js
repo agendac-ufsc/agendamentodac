@@ -19,11 +19,29 @@ function getIsoWeekday(value) {
     return date.getUTCDay();
 }
 
-function validateScheduleRules(stages, restrictNonRehearsalDates = false) {
+function normalizeDateSet(value) {
+    const dates = Array.isArray(value) ? value : [];
+    return new Set(dates
+        .map(date => String(date || '').trim())
+        .filter(date => getIsoWeekday(date) !== null));
+}
+
+function validateScheduleRules(stages, restrictNonRehearsalDates = false, releasedDates = [], blockedDates = []) {
     const schedule = stages && typeof stages === 'object' ? stages : {};
+    const releasedDateSet = normalizeDateSet(releasedDates);
+    const blockedDateSet = normalizeDateSet(blockedDates);
     const rehearsals = stageItems(schedule.ensaio);
     if (rehearsals.length > MAX_REHEARSALS_PER_PROPOSAL) {
         return 'Cada proposta pode incluir no máximo 2 ensaios.';
+    }
+
+    for (const value of Object.values(schedule)) {
+        for (const item of stageItems(value)) {
+            const date = String(item?.data || '').trim();
+            if (blockedDateSet.has(date) && !releasedDateSet.has(date)) {
+                return 'A data selecionada está bloqueada administrativamente.';
+            }
+        }
     }
 
     const eventDates = new Set(stageItems(schedule.evento)
@@ -44,8 +62,9 @@ function validateScheduleRules(stages, restrictNonRehearsalDates = false) {
             if (stage === 'ensaio') continue;
             for (const item of stageItems(value)) {
                 if (!item?.data) continue;
-                const weekday = getIsoWeekday(item.data);
-                if (weekday === null || !EVENT_DAYS_WITH_RESTRICTION.has(weekday)) {
+                const date = String(item.data).trim();
+                const weekday = getIsoWeekday(date);
+                if (weekday === null || (!releasedDateSet.has(date) && !EVENT_DAYS_WITH_RESTRICTION.has(weekday))) {
                     return 'Inscrições só são aceitas para datas de quinta-feira a domingo.';
                 }
             }
