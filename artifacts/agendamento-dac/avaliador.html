@@ -251,21 +251,23 @@
     <div class="login-box">
         <h1>🎭 Painel do Avaliador</h1>
         <p>DAC — UFSC</p>
-        <div class="form-field">
-            <label>Seu E-mail</label>
-            <input type="email" id="viewerEmail" placeholder="avaliador@exemplo.com" onkeydown="if(event.key==='Enter')doLogin()">
-        </div>
-        <div class="form-field">
-            <label>Senha</label>
-            <div class="password-wrap">
-                <input type="password" id="viewerPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
-                <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('viewerPass', this)">
-                    <i class="fa-solid fa-eye"></i>
-                </button>
+        <form id="evaluatorLoginForm" onsubmit="event.preventDefault(); doLogin()">
+            <div class="form-field">
+                <label>Seu E-mail</label>
+                <input type="email" id="viewerEmail" placeholder="avaliador@exemplo.com">
             </div>
-        </div>
-        <button class="btn-login" onclick="doLogin()">Entrar</button>
-        <div class="login-err" id="loginErr"></div>
+            <div class="form-field">
+                <label>Senha</label>
+                <div class="password-wrap">
+                    <input type="password" id="viewerPass" placeholder="••••••••">
+                    <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('viewerPass', this)">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            <button type="submit" class="btn-login">Entrar</button>
+            <div class="login-err" id="loginErr"></div>
+        </form>
         <p style="text-align:center;margin-top:18px;font-size:13px;color:#666">É administrador? <a href="/admin" style="color:#2563eb;font-weight:600;text-decoration:none">Acessar Painel Administrativo</a></p>
     </div>
 </div>

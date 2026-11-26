@@ -226,19 +226,21 @@
     <div class="login-box">
         <h1>🏛️ DAC — UFSC</h1>
         <p>Painel de Administração</p>
-        <div id="loginAdmin">
-            <div class="form-field">
-                <label>Senha de Administrador</label>
-                <div class="password-wrap">
-                    <input type="password" id="adminPass" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
-                    <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('adminPass', this)">
-                        <i class="fa-solid fa-eye"></i>
-                    </button>
+        <form id="adminLoginForm" onsubmit="event.preventDefault(); doLogin()">
+            <div id="loginAdmin">
+                <div class="form-field">
+                    <label>Senha de Administrador</label>
+                    <div class="password-wrap">
+                        <input type="password" id="adminPass" placeholder="••••••••">
+                        <button type="button" class="toggle-password" aria-label="Mostrar senha" title="Mostrar senha" onclick="togglePasswordVisibility('adminPass', this)">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
-        <button class="btn-login" onclick="doLogin()">Entrar</button>
-        <div class="login-err" id="loginErr"></div>
+            <button type="submit" class="btn-login">Entrar</button>
+            <div class="login-err" id="loginErr"></div>
+        </form>
         <p style="text-align:center;margin-top:18px;font-size:13px;color:#666">É avaliador? <a href="/avaliador" style="color:#2563eb;font-weight:600;text-decoration:none">Acesse o Painel do Avaliador</a></p>
     </div>
 </div>
